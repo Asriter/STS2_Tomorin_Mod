@@ -1,5 +1,7 @@
 # STS2_Tomorin_Mod
 
+“能和我，爬一辈子塔么？”
+
 一个为《Slay the Spire 2》新增可玩角色「Tomorin」的整合型模组，核心机制为「Compose（作词）」：通过消耗手牌中特定类型的卡牌来生成或升级对应的「歌词」卡。项目采用 .NET 9 与 Godot 4.5.1，使用 HarmonyLib 注入，依赖 BaseLib 提供的通用基座与工具。
 
 - Mod ID：`STS2_Tomorin_Mod`

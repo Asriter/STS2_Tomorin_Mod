@@ -1,0 +1,48 @@
+[gd_scene load_steps=2 format=3 uid="uid://bo0822hfip5q7"]
+
+[ext_resource type="Texture2D" uid="uid://qc2klkq0n1ro" path="res://STS2_Tomorin_Mod/animations/characters/tomorin/Gemini_Generated_Image_twtpantwtpantwtp-removebg-preview.png" id="2_ppjxu"]
+
+[node name="TomorinRestSite" type="Node2D"]
+
+[node name="SpineSprite" type="Sprite2D" parent="."]
+position = Vector2(196, 1)
+scale = Vector2(1.2, 1.2)
+texture = ExtResource("2_ppjxu")
+
+[node name="ControlRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="SelectionReticle" type="Control" parent="ControlRoot"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 0
+offset_left = 2.0
+offset_top = -258.0
+offset_right = 403.0
+offset_bottom = 295.0
+
+[node name="Hitbox" type="Control" parent="ControlRoot"]
+unique_name_in_owner = true
+anchors_preset = 0
+offset_left = 11.0
+offset_top = -269.0
+offset_right = 412.0
+offset_bottom = 284.0
+
+[node name="ThoughtBubbleRight" type="Control" parent="ControlRoot"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 0
+offset_left = 330.389
+offset_top = -291.663
+offset_right = 330.389
+offset_bottom = -291.663
+
+[node name="ThoughtBubbleLeft" type="Control" parent="ControlRoot"]
+unique_name_in_owner = true
+anchors_preset = 0
+offset_left = 41.136
+offset_top = -273.537
+offset_right = 41.136
+offset_bottom = -273.537

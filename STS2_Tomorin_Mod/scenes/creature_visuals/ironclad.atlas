@@ -1,0 +1,237 @@
+ironclad.png
+size:1762,269
+filter:Linear,Linear
+scale:0.372
+attack/bod attack
+bounds:473,49,89,98
+rotate:90
+attack/bottom hand attack
+bounds:1650,45,41,37
+rotate:90
+attack/bottom lower arm attack
+bounds:870,7,72,47
+offsets:1,0,74,50
+attack/bottom upper arm attack
+bounds:1404,192,75,83
+rotate:90
+attack/front arm attack
+bounds:1489,192,79,75
+attack/front bracer attack
+bounds:1342,3,48,38
+offsets:3,2,71,41
+attack/front hand attack
+bounds:1657,9,34,32
+rotate:90
+attack/l foot attack
+bounds:1392,3,38,49
+rotate:90
+attack/l knee attack
+bounds:620,2,57,52
+offsets:1,0,60,52
+attack/l leg attack
+bounds:1216,217,50,87
+offsets:2,0,52,87
+rotate:90
+attack/l neck armor attack
+bounds:1727,176,33,33
+offsets:0,0,34,33
+attack/l shoulder bottom attack
+bounds:1720,123,51,40
+rotate:90
+attack/l shoulder bottom back attack
+bounds:519,2,40,45
+offsets:8,0,48,53
+attack/l shoulder top attack
+bounds:231,2,57,31
+attack/r foot attack
+bounds:476,2,45,41
+rotate:90
+attack/r knee attack
+bounds:1543,86,56,47
+offsets:2,1,58,49
+attack/r lower leg attack
+bounds:1110,4,68,74
+rotate:90
+attack/r neck armor attack
+bounds:2,2,16,24
+rotate:90
+attack/r shoulder bottom attack
+bounds:428,2,39,46
+offsets:13,0,52,56
+rotate:90
+attack/r shoulder top attack
+bounds:1717,83,38,42
+offsets:0,1,38,44
+rotate:90
+back mask
+bounds:1485,84,56,49
+belt
+bounds:1301,103,83,33
+belt 2
+bounds:1689,52,26,35
+offsets:0,1,26,36
+belt 3
+bounds:1567,2,27,45
+rotate:90
+bod
+bounds:359,43,95,112
+offsets:0,0,96,112
+rotate:90
+bottom lower arm
+bounds:1610,38,48,38
+offsets:11,0,59,39
+rotate:90
+bottom upper arm
+bounds:1651,176,33,74
+rotate:90
+bottom_hand
+bounds:1691,17,34,30
+offsets:0,0,34,32
+bottom_hand_fingers
+bounds:1727,13,34,30
+offsets:0,0,34,32
+rotate:90
+collar_back
+bounds:1742,222,45,18
+rotate:90
+death/body death
+bounds:231,35,126,103
+death/bottom shoulder death
+bounds:573,2,50,43
+offsets:1,1,51,44
+rotate:90
+death/bracer_death
+bounds:573,54,84,45
+rotate:90
+death/hair death
+bounds:1489,29,42,53
+death/hand death
+bounds:1533,29,53,32
+rotate:90
+death/head death
+bounds:1477,135,68,55
+offsets:0,0,69,55
+death/knee_death
+bounds:782,2,43,52
+offsets:1,0,44,52
+death/lower arm_death
+bounds:1427,66,66,56
+rotate:90
+death/lower leg_death
+bounds:1255,116,44,99
+offsets:1,0,45,99
+death/open hand_death
+bounds:1255,74,40,42
+rotate:90
+death/top shoulder death
+bounds:1601,88,56,44
+offsets:6,6,68,55
+death/upper arm_death
+bounds:1404,134,56,71
+offsets:1,0,57,71
+rotate:90
+eye glow
+bounds:1268,46,28,26
+hair
+bounds:290,5,28,45
+rotate:90
+head
+bounds:1443,10,44,54
+hip armor right back
+bounds:1543,9,18,22
+rotate:90
+hip bottom armor
+bounds:1489,2,22,25
+hip top bottom
+bounds:561,32,10,15
+hips
+bounds:1651,211,89,56
+l foot
+bounds:1659,89,56,43
+l hip armor bottom
+bounds:359,2,67,39
+l hip armor top
+bounds:1650,134,68,40
+offsets:1,0,69,40
+l knee
+bounds:679,2,53,52
+offsets:0,0,54,52
+l lower leg
+bounds:1301,138,51,92
+offsets:4,8,55,100
+rotate:90
+l neck armor
+bounds:1513,4,23,28
+rotate:90
+l shoulder armor bottom
+bounds:1614,2,41,34
+l shoulder armor top
+bounds:1717,49,40,32
+l upper leg
+bounds:951,2,82,83
+rotate:90
+neck
+bounds:1567,31,41,53
+r foot
+bounds:1268,2,36,39
+r hip armor bottom
+bounds:1072,4,80,36
+rotate:90
+r hip armor top
+bounds:1036,2,82,34
+rotate:90
+r knee
+bounds:734,2,52,46
+offsets:0,0,54,46
+rotate:90
+r lower leg
+bounds:1186,11,61,80
+rotate:90
+r neck armor
+bounds:1386,104,35,28
+r shoulder armor bottom
+bounds:827,2,52,41
+offsets:0,0,54,41
+rotate:90
+r shoulder armor top
+bounds:1616,134,56,32
+rotate:90
+r upper leg
+bounds:1305,191,76,97
+rotate:90
+shadow
+bounds:951,217,263,50
+offsets:6,1,270,52
+shine
+bounds:337,3,30,17
+offsets:0,1,30,19
+rotate:90
+slash
+bounds:620,56,329,211
+offsets:0,0,341,211
+slash2
+bounds:2,140,616,127
+offsets:218,176,856,395
+sword blade
+bounds:2,20,118,227
+rotate:90
+sword_handle
+bounds:1299,43,58,76
+offsets:0,0,58,77
+rotate:90
+top hand
+bounds:1306,2,39,34
+rotate:90
+top lower arm
+bounds:1547,135,67,55
+offsets:0,1,67,56
+top mask
+bounds:1377,43,48,58
+top upper arm
+bounds:1570,192,79,75
+zaps1
+bounds:951,86,157,129
+offsets:0,1,158,130
+zaps_2
+bounds:1110,74,143,141
+offsets:2,3,146,145

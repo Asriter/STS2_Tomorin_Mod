@@ -1,0 +1,17 @@
+{
+  "STS2_TOMORIN_MOD-NORMAL_PENCIL.title": "普通的铅笔",
+  "STS2_TOMORIN_MOD-NORMAL_PENCIL.description": "每场战斗你第一次作词时，抽两张卡。",
+  "STS2_TOMORIN_MOD-NORMAL_PENCIL.flavor": "普通和理所当然是什么呢......",
+  "STS2_TOMORIN_MOD-SOYO_BASE.title": "Soyo's Bass",
+  "STS2_TOMORIN_MOD-SOYO_BASE.description": "Every 3 Skill cards played, gain [blue]{AtFieldPower}[/blue] [gold]AT Field[/gold].",
+  "STS2_TOMORIN_MOD-SOYO_BASE.flavor": "The steady rhythm that supports everything.",
+  "STS2_TOMORIN_MOD-TAKI_DRUM.title": "Taki's Drum",
+  "STS2_TOMORIN_MOD-TAKI_DRUM.description": "The 5th card played each turn is played an additional time.",
+  "STS2_TOMORIN_MOD-TAKI_DRUM.flavor": "The beat that drives the performance forward.",
+  "STS2_TOMORIN_MOD-ANON_GUITAR.title": "Anon's Guitar",
+  "STS2_TOMORIN_MOD-ANON_GUITAR.description": "At the start of each combat, add a random [gold]Collectible[/gold] to your hand.",
+  "STS2_TOMORIN_MOD-ANON_GUITAR.flavor": "A guitar that always has something new to offer.",
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.title": "Raana's Guitar",
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.description": "Whenever [gold]Leftover Buffet[/gold] is exhausted, heal [blue]{HealAmount}[/blue] HP.",
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.flavor": "Every last bite counts."
+}

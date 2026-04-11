@@ -1,0 +1,4 @@
+{
+  "STS2_TOMORIN_MOD-COMPOSE.title": "作词",
+  "STS2_TOMORIN_MOD-COMPOSE.description": "消耗{0.isCostAttack:攻击卡*{0.atkCost} |}{0.isCostSkill:技能卡*{0.skillCost} |}{0.isCostState:状态卡*{0.stateCost} |}，将一张[gold]{0.cardName}[/gold]加入手牌，随后这张卡消耗。如果那张卡已经存在于你的卡组里，则改加入手牌为增加一层重放。"
+}

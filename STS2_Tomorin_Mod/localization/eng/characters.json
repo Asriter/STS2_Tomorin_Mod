@@ -1,0 +1,16 @@
+{
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.title": "Tomorin",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.titleObject": "Tomorin",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.description": "A determined girl who presses forward no matter what.",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.pronounSubject": "she",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.pronounObject": "her",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.pronounPossessive": "hers",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.possessiveAdjective": "her",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.goldMonologue": "[sine]This will come in handy...[/sine]",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.eventDeathPrevention": "I can't give up here.",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.aromaPrinciple": "[sine][color=#77BBDD]No matter what stands in my way — I'll keep going.[/color][/sine]",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.cardsModifierTitle": "Tomorin Cards",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.cardsModifierDescription": "Tomorin cards will now appear in rewards and shops.",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.banter.alive.endTurnPing": "Let's keep moving.",
+  "STS2_TOMORIN_MOD-TOMORIN_CHARACTER.banter.dead.endTurnPing": "..."
+}

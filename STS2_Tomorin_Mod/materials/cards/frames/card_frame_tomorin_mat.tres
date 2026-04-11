@@ -1,0 +1,9 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://bddyflsuc3fhk"]
+
+[ext_resource type="Shader" uid="uid://chgnk0sktsla3" path="res://materials/cards/frames/card_frame_tomorin.gdshader" id="1_sh2bt"]
+
+[resource]
+shader = ExtResource("1_sh2bt")
+shader_parameter/h = 0.5370000255075
+shader_parameter/s = 1.422000067545
+shader_parameter/v = 1.0

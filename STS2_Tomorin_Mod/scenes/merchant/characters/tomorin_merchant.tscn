@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3 uid="uid://b6rqph13y6mb6"]
+
+[ext_resource type="Texture2D" uid="uid://c643ckqyff4kw" path="res://STS2_Tomorin_Mod/animations/characters/tomorin/tomorin.png" id="2_ff6up"]
+
+[node name="TomorinMerchant" type="Node2D"]
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(37, -245)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("2_ff6up")
+hframes = 2
+vframes = 2
+frame = 3

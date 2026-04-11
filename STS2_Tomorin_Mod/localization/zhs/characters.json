@@ -1,0 +1,16 @@
+{
+  "STS2_TOMORIN_MOD-TOMORIN.titleObject": "高松灯",
+  "STS2_TOMORIN_MOD-TOMORIN.description": "来自奇妙世界的少女乐队主唱。发挥灵感创作歌词和敌人战斗。",
+  "STS2_TOMORIN_MOD-TOMORIN.title": "高松灯",
+  "STS2_TOMORIN_MOD-TOMORIN.pronounSubject": "她",
+  "STS2_TOMORIN_MOD-TOMORIN.pronounObject": "她",
+  "STS2_TOMORIN_MOD-TOMORIN.pronounPossessive": "她的",
+  "STS2_TOMORIN_MOD-TOMORIN.possessiveAdjective": "她的",
+  "STS2_TOMORIN_MOD-TOMORIN.goldMonologue": "[sine]这个用得上……[/sine]",
+  "STS2_TOMORIN_MOD-TOMORIN.eventDeathPrevention": "大家......还在等着我！",
+  "STS2_TOMORIN_MOD-TOMORIN.aromaPrinciple": "[sine][color=#77BBDD]就算迷茫，也要继续前进！[/color][/sine]",
+  "STS2_TOMORIN_MOD-TOMORIN.cardsModifierTitle": "高松灯的卡牌",
+  "STS2_TOMORIN_MOD-TOMORIN.cardsModifierDescription": "高松灯的卡牌现在将出现在奖励和商店中。",
+  "STS2_TOMORIN_MOD-TOMORIN.banter.alive.endTurnPing": "我...我会等你的...",
+  "STS2_TOMORIN_MOD-TOMORIN.banter.dead.endTurnPing": "别放弃！"
+}

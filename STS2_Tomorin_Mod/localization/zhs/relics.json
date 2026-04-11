@@ -1,0 +1,20 @@
+{
+  "STS2_TOMORIN_MOD-NORMAL_PENCIL.title": "普通的铅笔",
+  "STS2_TOMORIN_MOD-NORMAL_PENCIL.description": "每场战斗你第一次[gold]作词[/gold]时，抽两张卡。",
+  "STS2_TOMORIN_MOD-NORMAL_PENCIL.flavor": "普通和理所当然是什么呢......",
+  "STS2_TOMORIN_MOD-SHOUT_OF_SOUL.description": "每场战斗你第一次[gold]作词[/gold]时，抽[blue]5[/blue]张卡,获得{Energy:energyIcons()}",
+  "STS2_TOMORIN_MOD-SHOUT_OF_SOUL.flavor": "我的歌词，是我心灵的呐喊！",
+  "STS2_TOMORIN_MOD-SHOUT_OF_SOUL.title": "心灵的呐喊",
+  "STS2_TOMORIN_MOD-SOYO_BASE.title": "素世的贝斯",
+  "STS2_TOMORIN_MOD-SOYO_BASE.description": "每打出三张技能卡，获得[blue]{AtFieldPower}[/blue]层[gold]心之壁[/gold]。",
+  "STS2_TOMORIN_MOD-SOYO_BASE.flavor": "支撑一切的稳定节奏。",
+  "STS2_TOMORIN_MOD-TAKI_DRUM.title": "立希的鼓",
+  "STS2_TOMORIN_MOD-TAKI_DRUM.description": "每回合打出的第五张牌会被额外打出一次。",
+  "STS2_TOMORIN_MOD-TAKI_DRUM.flavor": "推动演出不断前行的鼓点。",
+  "STS2_TOMORIN_MOD-ANON_GUITAR.title": "爱音的吉他",
+  "STS2_TOMORIN_MOD-ANON_GUITAR.description": "每场战斗开始时，将一张随机[gold]收集品[/gold]加入手牌。",
+  "STS2_TOMORIN_MOD-ANON_GUITAR.flavor": "总能带来新惊喜的吉他。",
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.title": "乐奈的吉他",
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.description": "[gold]吃剩的巴菲[/gold]被消耗时，回复[blue]{HealAmount}[/blue]点生命值。",
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.flavor": "tomorin，抹茶巴菲。"
+}

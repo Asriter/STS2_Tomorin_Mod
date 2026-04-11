@@ -102,7 +102,7 @@ public class AtFieldPower : BasePowerModel
         if (side == Owner.Side)
         {
             int amount = Amount / 2;
-            await PowerCmd.ModifyAmount(this, Amount - amount, null, null);
+            await PowerCmd.ModifyAmount(this, amount - Amount, null, null);
         }
     }
 

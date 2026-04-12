@@ -32,10 +32,6 @@ public class MygoTogether : BaseCardModel
         {
             var list = base.CanonicalKeywords.ToList();
             list.Add(CardKeyword.Exhaust);
-            if (IsUpgraded)
-            {
-                list.Add(CardKeyword.Retain);
-            }
             return list;
         }
     }
@@ -53,5 +49,6 @@ public class MygoTogether : BaseCardModel
     protected override void OnUpgrade()
     {
         // 升级后获得保留关键词
+        AddKeyword(CardKeyword.Retain);
     }
 }

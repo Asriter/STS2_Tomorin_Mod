@@ -144,10 +144,10 @@ public sealed class Tomorin : CustomCharacterModel
         "res://STS2_Tomorin_Mod/scenes/screens/char_select/char_select_bg_tomorin.tscn";
 
     public override string? CustomCharacterSelectIconPath =>
-        "res://STS2_Tomorin_Mod/images/charui/char_select_Tomorin.png";
+        "res://STS2_Tomorin_Mod/images/charui/char_select_tomorin.png";
 
     public override string CustomCharacterSelectLockedIconPath =>
-        "res://STS2_Tomorin_Mod/images/charui/char_select_Tomorin_locked.png";
+        "res://STS2_Tomorin_Mod/images/charui/char_select_tomorin_locked.png";
 
     public override string? CustomCharacterSelectTransitionPath =>
         "res://STS2_Tomorin_Mod/materials/transitions/tomorin_transition_mat.tres";

@@ -97,7 +97,7 @@ public class AtFieldPower : BasePowerModel
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
-    public override async Task AfterSideTurnStartLate(CombatSide side, CombatState combatState)
+    public override async Task AfterSideTurnStart(CombatSide side, CombatState combatState)
     {
         if (side == Owner.Side)
         {

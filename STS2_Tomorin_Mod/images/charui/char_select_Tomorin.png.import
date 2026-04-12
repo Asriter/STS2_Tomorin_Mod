@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bw82d3l48rw4a"
-path="res://.godot/imported/char_select_Tomorin.png-335bdb1a93f4b3df4ec8c53906d0ca9b.ctex"
+uid="uid://b2vfbd3o2lfl3"
+path="res://.godot/imported/char_select_tomorin.png-3ea9d60bb5b313e94214a6d162079287.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://STS2_Tomorin_Mod/images/charui/char_select_Tomorin.png"
-dest_files=["res://.godot/imported/char_select_Tomorin.png-335bdb1a93f4b3df4ec8c53906d0ca9b.ctex"]
+source_file="res://STS2_Tomorin_Mod/images/charui/char_select_tomorin.png"
+dest_files=["res://.godot/imported/char_select_tomorin.png-3ea9d60bb5b313e94214a6d162079287.ctex"]
 
 [params]
 

@@ -15,7 +15,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 为什么演奏春日影
-/// 蓝卡 2费 攻击 灵感 对所有敌人造成16→22点伤害；将2张随机收集品加入手牌
+/// 蓝卡 2费 攻击 灵感 对所有敌人造成16→20点伤害；将2张随机收集品加入手牌
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class WhyPlayHaruhikage : BaseCardModel
@@ -48,6 +48,6 @@ public class WhyPlayHaruhikage : BaseCardModel
 
     protected override void OnUpgrade()
     {
-        base.DynamicVars.Damage.UpgradeValueBy(6m);
+        base.DynamicVars.Damage.UpgradeValueBy(4m);
     }
 }

@@ -11,6 +11,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
+using STS2_Tomorin_Mod.Commands;
 using STS2_Tomorin_Mod.Localization.CustomEnums;
 
 namespace STS2_Tomorin_Mod.Patch;
@@ -58,6 +59,9 @@ internal class HookAfterCombatEndPatch
             {
                 cardModel.RemoveKeyword(CustomKeyWord.SingleTurnInspiration);
             }
+
+            // 进入房间前，刷新消耗卡的计数
+            ComposeCmd.ComposeCostCardDict.Clear();
         }
 
         // ------------------------------------------

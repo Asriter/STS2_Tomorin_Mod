@@ -1,8 +1,11 @@
-[gd_scene load_steps=2 format=3 uid="uid://bo0822hfip5q7"]
+[gd_scene load_steps=4 format=3 uid="uid://bo0822hfip5q7"]
 
+[ext_resource type="Script" uid="uid://cfojor4y3clh" path="res://src/Core/Nodes/RestSite/NRestSiteCharacter.cs" id="1_uughb"]
 [ext_resource type="Texture2D" uid="uid://qc2klkq0n1ro" path="res://STS2_Tomorin_Mod/animations/characters/tomorin/Gemini_Generated_Image_twtpantwtpantwtp-removebg-preview.png" id="2_ppjxu"]
+[ext_resource type="Script" uid="uid://82o2e1qhi7g6" path="res://src/Core/Nodes/Combat/NSelectionReticle.cs" id="3_u2f2x"]
 
 [node name="TomorinRestSite" type="Node2D"]
+script = ExtResource("1_uughb")
 
 [node name="SpineSprite" type="Sprite2D" parent="."]
 position = Vector2(196, 1)
@@ -15,12 +18,12 @@ anchors_preset = 0
 
 [node name="SelectionReticle" type="Control" parent="ControlRoot"]
 unique_name_in_owner = true
-visible = false
 anchors_preset = 0
 offset_left = 2.0
 offset_top = -258.0
 offset_right = 403.0
 offset_bottom = 295.0
+script = ExtResource("3_u2f2x")
 
 [node name="Hitbox" type="Control" parent="ControlRoot"]
 unique_name_in_owner = true
@@ -32,7 +35,6 @@ offset_bottom = 284.0
 
 [node name="ThoughtBubbleRight" type="Control" parent="ControlRoot"]
 unique_name_in_owner = true
-visible = false
 anchors_preset = 0
 offset_left = 330.389
 offset_top = -291.663

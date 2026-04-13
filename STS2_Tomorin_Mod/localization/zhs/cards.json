@@ -184,6 +184,8 @@
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN.description": "每当你[gold]作词[/gold]时，复制一张相同的作词牌放入弃牌堆。",
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN.upgrade_description": "每当你[gold]作词[/gold]时，复制一张相同的作词牌放入弃牌堆。",
   "STS2_TOMORIN_MOD-SING_FULL_POWER.description": "对一名敌人造成[blue]{Damage:diff()}[/blue]点伤害。\n移除你的所有[gold]心之壁[/gold]，每移除一点额外造成[blue]{ExtraDamage:diff()}[/blue]点伤害。{InCombat:\n（额外命中{CalculatedHits:diff()}次）|}",
-  "STS2_TOMORIN_MOD-SING_FULL_POWER.title": "全力歌唱"
+  "STS2_TOMORIN_MOD-SING_FULL_POWER.title": "全力歌唱",
+  "STS2_TOMORIN_MOD-ADAYUME.description": "每当你打出一张牌时，你获得[blue]1[/blue]点[gold]心之壁[/gold]和[blue]1[/blue]点[gold]格挡[/gold]",
+  "STS2_TOMORIN_MOD-ADAYUME.title": "过堕幻"
 }
 

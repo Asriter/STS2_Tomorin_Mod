@@ -40,5 +40,8 @@
   "STS2_TOMORIN_MOD-THINKING_YOURSELF_POWER.title": "只想着自己呢",
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN_POWER.description": "每当你[gold]作词[/gold]时，复制一张相同的作词牌放入弃牌堆。",
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN_POWER.smartDescription": "每当你[gold]作词[/gold]时，复制一张相同的作词牌放入弃牌堆。",
-  "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN_POWER.title": "=未来永劫"
+  "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN_POWER.title": "=未来永劫",
+  "STS2_TOMORIN_MOD-ADAYUME_POWER.description": "每当你打出一张牌时，你获得[blue]1[/blue]点[gold]心之壁[/gold]和[blue]1[/blue]点[gold]格挡[/gold]",
+  "STS2_TOMORIN_MOD-ADAYUME_POWER.smartDescription": "每当你打出一张牌时，你获得[blue]{Amount}[/blue]点[gold]心之壁[/gold]和[blue]{Amount}[/blue]点[gold]格挡[/gold]",
+  "STS2_TOMORIN_MOD-ADAYUME_POWER.title": "过堕幻"
 }

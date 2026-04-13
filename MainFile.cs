@@ -20,7 +20,7 @@ public partial class MainFile : Node
         Harmony harmony = new(ModId);
 
         //尝试创建新的NodeFactory
-        NRestSiteCharacterFactory factory = new();
+        // NRestSiteCharacterFactory factory = new();
         harmony.PatchAll();
     }
 }

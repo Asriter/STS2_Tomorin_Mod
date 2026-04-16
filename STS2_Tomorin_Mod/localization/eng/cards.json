@@ -161,5 +161,19 @@
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE.upgrade_description": "[gold]COMPOSE[/gold]\nDraw [blue]{Cards:diff()}[/blue] card(s). Add a [gold]=Eternal Future[/gold] to your hand.",
   "STS2_TOMORIN_MOD-EQUAL_FOREVER.title": "=Eternal Future",
   "STS2_TOMORIN_MOD-EQUAL_FOREVER.description": "Whenever you [gold]Compose[/gold], put that compose card into your discard pile.",
-  "STS2_TOMORIN_MOD-EQUAL_FOREVER.upgrade_description": "Whenever you [gold]Compose[/gold], put that compose card into your discard pile."
+  "STS2_TOMORIN_MOD-EQUAL_FOREVER.upgrade_description": "Whenever you [gold]Compose[/gold], put that compose card into your discard pile.",
+  "STS2_TOMORIN_MOD-HEKITENBANSOU.title": "Hekitenbansou",
+  "STS2_TOMORIN_MOD-HEKITENBANSOU.description": "[gold]COMPOSE[/gold]\\nAttack*1\\nAdd a Walk With You to your hand. Add a copy of this card to your hand.",
+  "STS2_TOMORIN_MOD-HEKITENBANSOU.upgrade_description": "[gold]COMPOSE[/gold]\\nAttack*1\\nAdd a Walk With You to your hand. Add a copy of this card to your hand.",
+  "STS2_TOMORIN_MOD-HEKITENBANSOU_TOKEN.title": "Walk With You",
+  "STS2_TOMORIN_MOD-HEKITENBANSOU_TOKEN.description": "Deal [blue]{Damage:diff()}[/blue] damage. [gold]Retain[/gold].",
+  "STS2_TOMORIN_MOD-HEKITENBANSOU_TOKEN.upgrade_description": "Deal [blue]{Damage:diff()}[/blue] damage. [gold]Retain[/gold].",
+  "STS2_TOMORIN_MOD-PENGUIN_KICK.title": "Penguin Kick",
+  "STS2_TOMORIN_MOD-PENGUIN_KICK.description": "Deal [blue]{Damage:diff()}[/blue] damage. Each time you [gold]Compose[/gold], reduce this card's cost by 1.",
+  "STS2_TOMORIN_MOD-PENGUIN_KICK.upgrade_description": "Deal [blue]{Damage:diff()}[/blue] damage. Each time you [gold]Compose[/gold], reduce this card's cost by 1.",
+  "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.title": "Giant Stone Force",
+  "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.description": "Choose 2 cards in your draw pile. Transform them into [gold]Giant Rock[/gold]s.",
+  "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.upgrade_description": "Choose 2 cards in your draw pile. Transform them into upgraded [gold]Giant Rock[/gold]s.",
+  "STS2_TOMORIN_MOD-GIANT_ROCK.title": "Giant Rock",
+  "STS2_TOMORIN_MOD-GIANT_ROCK.description": "[gold]Unplayable[/gold]."
 }

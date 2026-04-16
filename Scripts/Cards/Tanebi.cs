@@ -24,13 +24,13 @@ public class Tanebi : BaseCardModel
         {
             new ComposeVar(new Dictionary<CardType, int>()
             {
-                { CardType.Attack, 1 },
+                { CardType.Attack, 2 },
                 // { CardType.Skill, 1 }
             }, ModelDb.Card<TanebiToken>()),
         };
 
     public Tanebi() :
-        base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)
+        base(0, CardType.Skill, CardRarity.Rare, TargetType.Self)
     {
     }
 

@@ -1,6 +1,7 @@
 using BaseLib.Utils;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Extensions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
@@ -15,7 +16,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 诗与歌
-/// 金卡 1费 技能 消耗手牌/牌组/弃牌堆中所有收集品，每消耗一张获得1->2层敏捷和1->2层心之壁
+/// 金卡 1费 技能 消耗 消耗手牌/牌组/弃牌堆中所有收集品。消耗牌堆中有一张收集品则获得1->2层敏捷和1->2层心之壁
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class PoetryOrLyrics : BaseCardModel
@@ -34,6 +35,16 @@ public class PoetryOrLyrics : BaseCardModel
             var list = base.ExtraHoverTips.ToList();
             list.Add(HoverTipFactory.FromPower<DexterityPower>());
             list.Add(HoverTipFactory.FromPower<AtFieldPower>());
+            return list;
+        }
+    }
+
+    public override IEnumerable<CardKeyword> CanonicalKeywords 
+    {
+        get
+        {
+            var list = base.CanonicalKeywords.ToList();
+            list.Add(CardKeyword.Exhaust);
             return list;
         }
     }
@@ -61,11 +72,17 @@ public class PoetryOrLyrics : BaseCardModel
             toExhaust.AddRange(pile.Where(c => collectibleTypes.Contains(c.GetType())));
         }
 
-        var count = toExhaust.Count;
         foreach (var card in toExhaust)
         {
             await CardCmd.Exhaust(choiceContext, card);
         }
+        
+        //消耗牌堆中收集品数量
+        var exhaustPile = Owner.PlayerCombatState?.ExhaustPile;
+        if (exhaustPile == null || exhaustPile.Cards.Count == 0)
+            return;
+
+        var count = exhaustPile.Cards.Count(c => collectibleTypes.Contains(c.GetType()));
 
         await PowerCmd.Apply<DexterityPower>(Owner.Creature, base.DynamicVars["DexterityPower"].BaseValue * count,
             Owner.Creature, this);

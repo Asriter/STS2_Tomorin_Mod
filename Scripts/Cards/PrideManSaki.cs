@@ -12,7 +12,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// PrideManSaki
-/// 1费 金卡 攻击 常驻消耗 对所有敌人造成10-12点伤害*10次
+/// 1费 金卡 攻击 常驻消耗 对所有敌人造成5-10点伤害*10次
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class PrideManSaki : BaseCardModel
@@ -25,15 +25,17 @@ public class PrideManSaki : BaseCardModel
     public override IEnumerable<CardKeyword> CanonicalKeywords =>
         [CardKeyword.Exhaust];
 
-    protected override int CanonicalEnergyCost => IsUpgraded ? 0 : 1;
+    // protected override int CanonicalEnergyCost => IsUpgraded ? 0 : 1;
 
     public PrideManSaki() :
-        base(1, CardType.Attack, CardRarity.Token, TargetType.AllEnemies)
+        base(1, CardType.Attack, CardRarity.Token, TargetType.AnyAlly)
     {
     }
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
+        ArgumentNullException.ThrowIfNull(cardPlay.Target, "cardPlay.Target");
+      
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
             .FromCard(this)
             .TargetingAllOpponents(CombatState)
@@ -43,6 +45,6 @@ public class PrideManSaki : BaseCardModel
 
     protected override void OnUpgrade()
     {
-        DynamicVars.Damage.UpgradeValueBy(2m);
+        DynamicVars.Damage.UpgradeValueBy(5m);
     }
 }

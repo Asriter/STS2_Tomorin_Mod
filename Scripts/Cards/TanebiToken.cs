@@ -25,7 +25,7 @@ public class TanebiToken : BaseCardModel
         [CardKeyword.Exhaust];
 
     public TanebiToken() :
-        base(0, CardType.Skill, CardRarity.Token, TargetType.Self)
+        base(1, CardType.Skill, CardRarity.Token, TargetType.Self)
     {
     }
 

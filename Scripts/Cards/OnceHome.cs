@@ -12,7 +12,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 曾经的归宿
-/// 金卡 1费 技能 消耗 心之壁层数翻倍（升级后先额外获得2层）；将一张笔记本加入弃牌堆
+/// 金卡 1费 技能 消耗 回合开始时心之壁不会自动减少（升级后先额外获得2层）；将一张笔记本加入弃牌堆
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class OnceHome : BaseCardModel
@@ -31,7 +31,7 @@ public class OnceHome : BaseCardModel
         }
     }
 
-    public OnceHome() : base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)
+    public OnceHome() : base(1, CardType.Power, CardRarity.Rare, TargetType.Self)
     {
     }
 
@@ -42,15 +42,18 @@ public class OnceHome : BaseCardModel
             await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, 2m, base.Owner.Creature, this);
         }
 
-        if (Owner.Creature.HasPower<AtFieldPower>())
-        {
-            var atFieldPower = Owner.Creature.GetPower<AtFieldPower>();
-            decimal currentAmount = atFieldPower.Amount;
-            if (currentAmount > 0m)
-            {
-                await PowerCmd.ModifyAmount(atFieldPower, currentAmount, Owner.Creature, this);
-            }
-        }
+        // if (Owner.Creature.HasPower<AtFieldPower>())
+        // {
+        //     var atFieldPower = Owner.Creature.GetPower<AtFieldPower>();
+        //     decimal currentAmount = atFieldPower.Amount;
+        //     if (currentAmount > 0m)
+        //     {
+        //         await PowerCmd.ModifyAmount(atFieldPower, currentAmount, Owner.Creature, this);
+        //     }
+        // }
+        
+        //挂buff
+        await PowerCmd.Apply<OnceHomePower>(Owner.Creature, 1m, Owner.Creature, this);
 
         var brokenNote = base.CombatState!.CreateCard<BrokenNote>(Owner);
         await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Discard, addedByPlayer: true);

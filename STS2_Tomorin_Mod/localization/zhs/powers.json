@@ -43,5 +43,8 @@
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN_POWER.title": "=未来永劫",
   "STS2_TOMORIN_MOD-ADAYUME_POWER.description": "每当你打出一张牌时，你获得[blue]1[/blue]点[gold]心之壁[/gold]和[blue]1[/blue]点[gold]格挡[/gold]",
   "STS2_TOMORIN_MOD-ADAYUME_POWER.smartDescription": "每当你打出一张牌时，你获得[blue]{Amount}[/blue]点[gold]心之壁[/gold]和[blue]{Amount}[/blue]点[gold]格挡[/gold]",
-  "STS2_TOMORIN_MOD-ADAYUME_POWER.title": "过堕幻"
+  "STS2_TOMORIN_MOD-ADAYUME_POWER.title": "过堕幻",
+  "STS2_TOMORIN_MOD-ONCE_HOME_POWER.description": "回合开始时[gold]心之壁[/gold]不再自动减少。",
+  "STS2_TOMORIN_MOD-ONCE_HOME_POWER.smartDescription": "回合开始时[gold]心之壁[/gold]不再自动减少。",
+  "STS2_TOMORIN_MOD-ONCE_HOME_POWER.title": "曾经的归宿"
 }

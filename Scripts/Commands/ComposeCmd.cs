@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using STS2_Tomorin_Mod.Cards.Base;
@@ -103,21 +104,14 @@ public static class ComposeCmd
         await CardCmd.Exhaust(choiceContext, source);
 
         //触发所有的”作词后”效果
-        IRunState runState = player.RunState;
-        foreach (AbstractModel model in runState.IterateHookListeners(null))
+        var runState = source.CombatState;
+        foreach (AbstractModel model in runState.IterateHookListeners())
         {
+            // Log.Warn("测试代码，触发作词后回调：" + model.GetType());
             if (model is CustomHookInterface customHook)
             {
+                // Log.Warn("测试代码，类型判断成功！：" + model.GetType());
                 await customHook.AfterCompose(choiceContext, player, source);
-            }
-        }
-
-        // 触发战斗中所有power的”作词后”效果
-        foreach (PowerModel power in player.Creature.Powers)
-        {
-            if (power is CustomHookInterface powerHook)
-            {
-                await powerHook.AfterCompose(choiceContext, player, source);
             }
         }
     }
@@ -138,14 +132,15 @@ public static class ComposeCmd
         {
             var cardType = kv.Key;
             var requiredCount = kv.Value;
-            var actualCount = hand.Cards.Count(card => card != source && card.Type == cardType && !card.CanonicalKeywords.Contains(CustomKeyWord.Epiphany));
+            var actualCount = hand.Cards.Count(card =>
+                card != source && card.Type == cardType && !card.CanonicalKeywords.Contains(CustomKeyWord.Epiphany));
             if (actualCount + epiphanyCount < requiredCount)
                 return false;
 
             if (actualCount < requiredCount)
                 epiphanyCount -= (requiredCount - actualCount);
         }
-        
+
         return true;
     }
 }

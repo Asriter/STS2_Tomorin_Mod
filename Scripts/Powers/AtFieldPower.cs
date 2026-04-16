@@ -21,6 +21,7 @@ namespace STS2_Tomorin_Mod.Powers;
 /// </summary>
 public class AtFieldPower : BasePowerModel
 {
+    public const string DefaultName = "AtFieldPower";
     public override PowerType Type => PowerType.Buff;
     public override PowerStackType StackType => PowerStackType.Counter;
     public override bool AllowNegative => false;
@@ -93,13 +94,14 @@ public class AtFieldPower : BasePowerModel
 
     /// <summary>
     /// 当前心之壁层数减半
+    /// 如果有“曾经的归宿”则不减半
     /// </summary>
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
     public override async Task AfterSideTurnStart(CombatSide side, CombatState combatState)
     {
-        if (side == Owner.Side)
+        if (side == Owner.Side && !Owner.HasPower<OnceHomePower>())
         {
             int amount = Amount / 2;
             await PowerCmd.ModifyAmount(this, amount - Amount, null, null);

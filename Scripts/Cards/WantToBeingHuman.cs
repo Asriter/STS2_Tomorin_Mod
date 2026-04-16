@@ -11,12 +11,13 @@ using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.CardPools;
 using STS2_Tomorin_Mod.Cards.Base;
+using STS2_Tomorin_Mod.Powers;
 
 namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 好想成为人类
-/// 金卡 1费 技能 移除所有格挡，每移除1点格挡获得1->2点力量（本回合结束时失去）
+/// 金卡 1费 技能 移除所有心之壁，每移除1点心之壁获得1->2点力量（本回合结束时失去）
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class WantToBeingHuman : BaseCardModel
@@ -25,7 +26,6 @@ public class WantToBeingHuman : BaseCardModel
         new List<DynamicVar>()
         {
             new PowerVar<FlexPotionPower>(1m),
-            new BlockVar(1m, ValueProp.Move),
         };
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips
@@ -44,18 +44,19 @@ public class WantToBeingHuman : BaseCardModel
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        decimal currentBlock = Owner.Creature.Block;
-        if (currentBlock <= 0m) return;
-
-        await CreatureCmd.LoseBlock(Owner.Creature, currentBlock);
-
-        decimal strengthToGain = (currentBlock * base.DynamicVars[nameof(FlexPotionPower)].BaseValue) / DynamicVars.Block.IntValue;
-        if (strengthToGain > 1m)
+        if (Owner.Creature.HasPower<AtFieldPower>())
         {
-            await PowerCmd.Apply<FlexPotionPower>(Owner.Creature, strengthToGain, Owner.Creature, this);
+            var atFieldPower = Owner.Creature.GetPower<AtFieldPower>();
+            decimal currentAmount = atFieldPower.Amount;
+            if (currentAmount > 0m)
+            {
+                await PowerCmd.ModifyAmount(atFieldPower, -currentAmount, Owner.Creature, this);
+                decimal strengthToGain = currentAmount * base.DynamicVars[nameof(FlexPotionPower)].BaseValue;
+                await PowerCmd.Apply<FlexPotionPower>(Owner.Creature, strengthToGain, Owner.Creature, this);
+            }
         }
     }
-    
+
 
     protected override void OnUpgrade()
     {

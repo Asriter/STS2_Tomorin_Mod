@@ -28,7 +28,7 @@ public class PrideManSaki : BaseCardModel
     // protected override int CanonicalEnergyCost => IsUpgraded ? 0 : 1;
 
     public PrideManSaki() :
-        base(1, CardType.Attack, CardRarity.Token, TargetType.AnyAlly)
+        base(1, CardType.Attack, CardRarity.Token, TargetType.AnyEnemy)
     {
     }
 
@@ -38,7 +38,7 @@ public class PrideManSaki : BaseCardModel
       
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
             .FromCard(this)
-            .TargetingAllOpponents(CombatState)
+            .Targeting(cardPlay.Target)
             .WithHitCount(HitCount)
             .Execute(choiceContext);
     }

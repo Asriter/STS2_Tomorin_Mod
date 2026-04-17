@@ -69,7 +69,7 @@
   "STS2_TOMORIN_MOD-HOPE_ON_THE_VOICE.upgrade_description": "给予一名敌人[blue]{WeakPower}[/blue]层[gold]虚弱[/gold]和[blue]{VulnerablePower}[/blue]层[gold]易伤[/gold]。\n将一张[gold]深夜的罐装咖啡[/gold]加入手牌。",
   "STS2_TOMORIN_MOD-UTAKOTOBA.description": "[gold]作词[/gold]\n保留费用，立即结束当前回合并进入一个额外的回合。",
   "STS2_TOMORIN_MOD-UTAKOTOBA.title": "诗超绊",
-  "STS2_TOMORIN_MOD-UTAKOTOBA_TOKEN.description": "敌方全体造成5点伤害[gold]X[/gold]次，抽[gold]X{IfUpgraded:show:+5}[/gold]张牌。\n[gold]X[/gold]为这场战斗中被[gold]作词[/gold]消耗的卡的数量。{InCombat:\n(当前作词消耗的卡：{ComposeNum})|}",
+  "STS2_TOMORIN_MOD-UTAKOTOBA_TOKEN.description": "敌方全体造成5点伤害[gold]X[/gold]次，抽[gold]X{IfUpgraded:show:+5}[/gold]张牌。\n[gold]X[/gold]为这场战斗中被[gold]作词[/gold]消耗的卡的数量。\n每次打出，这张卡的耗能减少1。{InCombat:\n(当前作词消耗的卡：{ComposeNum})|}",
   "STS2_TOMORIN_MOD-UTAKOTOBA_TOKEN.title": "唱着我们的歌",
   "STS2_TOMORIN_MOD-SENZAIHYOUMEI.description": "[gold]作词[/gold]",
   "STS2_TOMORIN_MOD-SENZAIHYOUMEI.upgrade_description": "抽[blue]{Cards}[/blue]张卡。",
@@ -135,7 +135,7 @@
   "STS2_TOMORIN_MOD-REPRODUCTION.upgrade_description": "消耗手牌中的一张[gold]状态[/gold]牌。\n获得{Energy:energyIcons()}。",
   "STS2_TOMORIN_MOD-GOING_ALL_OUT.description": "选择一名敌人，将其本回合意图修改为：\n造成[blue]1[/blue]点伤害[blue]3[/blue]次",
   "STS2_TOMORIN_MOD-GOING_ALL_OUT.title": "拼命",
-  "STS2_TOMORIN_MOD-NAME_OF_TEAR.description": "自身的[gold]心之壁[/gold]对敌人造成的伤害翻倍。",
+  "STS2_TOMORIN_MOD-NAME_OF_TEAR.description": "自身的[gold]心之壁[/gold]对敌人造成的伤害翻倍。\n 该能力无法叠加。",
   "STS2_TOMORIN_MOD-NAME_OF_TEAR.title": "泪水之名",
   "STS2_TOMORIN_MOD-TAKAMASU_CALCULUS.title": "高松积分",
   "STS2_TOMORIN_MOD-TAKAMASU_CALCULUS.description": "获得[blue]{Block:diff()}[/blue]点[gold]格挡[/gold]。\n造成[blue]{Damage:diff()}[/blue]点伤害。\n获得[blue]{AtFieldPower:diff()}[/blue]层[gold]心之壁[/gold]。\n每次打出此卡，其数值在本局游戏中永久增加[blue]{Increase}[/blue]点。",
@@ -190,6 +190,6 @@
   "STS2_TOMORIN_MOD-PENGUIN_KICK.title": "企鹅飞踢",
   "STS2_TOMORIN_MOD-PENGUIN_KICK.description": "对一名敌人造成[blue]{Damage:diff()}[/blue]点伤害。\n每次触发[gold]作词[/gold]，此卡耗能减少1。",
   "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.title": "巨石之力",
-  "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.description": "选择卡组中的[blue]2[/blue]张卡，将其变化为[gold]巨石[/gold]。"
+  "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.description": "选择卡组中的[blue]2[/blue]张卡，将其变化为[gold]{IfUpgraded:show:巨石+|巨石}[/gold]。"
 }
 

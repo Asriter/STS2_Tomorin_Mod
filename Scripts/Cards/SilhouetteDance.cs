@@ -14,7 +14,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 影色舞
-/// 金卡 0费 技能卡 作词 状态卡*1
+/// 蓝卡 0费 技能卡 作词 状态卡*1
 /// 抽1->2张牌，将一张=未来永劫加入手牌
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
@@ -38,7 +38,7 @@ public class SilhouetteDance : BaseCardModel
     }
 
     public SilhouetteDance() :
-        base(0, CardType.Skill, CardRarity.Rare, TargetType.Self)
+        base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)
     {
     }
 

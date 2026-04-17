@@ -23,7 +23,7 @@ public class Utakotoba() :
     protected override IEnumerable<DynamicVar> CanonicalVars =>
         new List<DynamicVar>()
         {
-            new ComposeVar(new Dictionary<CardType, int>() { { CardType.Status, 5 } }, ModelDb.Card<UtakotobaToken>()),
+            new ComposeVar(new Dictionary<CardType, int>() { { CardType.Status, 3 } }, ModelDb.Card<UtakotobaToken>()),
         };
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips

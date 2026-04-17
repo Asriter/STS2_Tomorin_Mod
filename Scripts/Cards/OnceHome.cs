@@ -17,8 +17,8 @@ namespace STS2_Tomorin_Mod.Cards;
 [Pool(typeof(TomorinCardPool))]
 public class OnceHome : BaseCardModel
 {
-    public override IEnumerable<CardKeyword> CanonicalKeywords =>
-        [CardKeyword.Exhaust];
+    // public override IEnumerable<CardKeyword> CanonicalKeywords =>
+        // [CardKeyword.Exhaust];
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips
     {

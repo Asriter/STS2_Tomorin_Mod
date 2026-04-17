@@ -133,6 +133,7 @@ public class AtFieldPower : BasePowerModel
 
     /// <summary>
     /// 被攻击后层数减少
+    /// Unblockable，也就是主动扣血不减少层数
     /// </summary>
     /// <param name="choiceContext"></param>
     /// <param name="target"></param>
@@ -145,7 +146,7 @@ public class AtFieldPower : BasePowerModel
         DamageResult result, ValueProp props,
         Creature? dealer, CardModel? cardSource)
     {
-        if (target == Owner && result.UnblockedDamage > 0 && ShouldDeduceAtFieldPower)
+        if (target == Owner && !props.HasFlag(ValueProp.Unblockable) && result.UnblockedDamage > 0 && ShouldDeduceAtFieldPower)
         {
             await PowerCmd.ModifyAmount(this, -result.UnblockedDamage, null, null);
         }

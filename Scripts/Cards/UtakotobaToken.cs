@@ -19,7 +19,7 @@ namespace STS2_Tomorin_Mod.Cards;
 [Pool(typeof(TomorinCardPool))]
 public class UtakotobaToken : BaseCardModel
 {
-    public UtakotobaToken() : base(0, CardType.Attack, CardRarity.Token, TargetType.AllEnemies)
+    public UtakotobaToken() : base(3, CardType.Attack, CardRarity.Token, TargetType.AllEnemies)
     {
     }
 
@@ -69,6 +69,13 @@ public class UtakotobaToken : BaseCardModel
     {
         //更新融合次数，用于表现
         UpdateComposeNum();
+        
+        //如果被打出的是自己
+        if (cardPlay.Card == this)
+        {
+            //减费
+            base.EnergyCost.AddThisCombat(-1);
+        }
         return Task.CompletedTask;
     }
 

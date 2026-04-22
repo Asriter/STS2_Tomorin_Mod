@@ -12,3 +12,4 @@ build/
 *cs.uid
 *.user
 global.json
+.addons/

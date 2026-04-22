@@ -23,8 +23,8 @@ public class ThisNoNeed : BaseCardModel
     protected override IEnumerable<DynamicVar> CanonicalVars =>
         new List<DynamicVar>()
         {
-            new DamageVar(8m, ValueProp.Move),
-            new BlockVar(8m, ValueProp.Move),
+            new DamageVar(5m, ValueProp.Move),
+            new BlockVar(5m, ValueProp.Move),
         };
 
     public ThisNoNeed() : base(1, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)

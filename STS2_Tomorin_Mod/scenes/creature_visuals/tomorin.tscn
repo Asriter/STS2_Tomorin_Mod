@@ -1,12 +1,16 @@
-[gd_scene load_steps=2 format=3 uid="uid://cfbgfauksulpl"]
+[gd_scene load_steps=3 format=3 uid="uid://cfbgfauksulpl"]
 
+[ext_resource type="Script" uid="uid://c2yrfx7bd5gc2" path="res://src/Core/Nodes/Combat/NCreatureVisuals.cs" id="1_lo36t"]
 [ext_resource type="Texture2D" uid="uid://c643ckqyff4kw" path="res://STS2_Tomorin_Mod/animations/characters/tomorin/tomorin.png" id="2_j4ahg"]
 
 [node name="Tomorin" type="Node2D"]
+script = ExtResource("1_lo36t")
 metadata/_edit_group_ = true
 
-[node name="Visuals" type="Sprite2D" parent="."]
-unique_name_in_owner = true
+[node name="Visuals1" type="SpineSprite" parent="."]
+visible = false
+
+[node name="tomori" type="Sprite2D" parent="Visuals1"]
 position = Vector2(2.9999998, -158.99998)
 scale = Vector2(0.8, 0.8)
 texture = ExtResource("2_j4ahg")
@@ -30,3 +34,12 @@ position = Vector2(4, -293)
 [node name="CenterPos" type="Marker2D" parent="."]
 unique_name_in_owner = true
 position = Vector2(-9, -115)
+
+[node name="Visuals" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(2.9999998, -158.99998)
+scale = Vector2(0.8, 0.8)
+texture = ExtResource("2_j4ahg")
+hframes = 2
+vframes = 2
+frame = 2

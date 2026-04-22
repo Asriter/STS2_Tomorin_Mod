@@ -179,7 +179,7 @@
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE.upgrade_description": "[gold]作词[/gold]\n抽[blue]{Cards:diff()}[/blue]张牌。将一张[gold]=未来永劫[/gold]加入手牌。",
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN.title": "=未来永劫",
   "STS2_TOMORIN_MOD-SILHOUETTE_DANCE_TOKEN.description": "每当你[gold]作词[/gold]时，复制一张相同的作词牌放入弃牌堆。",
-  "STS2_TOMORIN_MOD-SING_FULL_POWER.description": "对一名敌人造成[blue]{Damage:diff()}[/blue]点伤害。\n移除你的所有[gold]心之壁[/gold]，每移除一点额外造成[blue]{ExtraDamage:diff()}[/blue]点伤害。{InCombat:\n（额外命中{CalculatedHits:diff()}次）|}",
+  "STS2_TOMORIN_MOD-SING_FULL_POWER.description": "对一名敌人造成[blue]{CalculationBase:diff()}[/blue]点伤害。\n你每有一层[gold]心之壁[/gold]额外造成[blue]{ExtraDamage:diff()}[/blue]点伤害。{InCombat:\n（当前伤害为[blue]{CalculatedDamage:diff()}[/blue]）|}",
   "STS2_TOMORIN_MOD-SING_FULL_POWER.title": "全力歌唱",
   "STS2_TOMORIN_MOD-ADAYUME.description": "每当你打出一张牌时，你获得[blue]1[/blue]点[gold]心之壁[/gold]和[blue]1[/blue]点[gold]格挡[/gold]",
   "STS2_TOMORIN_MOD-ADAYUME.title": "过堕幻",
@@ -190,6 +190,14 @@
   "STS2_TOMORIN_MOD-PENGUIN_KICK.title": "企鹅飞踢",
   "STS2_TOMORIN_MOD-PENGUIN_KICK.description": "对一名敌人造成[blue]{Damage:diff()}[/blue]点伤害。\n每次触发[gold]作词[/gold]，此卡耗能减少1。",
   "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.title": "巨石之力",
-  "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.description": "选择卡组中的[blue]2[/blue]张卡，将其变化为[gold]{IfUpgraded:show:巨石+|巨石}[/gold]。"
+  "STS2_TOMORIN_MOD-GIANT_STONE_FORCE.description": "选择卡组中的[blue]2[/blue]张卡，将其变化为[gold]{IfUpgraded:show:巨石+|巨石}[/gold]。",
+  "STS2_TOMORIN_MOD-ANON_REJECT.description": "在你的回合结束时，如果这张牌在你的[gold]手牌[/gold]中，获得{WeakPower:diff()}层[gold]虚弱[/gold]和{FrailPower:diff()}层[gold]脆弱[/gold]。",
+  "STS2_TOMORIN_MOD-ANON_REJECT.title": "拒绝",
+  "STS2_TOMORIN_MOD-ANON_NEED_YOU.description": "千早爱音能力[gold]要逃跑了！[/gold]的层数减少一层。",
+  "STS2_TOMORIN_MOD-ANON_NEED_YOU.title": "“我需要你！”",
+  "STS2_TOMORIN_MOD-ANON_PLAY_GUITAR.description": "千早爱音能力[gold]要逃跑了！[/gold]的层数减少一层。",
+  "STS2_TOMORIN_MOD-ANON_PLAY_GUITAR.title": "“来弹吉他！”",
+  "STS2_TOMORIN_MOD-ANON_LIVE_TOGETHER.description": "千早爱音能力[gold]要逃跑了！[/gold]的层数减少一层。",
+  "STS2_TOMORIN_MOD-ANON_LIVE_TOGETHER.title": "“一起演出！”"
 }
 

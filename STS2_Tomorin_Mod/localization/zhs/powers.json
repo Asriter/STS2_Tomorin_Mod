@@ -46,5 +46,14 @@
   "STS2_TOMORIN_MOD-ADAYUME_POWER.title": "过堕幻",
   "STS2_TOMORIN_MOD-ONCE_HOME_POWER.description": "回合开始时[gold]心之壁[/gold]不再自动减少。",
   "STS2_TOMORIN_MOD-ONCE_HOME_POWER.smartDescription": "回合开始时[gold]心之壁[/gold]不再自动减少。",
-  "STS2_TOMORIN_MOD-ONCE_HOME_POWER.title": "曾经的归宿"
+  "STS2_TOMORIN_MOD-ONCE_HOME_POWER.title": "曾经的归宿",
+  "STS2_TOMORIN_MOD-ANON_ESCAPE_POWER.description": "爱音生命值归零后会开始逃跑。",
+  "STS2_TOMORIN_MOD-ANON_ESCAPE_POWER.smartDescription": "爱音生命值归零后会开始逃跑。",
+  "STS2_TOMORIN_MOD-ANON_ESCAPE_POWER.title": "逃避",
+  "STS2_TOMORIN_MOD-ANON_ESCAPE_COUNT_POWER.description": "层数归零时，千早爱音会认输。",
+  "STS2_TOMORIN_MOD-ANON_ESCAPE_COUNT_POWER.smartDescription": "层数归零时，千早爱音会认输。",
+  "STS2_TOMORIN_MOD-ANON_ESCAPE_COUNT_POWER.title": "要逃跑了！",
+  "STS2_TOMORIN_MOD-LESS_DRAW_NEXT_TURN_POWER.description": "下回合开始时，抽卡数量减少1。",
+  "STS2_TOMORIN_MOD-LESS_DRAW_NEXT_TURN_POWER.smartDescription": "下回合开始时，抽卡数量减少{Amount}。",
+  "STS2_TOMORIN_MOD-LESS_DRAW_NEXT_TURN_POWER.title": "减少抽牌"
 }

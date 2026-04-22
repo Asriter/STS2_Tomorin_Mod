@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3 uid="uid://b2incu8paxdqv"]
+
+[ext_resource type="Script" uid="uid://dcwgtgxbpct6v" path="res://src/Core/Nodes/Rooms/NCombatBackground.cs" id="1_myqpv"]
+[ext_resource type="Texture2D" uid="uid://d1ne86qlyh8da" path="res://STS2_Tomorin_Mod/images/rooms/AnonBossRoom.png" id="1_vapuk"]
+
+[node name="Sts2TomorinModAnonBossBackground" type="TextureRect"]
+script = ExtResource("1_myqpv")
+
+[node name="AnonBossRoom" type="Sprite2D" parent="."]
+scale = Vector2(2.85, 2.85)
+texture = ExtResource("1_vapuk")
+
+[node name="Layer_00" type="Control" parent="."]
+unique_name_in_owner = true
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0

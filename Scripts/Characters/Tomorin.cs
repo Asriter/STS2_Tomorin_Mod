@@ -48,7 +48,7 @@ public sealed class Tomorin : CustomCharacterModel
         ModelDb.Card<StrikeTomorin>(),
         ModelDb.Card<StrikeTomorin>(),
         ModelDb.Card<DefendTomorin>(),
-        ModelDb.Card<DefendTomorin>(),
+        // ModelDb.Card<DefendTomorin>(),
         ModelDb.Card<DefendTomorin>(),
         ModelDb.Card<DefendTomorin>(),
         ModelDb.Card<DefendTomorin>(),

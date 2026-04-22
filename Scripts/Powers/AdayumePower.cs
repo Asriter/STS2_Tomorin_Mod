@@ -30,8 +30,8 @@ public class AdayumePower : BasePowerModel
         if (cardPlay.Card.Owner.Creature == Owner)
         {
             Flash();
-            await PowerCmd.Apply<AtFieldPower>(Owner, DynamicVars["AtFieldPower"].BaseValue, Owner, null);
-            await CreatureCmd.GainBlock(base.Owner, base.DynamicVars.Block, null, true);
+            await PowerCmd.Apply<AtFieldPower>(Owner, DynamicVars["AtFieldPower"].BaseValue * Amount, Owner, null);
+            await CreatureCmd.GainBlock(base.Owner, base.DynamicVars.Block.BaseValue * Amount, base.DynamicVars.Block.Props, null, true);
         }
     }
 }

@@ -8,15 +8,31 @@
 
 config_version=5
 
+[Fmod]
+
+General/banks_path="res://STS2_Tomorin_Mod/banks"
+
 [application]
 
 config/name="STS2_Tomorin_Mod"
 config/features=PackedStringArray("4.5", "C#", "Mobile")
 config/icon="res://icon.svg"
 
+[autoload]
+
+FmodManager="*res://addons/fmod/FmodManager.gd"
+
+[debug]
+
+settings/gdscript/always_track_call_stacks=true
+
 [dotnet]
 
 project/assembly_name="STS2_Tomorin_Mod"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/fmod/plugin.cfg")
 
 [rendering]
 

@@ -1,4 +1,5 @@
 using BaseLib.Utils;
+using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -17,11 +18,21 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 好想成为人类
-/// 金卡 1费 技能 移除所有心之壁，每移除1点心之壁获得1->2点力量（本回合结束时失去）
+/// 金卡 1费 技能 移除所有心之壁，每移除1点心之壁获得1点力量（本回合结束时失去）,升级后移除虚无
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class WantToBeingHuman : BaseCardModel
 {
+    public override IEnumerable<CardKeyword> CanonicalKeywords
+    {
+        get
+        {
+            var list = base.CanonicalKeywords.ToList();
+            list.Add(CardKeyword.Ethereal);
+            return list;
+        }
+    }
+
     protected override IEnumerable<DynamicVar> CanonicalVars =>
         new List<DynamicVar>()
         {
@@ -34,6 +45,7 @@ public class WantToBeingHuman : BaseCardModel
         {
             var list = base.ExtraHoverTips.ToList();
             list.Add(HoverTipFactory.FromPower<FlexPotionPower>());
+            list.Add(HoverTipFactory.FromPower<AtFieldPower>());
             return list;
         }
     }
@@ -60,6 +72,7 @@ public class WantToBeingHuman : BaseCardModel
 
     protected override void OnUpgrade()
     {
-        base.DynamicVars["FlexPotionPower"].UpgradeValueBy(1m);
+        // base.DynamicVars["FlexPotionPower"].UpgradeValueBy(1m);
+        RemoveKeyword(CardKeyword.Ethereal);
     }
 }

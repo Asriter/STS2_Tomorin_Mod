@@ -16,38 +16,22 @@ namespace STS2_Tomorin_Mod.Patch;
 [HarmonyPatch(typeof(Hook), "AfterCardExhausted")]
 internal class HookAfterCardExhaustedPatch
 {
-    // ==========================================
-    // 第一步：定义反向补丁 (Reverse Patch)
-    // 作用：提供一个原方法的“克隆体”，供我们稍后手动调用
-    // ==========================================
-    [HarmonyReversePatch]
-    [HarmonyPatch(typeof(Hook), "AfterCardExhausted")]
-    public static Task Original_AfterCardExhausted(CombatState combatState, PlayerChoiceContext choiceContext,
-        CardModel card, bool causedByEthereal)
-    {
-        // 这里的代码会在运行时被 Harmony 替换为底层的 IL 指令，所以写什么都会被忽略
-        // 抛出异常可以防止 Harmony 应用失败时发生意外的静默错误
-        throw new NotImplementedException("这是反向补丁的占位符，如果抛出此异常说明 Harmony 未能成功应用该反向补丁。");
-    }
-
-    // ==========================================
-    // 第二步：Prefix 完全拦截
-    // ==========================================
-    [HarmonyPrefix]
-    public static bool Prefix(ref Task __result, CombatState combatState, PlayerChoiceContext choiceContext,
+    [HarmonyPriority(Priority.First)]
+    [HarmonyPostfix]
+    public static void Postfix(ref Task __result, CombatState combatState, PlayerChoiceContext choiceContext,
         CardModel card, bool causedByEthereal)
     {
         // 将原方法应当返回的 Task 替换为我们自己构建的 Task
-        __result = AsyncWrapper(combatState, choiceContext, card, causedByEthereal);
+        __result = AsyncWrapper(__result, combatState, choiceContext, card, causedByEthereal);
 
         // 返回 false，告诉 Harmony 立即终止原方法的执行
-        return false;
+        // return false;
     }
 
     // ==========================================
-    // 第三步：自定义包裹方法 (处理前置逻辑)
+    // 自定义包裹方法 (处理前置逻辑)
     // ==========================================
-    private static async Task AsyncWrapper(CombatState combatState, PlayerChoiceContext choiceContext, CardModel card,
+    private static async Task AsyncWrapper(Task originalTask, CombatState combatState, PlayerChoiceContext choiceContext, CardModel card,
         bool causedByEthereal)
     {
         // ------------------------------------------
@@ -65,11 +49,7 @@ internal class HookAfterCardExhaustedPatch
         // ------------------------------------------
         // 【B】手动调用原方法克隆体
         // ------------------------------------------
-        // 通过反向补丁执行原本的 AfterCardExhausted 逻辑
-        Task originalLogicTask = Original_AfterCardExhausted(combatState, choiceContext, card, causedByEthereal);
-
-        // 等待原方法的逻辑执行完毕
-        await originalLogicTask;
+        await originalTask;
 
         // ------------------------------------------
         // 【C】后置逻辑 (可选)

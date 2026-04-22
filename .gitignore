@@ -12,4 +12,4 @@ build/
 *cs.uid
 *.user
 global.json
-.addons/
+build/STS2_Tomorin_Mod.pck

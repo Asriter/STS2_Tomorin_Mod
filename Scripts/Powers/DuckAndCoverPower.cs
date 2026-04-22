@@ -20,7 +20,7 @@ public class DuckAndCoverPower : BasePowerModel
 
     public override async Task AfterBlockCleared(Creature creature)
     {
-        if (creature.Side == base.Owner.Side && base.Owner.HasPower<AtFieldPower>())
+        if (creature == base.Owner && base.Owner.HasPower<AtFieldPower>())
         {
             decimal atFieldAmount = base.Owner.GetPower<AtFieldPower>().Amount;
             if (atFieldAmount > 0)

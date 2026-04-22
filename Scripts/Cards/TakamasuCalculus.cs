@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
+using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Saves.Runs;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.CardPools;
@@ -83,6 +84,16 @@ public class TakamasuCalculus : BaseCardModel
     public TakamasuCalculus() :
         base(1, CardType.Attack, CardRarity.Rare, TargetType.AnyEnemy)
     {
+    }
+
+    protected override IEnumerable<IHoverTip> ExtraHoverTips
+    {
+        get
+        {
+            var list = base.ExtraHoverTips.ToList();
+            list.Add(HoverTipFactory.FromPower<AtFieldPower>());
+            return list;
+        }
     }
 
     public override IEnumerable<CardKeyword> CanonicalKeywords

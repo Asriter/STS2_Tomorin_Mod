@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
+using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.CardPools;
@@ -28,11 +29,19 @@ public class SingFullPower() : BaseCardModel(1, CardType.Attack, CardRarity.Rare
         get
         {
             var list = base.CanonicalVars.ToList();
-            list.Add(new DamageVar(9, ValueProp.Move));
-            list.Add(new IntVar(ExtraDamageKey, 3));
-            list.Add(new CalculationBaseVar(0m));
-            list.Add(new CalculationExtraVar(1m));
-            list.Add(new CalculatedVar("CalculatedHits").WithMultiplier(GetDamageCount));
+            list.Add(new CalculationBaseVar(9));
+            list.Add(new ExtraDamageVar(3));
+            list.Add(new CalculatedDamageVar(ValueProp.Move).WithMultiplier(GetDamageCount));
+            return list;
+        }
+    }
+
+    protected override IEnumerable<IHoverTip> ExtraHoverTips
+    {
+        get
+        {
+            var list = base.ExtraHoverTips.ToList();
+            list.Add(HoverTipFactory.FromPower<AtFieldPower>());
             return list;
         }
     }
@@ -40,39 +49,29 @@ public class SingFullPower() : BaseCardModel(1, CardType.Attack, CardRarity.Rare
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         ArgumentNullException.ThrowIfNull(cardPlay.Target, "cardPlay.Target");
+        
         //先打一下
-        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
+        await DamageCmd.Attack(DynamicVars.CalculatedDamage)
             .FromCard(this)
             .Targeting(cardPlay.Target)
             .Execute(choiceContext);
-
-        int count = (int)GetDamageCount(this, Owner.Creature);
-        if (count > 0)
-        {
-            await PowerCmd.Remove<AtFieldPower>(Owner.Creature);
-            //额外打
-            await DamageCmd.Attack(base.DynamicVars[ExtraDamageKey].IntValue)
-                .WithHitCount(count)
-                .FromCard(this)
-                .Targeting(cardPlay.Target)
-                .Execute(choiceContext);
-            
-        }
     }
 
     public static decimal GetDamageCount(CardModel card, Creature? creature)
     {
+        var amount = 0;
         if (card.Owner.Creature.HasPower<AtFieldPower>())
         {
             var atFieldPower = card.Owner.Creature.GetPower<AtFieldPower>();
-            return atFieldPower.Amount;
+            amount = atFieldPower.Amount;
         }
-        return 0;
+
+        return amount;
     }
 
     protected override void OnUpgrade()
     {
-        DynamicVars.Damage.UpgradeValueBy(3);
-        DynamicVars[ExtraDamageKey].UpgradeValueBy(1);
+        DynamicVars.CalculationBase.UpgradeValueBy(3);
+        DynamicVars.ExtraDamage.UpgradeValueBy(1);
     }
 }

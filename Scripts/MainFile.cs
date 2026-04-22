@@ -1,12 +1,14 @@
+using BaseLib.Config;
 using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
-using STS2_Tomorin_Mod.Patch;
+using FileAccess = Godot.FileAccess;
 
 namespace STS2_Tomorin_Mod;
 
 [ModInitializer(nameof(Initialize))]
-public partial class MainFile : Node
+public partial class MainFile : Godot.Node
 {
     public const string ModId = "STS2_Tomorin_Mod"; //At the moment, this is used only for the Logger and harmony names.
     
@@ -19,8 +21,9 @@ public partial class MainFile : Node
     {
         Harmony harmony = new(ModId);
 
-        //尝试创建新的NodeFactory
-        // NRestSiteCharacterFactory factory = new();
         harmony.PatchAll();
+        
+        //加载设置
+        ModConfigRegistry.Register(ModId, new TomorinModConfig());
     }
 }

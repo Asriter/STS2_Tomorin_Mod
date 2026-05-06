@@ -19,6 +19,8 @@ public class ActModelBossPatch
             //根据房间类型判断要给的boss
             if (__instance is Underdocks)
                 __result = [ModelDb.Encounter<AnonBoss>()];
+            if (__instance is Overgrowth)
+                __result = [ModelDb.Encounter<TakiBoss>()];
         }
     }
 }

@@ -1,10 +1,8 @@
 ﻿using BaseLib.Abstracts;
-using BaseLib.Extensions;
 using MegaCrit.Sts2.Core.Bindings.MegaSpine;
-using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Rooms;
-using STS2_Tomorin_Mod.Enemy.Ememies;
+using STS2_Tomorin_Mod.Enemy;
 
 namespace STS2_Tomorin_Mod.Encounters;
 

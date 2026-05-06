@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3 uid="uid://dssexeogemvnl"]
+
+[ext_resource type="Script" uid="uid://dcwgtgxbpct6v" path="res://src/Core/Nodes/Rooms/NCombatBackground.cs" id="1_bkhyi"]
+[ext_resource type="Texture2D" uid="uid://cn5kcf3da26b7" path="res://STS2_Tomorin_Mod/images/rooms/TakiBossRoom.png" id="2_s4cm7"]
+
+[node name="Sts2TomorinModTakiBossBackground" type="TextureRect"]
+script = ExtResource("1_bkhyi")
+
+[node name="TakiBossRoom" type="Sprite2D" parent="."]
+scale = Vector2(2.85, 2.85)
+texture = ExtResource("2_s4cm7")
+
+[node name="TakiBossRoom" type="Sprite2D" parent="TakiBossRoom"]
+scale = Vector2(2.85, 2.85)
+texture = ExtResource("2_s4cm7")
+
+[node name="Layer_00" type="Control" parent="."]
+unique_name_in_owner = true
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0

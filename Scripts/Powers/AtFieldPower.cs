@@ -101,7 +101,7 @@ public class AtFieldPower : BasePowerModel
     /// <returns></returns>
     public override async Task AfterSideTurnStart(CombatSide side, CombatState combatState)
     {
-        if (side == Owner.Side && !Owner.HasPower<OnceHomePower>())
+        if (side == Owner.Side && !Owner.HasPower<OnceHomePower>() && !Owner.HasPower<TakiAtFieldPower>())
         {
             int amount = Amount / 2;
             await PowerCmd.ModifyAmount(this, amount - Amount, null, null);

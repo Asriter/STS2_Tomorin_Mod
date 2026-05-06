@@ -71,8 +71,8 @@ public class AtField : BaseCardModel
         await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue,
             base.Owner.Creature, this);
 
-        var brokenNote = base.CombatState!.CreateCard<BrokenNote>(Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Hand, addedByPlayer: true);
+        // var brokenNote = base.CombatState!.CreateCard<BrokenNote>(Owner);
+        // await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Hand, addedByPlayer: true);
     }
 
     protected override void OnUpgrade()

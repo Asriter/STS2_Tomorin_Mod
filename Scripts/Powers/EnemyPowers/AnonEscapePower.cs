@@ -1,7 +1,7 @@
 ﻿using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
-using STS2_Tomorin_Mod.Enemy.Ememies;
+using STS2_Tomorin_Mod.Enemy;
 
 namespace STS2_Tomorin_Mod.Powers;
 

@@ -7,5 +7,13 @@
   "STS2_TOMORIN_MOD-ANON.moves.speakLine1": "只要能摘下TopStar，我也能成为受人瞩目的大明星了！",
   "STS2_TOMORIN_MOD-ANON.moves.initSpeak": "哼哼，这次谁也不能阻止我成立Anon Tokyo！",
   "STS2_TOMORIN_MOD-ANON.name": "千早爱音",
-  "ANON.name": "Anon"
+  "STS2_TOMORIN_MOD-TAKI.name": "椎名立希",
+  "STS2_TOMORIN_MOD-TAKI.moves.initSpeak": "灯？！！为什么你会在这里！",
+  "STS2_TOMORIN_MOD-TAKI.moves.wait": "抱歉了，我本不想和你战斗。",
+  "STS2_TOMORIN_MOD-TAKI.moves.phaseOne": "但只有摘下TopStar，我才能证明自己比那个人......！",
+  "STS2_TOMORIN_MOD-TAKI.moves.phaseTwo": "我也有不能退让的理由!",
+  "STS2_TOMORIN_MOD-TAKI.moves.phaseTwoDie": "不愧是你，但果然我还不想认输！",
+  "STS2_TOMORIN_MOD-TAKI.moves.phaseThree": "这就是我的全力！也让我听听你的歌！",
+  "STS2_TOMORIN_MOD-TAKI.moves.run": "......果然我还是无法对你动手。精彩的演奏，灯。",
+  "STS2_TOMORIN_MOD-TAKI.moves.die": "不愧是你，灯。虽然输了，但现在的我很幸福......！"
 }

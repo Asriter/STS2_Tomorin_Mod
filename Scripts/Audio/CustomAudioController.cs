@@ -55,6 +55,12 @@ public static class CustomAudioController
         //调整音量大小
         CustomBgmPlayer.VolumeDb = SaveManager.Instance.SettingsSave.VolumeBgm;
         AudioStream bgmStream = GD.Load<AudioStream>(GetBgmPath(path));
+        if (bgmStream == null)
+        {
+            StopMusic();
+            return;
+        }
+        
         CustomBgmPlayer.Stream = bgmStream;
         CustomBgmPlayer.Play();
     }
@@ -79,6 +85,9 @@ public static class CustomAudioController
             sfxStream = GD.Load<AudioStream>(GetSfxPath(path));
             _sfxDict[path] = sfxStream;
         }
+
+        if (sfxStream == null)
+            return;
         
         CustomSfxPlayer.Stream = sfxStream;
         CustomSfxPlayer.Finished += CustomSfxPlayer.QueueFree;

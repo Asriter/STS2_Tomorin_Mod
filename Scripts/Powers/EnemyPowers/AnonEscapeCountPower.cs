@@ -5,8 +5,7 @@ using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using STS2_Tomorin_Mod.Cards;
-using STS2_Tomorin_Mod.Enemy.Ememies;
-using STS2_Tomorin_Mod.Relics;
+using STS2_Tomorin_Mod.Enemy;
 
 namespace STS2_Tomorin_Mod.Powers;
 
@@ -31,14 +30,22 @@ public class AnonEscapeCountPower : BasePowerModel
     {
         if (cardPlay.Card is AnonPlayGuitar || cardPlay.Card is AnonLiveTogether || cardPlay.Card is AnonNeedYou)
         {
-            // if (Amount == 1)
-            // {
-            //     await ((Anon)Owner.Monster).TriggerAnonDie();
-            // }
-            // else
-            {
                 await PowerCmd.ModifyAmount(this, -1, cardPlay.Card.Owner.Creature, cardPlay.Card);
-            }
+        }
+    }
+
+    /// <summary>
+    /// 卡牌被消耗掉也有效；特定“一起演出”，
+    /// </summary>
+    /// <param name="choiceContext"></param>
+    /// <param name="card"></param>
+    /// <param name="causedByEthereal"></param>
+    /// <returns></returns>
+    public override async Task AfterCardExhausted(PlayerChoiceContext choiceContext, CardModel card, bool causedByEthereal)
+    {
+        if (card is AnonLiveTogether)
+        {
+            await PowerCmd.ModifyAmount(this, -1, card.Owner.Creature, card);
         }
     }
 

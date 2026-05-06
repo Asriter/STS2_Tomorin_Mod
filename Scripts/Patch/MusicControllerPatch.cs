@@ -23,6 +23,9 @@ public class MusicControllerPatch
         if (!NonInteractiveMode.IsActive)
         {
             var traverse = Traverse.Create(__instance);
+
+            if (traverse == null)
+                return true;
             
             var node = traverse.Field<Node>("_proxy").Value;
             node.Call(traverse.Field<StringName>("_stopMusic").Value);

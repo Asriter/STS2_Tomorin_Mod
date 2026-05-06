@@ -57,6 +57,7 @@ public static class ComposeCmd
         //记录每个角色分别打了多少下
         if (!ComposeCostCardDict.ContainsKey(player))
             ComposeCostCardDict.Add(player, 0);
+
         for (int i = 0; i < cardsToConsume.Count; i++)
         {
             ComposeCostCardDict[player]++;
@@ -101,7 +102,10 @@ public static class ComposeCmd
         }
 
         // 5. 消耗source卡牌（自身消失）
-        await CardCmd.Exhaust(choiceContext, source);
+        //如果这张卡已经被消耗，则不进行第二次消耗处理
+        var exhaustedCards = player.PlayerCombatState?.ExhaustPile.Cards;
+        if (exhaustedCards != null && !exhaustedCards.Contains(source))
+            await CardCmd.Exhaust(choiceContext, source);
 
         //触发所有的”作词后”效果
         var runState = source.CombatState;

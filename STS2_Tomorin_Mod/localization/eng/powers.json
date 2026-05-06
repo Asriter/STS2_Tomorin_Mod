@@ -1,0 +1,20 @@
+{
+  "STS2_TOMORIN_MOD-PHASE_ONE_SELECT_CARD_POWER.title": "Phase One Select Card",
+  "STS2_TOMORIN_MOD-PHASE_ONE_SELECT_CARD_POWER.description": "Phase One Select Card",
+  "STS2_TOMORIN_MOD-PHASE_ONE_SELECT_CARD_POWER.smartDescription": "Phase One Select Card",
+  "STS2_TOMORIN_MOD-TAKI_DRAW_CARD_POWER.title": "Extra Draw",
+  "STS2_TOMORIN_MOD-TAKI_DRAW_CARD_POWER.description": "Draw 3 additional cards at the start of each turn.",
+  "STS2_TOMORIN_MOD-TAKI_DRAW_CARD_POWER.smartDescription": "Draw 3 additional cards at the start of each turn.",
+  "STS2_TOMORIN_MOD-TAKI_ADD_ENERGY_POWER.title": "Extra Energy",
+  "STS2_TOMORIN_MOD-TAKI_ADD_ENERGY_POWER.description": "Gain 1 additional Energy.",
+  "STS2_TOMORIN_MOD-TAKI_ADD_ENERGY_POWER.smartDescription": "Gain 1 additional Energy.",
+  "STS2_TOMORIN_MOD-TAKI_GET_BLOCK_POWER.title": "Auto Block",
+  "STS2_TOMORIN_MOD-TAKI_GET_BLOCK_POWER.description": "Gain 5 Block at the start of each turn.",
+  "STS2_TOMORIN_MOD-TAKI_GET_BLOCK_POWER.smartDescription": "Gain 5 Block at the start of each turn.",
+  "STS2_TOMORIN_MOD-TAKI_ADD_DAMAGE_POWER.title": "Double Damage",
+  "STS2_TOMORIN_MOD-TAKI_ADD_DAMAGE_POWER.description": "Whenever a card is Exhausted, your next Attack deals double damage.",
+  "STS2_TOMORIN_MOD-TAKI_ADD_DAMAGE_POWER.smartDescription": "Whenever a card is Exhausted, your next Attack deals double damage.",
+  "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.title": "AT Field Boost",
+  "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.description": "At the start of each turn, gain temporary Strength equal to your AT Field. AT Field no longer halves at turn start.",
+  "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.smartDescription": "At the start of each turn, gain temporary Strength equal to your AT Field. AT Field no longer halves at turn start."
+}

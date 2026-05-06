@@ -22,10 +22,10 @@ using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Powers;
 using STS2_Tomorin_Mod.Relics;
 
-namespace STS2_Tomorin_Mod.Enemy.Ememies;
+namespace STS2_Tomorin_Mod.Enemy;
 
 /// <summary>
-/// 
+/// boss 爱音
 /// </summary>
 public class Anon : CustomMonsterModel
 {
@@ -271,7 +271,7 @@ public class Anon : CustomMonsterModel
         await PowerCmd.Apply<AnonEscapeCountPower>(this.Creature, targets.Count * _escapeBuffCount, this.Creature,
             null);
 
-        TalkCmd.Play(_speak1, base.Creature, _anonColor);
+        TalkCmd.Play(_dead, base.Creature, _anonColor);
     }
 
     /// <summary>

@@ -21,6 +21,8 @@ public class Gacha : BaseCardModel
 {
     public Gacha() : base(1, CardType.Skill, CardRarity.Common, TargetType.Self) { }
 
+    public override IEnumerable<CardKeyword> CanonicalKeywords => [CardKeyword.Exhaust];
+
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         var pool = ModelDb.CardPool<TomorinCardPool>().AllCards

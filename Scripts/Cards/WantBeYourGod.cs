@@ -18,7 +18,7 @@ namespace STS2_Tomorin_Mod.Cards;
 public class WantBeYourGod : BaseCardModel
 {
     //多人卡牌
-    public override CardMultiplayerConstraint MultiplayerConstraint => CardMultiplayerConstraint.MultiplayerOnly;
+    // public override CardMultiplayerConstraint MultiplayerConstraint => CardMultiplayerConstraint.MultiplayerOnly;
     
     protected override IEnumerable<DynamicVar> CanonicalVars =>
         new List<DynamicVar>()

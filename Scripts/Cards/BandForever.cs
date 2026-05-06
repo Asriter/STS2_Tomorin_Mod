@@ -35,7 +35,8 @@ public class BandForever : BaseCardModel
         var powerCards = ModelDb.CardPool<TomorinCardPool>().AllCards
             .Where(c => c.Type == CardType.Power
                 && c.Rarity != CardRarity.Token
-                && c.Rarity != CardRarity.Status)
+                && c.Rarity != CardRarity.Status
+                && c.Rarity != CardRarity.Ancient)
             .ToList();
 
         if (powerCards.Count == 0) return;

@@ -17,6 +17,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Rooms;
 using STS2_Tomorin_Mod.Commands;
+using STS2_Tomorin_Mod.Enemy.Ememies;
 using STS2_Tomorin_Mod.Extensions;
 using STS2_Tomorin_Mod.Localization.CustomEnums;
 using STS2_Tomorin_Mod.Localization.DynamicVars;
@@ -140,7 +141,7 @@ public abstract class BaseCardModel(
     {
         return Task.CompletedTask;
     }
-    
+
     /// <summary>
     /// 消耗手卡
     /// </summary>

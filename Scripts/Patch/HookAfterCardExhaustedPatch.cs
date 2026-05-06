@@ -21,11 +21,7 @@ internal class HookAfterCardExhaustedPatch
     public static void Postfix(ref Task __result, CombatState combatState, PlayerChoiceContext choiceContext,
         CardModel card, bool causedByEthereal)
     {
-        // 将原方法应当返回的 Task 替换为我们自己构建的 Task
         __result = AsyncWrapper(__result, combatState, choiceContext, card, causedByEthereal);
-
-        // 返回 false，告诉 Harmony 立即终止原方法的执行
-        // return false;
     }
 
     // ==========================================

@@ -40,6 +40,7 @@ public class SorrowfulRain : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         await PowerCmd.Apply<SorrowfulRainPower>(
+            choiceContext,
             base.Owner.Creature,
             base.DynamicVars["SorrowfulRainPower"].BaseValue,
             base.Owner.Creature,

@@ -57,7 +57,7 @@ public class AtFieldPower : BasePowerModel
     /// <param name="combatState"></param>
     /// <returns></returns>
     public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side,
-        CombatState combatState)
+        ICombatState combatState)
     {
         if (side == base.Owner.Side)
         {
@@ -99,12 +99,12 @@ public class AtFieldPower : BasePowerModel
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
-    public override async Task AfterSideTurnStart(CombatSide side, CombatState combatState)
+    public override async Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
     {
         if (side == Owner.Side && !Owner.HasPower<OnceHomePower>() && !Owner.HasPower<TakiAtFieldPower>())
         {
             int amount = Amount / 2;
-            await PowerCmd.ModifyAmount(this, amount - Amount, null, null);
+            await PowerCmd.ModifyAmount(new ThrowingPlayerChoiceContext(),this, amount - Amount, null, null);
         }
     }
 
@@ -148,7 +148,7 @@ public class AtFieldPower : BasePowerModel
     {
         if (target == Owner && !props.HasFlag(ValueProp.Unblockable) && result.UnblockedDamage > 0 && ShouldDeduceAtFieldPower)
         {
-            await PowerCmd.ModifyAmount(this, -result.UnblockedDamage, null, null);
+            await PowerCmd.ModifyAmount(choiceContext,this, -result.UnblockedDamage, null, null);
         }
     }
 

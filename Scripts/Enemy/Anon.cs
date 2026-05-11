@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Relics;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Logging;
@@ -193,8 +194,8 @@ public class Anon : CustomMonsterModel
     {
         //TODO 音效
         await CreatureCmd.TriggerAnim(base.Creature, "Heal", 0.8f);
-        await PowerCmd.Apply<AnonEscapePower>(base.Creature, 1, base.Creature, null);
-        await CardPileCmd.AddToCombatAndPreview<AnonReject>(targets, PileType.Draw, _stateCount, addedByPlayer: false);
+        await PowerCmd.Apply<AnonEscapePower>(new ThrowingPlayerChoiceContext(), base.Creature, 1, base.Creature, null);
+        await CardPileCmd.AddToCombatAndPreview<AnonReject>(targets, PileType.Draw, _stateCount, null, CardPilePosition.Random);
 
         //说话
         TalkCmd.Play(_initSpeak, base.Creature, _anonColor);
@@ -247,7 +248,7 @@ public class Anon : CustomMonsterModel
         //TODO 动画，特效
         await CreatureCmd.TriggerAnim(base.Creature, "Plow", 0f);
         await CreatureCmd.GainBlock(base.Creature, NormalBlockNum, ValueProp.Move, null);
-        await CardPileCmd.AddToCombatAndPreview<AnonReject>(targets, PileType.Draw, _stateCount, addedByPlayer: false);
+        await CardPileCmd.AddToCombatAndPreview<AnonReject>(targets, PileType.Draw, _stateCount, null, CardPilePosition.Random);
     }
 
     /// <summary>
@@ -263,12 +264,12 @@ public class Anon : CustomMonsterModel
         await CreatureCmd.TriggerAnim(base.Creature, "Heal", 0.8f);
 
         //塞牌
-        await CardPileCmd.AddToCombatAndPreview<AnonNeedYou>(targets, PileType.Hand, 1, addedByPlayer: false);
-        await CardPileCmd.AddToCombatAndPreview<AnonPlayGuitar>(targets, PileType.Discard, 1, addedByPlayer: false);
-        await CardPileCmd.AddToCombatAndPreview<AnonLiveTogether>(targets, PileType.Draw, 1, addedByPlayer: false);
+        await CardPileCmd.AddToCombatAndPreview<AnonNeedYou>(targets, PileType.Hand, 1, null);
+        await CardPileCmd.AddToCombatAndPreview<AnonPlayGuitar>(targets, PileType.Discard, 1, null);
+        await CardPileCmd.AddToCombatAndPreview<AnonLiveTogether>(targets, PileType.Draw, 1, null, CardPilePosition.Random);
 
         //上buff：
-        await PowerCmd.Apply<AnonEscapeCountPower>(this.Creature, targets.Count * _escapeBuffCount, this.Creature,
+        await PowerCmd.Apply<AnonEscapeCountPower>(new ThrowingPlayerChoiceContext(),this.Creature, targets.Count * _escapeBuffCount, this.Creature,
             null);
 
         TalkCmd.Play(_dead, base.Creature, _anonColor);
@@ -283,7 +284,7 @@ public class Anon : CustomMonsterModel
     {
         //TODO 动画，特效
         await CardPileCmd.AddToCombatAndPreview<Dazed>(targets, PileType.Draw, _secondPhaseStateCount,
-            false, CardPilePosition.Random);
+            null, CardPilePosition.Random);
 
         TalkCmd.Play(_speakRun1, base.Creature, _anonColor);
     }
@@ -296,7 +297,7 @@ public class Anon : CustomMonsterModel
     private async Task RunPhaseTwoState(IReadOnlyList<Creature> targets)
     {
         //TODO 动画，特效
-        await PowerCmd.Apply<LessDrawNextTurnPower>(targets, 2, this.Creature, null);
+        await PowerCmd.Apply<LessDrawNextTurnPower>(new ThrowingPlayerChoiceContext(), targets, 2, this.Creature, null);
 
         TalkCmd.Play(_speakRun2, base.Creature, _anonColor);
     }
@@ -323,7 +324,7 @@ public class Anon : CustomMonsterModel
         //TODO 切换bgm
         // NRunMusicController.Instance?.UpdateMusicParameter("waterfall_giant_progress", 2f);
         await CreatureCmd.SetMaxAndCurrentHp(base.Creature, 999999999m);
-        base.Creature.ShowsInfiniteHp = true;
+        Creature.HpDisplay = HpDisplay.InfiniteWithoutNumbers;
         SetMoveImmediate(DeadState, forceTransition: true);
         // SfxCmd.SetParam("event:/sfx/enemy/enemy_attacks/waterfall_giant/waterfall_giant_ambient", "waterfall_giant_sfx", 3f);
         //TODO 切换立绘

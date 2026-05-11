@@ -42,7 +42,7 @@ public class MygoTogether : BaseCardModel
         var allPlayers = base.CombatState!.Players;
         foreach (var player in allPlayers)
         {
-            await PowerCmd.Apply<IntangiblePower>(player.Creature, base.DynamicVars["IntangiblePower"].BaseValue, base.Owner.Creature, this);
+            await PowerCmd.Apply<IntangiblePower>(choiceContext, player.Creature, base.DynamicVars["IntangiblePower"].BaseValue, base.Owner.Creature, this);
         }
     }
 

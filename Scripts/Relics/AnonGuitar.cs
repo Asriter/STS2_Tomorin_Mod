@@ -26,7 +26,7 @@ public class AnonGuitar : BaseRelicModel
     /// <summary>
     /// 战斗第一回合开始时，随机将一张收集品加入手牌
     /// </summary>
-    public override async Task AfterSideTurnStart(CombatSide side, CombatState combatState)
+    public override async Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
     {
         if (side == Owner.Creature.Side && combatState.RoundNumber == 1)
         {
@@ -36,7 +36,7 @@ public class AnonGuitar : BaseRelicModel
                 var randomCard = collectionsCards.TakeRandom(1, Owner.RunState.Rng.CombatCardGeneration).First();
                 var newCard = combatState.CreateCard(randomCard, Owner);
                 Flash();
-                await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, addedByPlayer: true);
+                await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
             }
         }
     }

@@ -67,7 +67,7 @@ public class ColdRedTea : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
 		await CreatureCmd.TriggerAnim(base.Owner.Creature, "Cast", base.Owner.Character.AttackAnimDelay);
-		await PowerCmd.Apply<CustomConstrictPower>(base.CombatState.HittableEnemies, base.DynamicVars["CustomConstrictPower"].BaseValue, base.Owner.Creature, this);
-		await PowerCmd.Apply<WeakPower>(base.CombatState.HittableEnemies, base.DynamicVars.Weak.BaseValue, base.Owner.Creature, this);
+		await PowerCmd.Apply<CustomConstrictPower>(choiceContext, base.CombatState.HittableEnemies, base.DynamicVars["CustomConstrictPower"].BaseValue, base.Owner.Creature, this);
+		await PowerCmd.Apply<WeakPower>(choiceContext, base.CombatState.HittableEnemies, base.DynamicVars.Weak.BaseValue, base.Owner.Creature, this);
     }
 }

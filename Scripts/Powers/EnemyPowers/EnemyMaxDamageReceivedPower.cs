@@ -79,7 +79,7 @@ public class EnemyMaxDamageReceivedPower : BasePowerModel
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
-    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, CombatState combatState)
+    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, ICombatState combatState)
     {
         if (side != CombatSide.Player && GetInternalData<Data>().damageReceivedThisPhase >= Amount)
         {

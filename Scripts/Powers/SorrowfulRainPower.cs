@@ -23,7 +23,7 @@ public class SorrowfulRainPower : BasePowerModel
         if (player == base.Owner.Player)
         {
             Flash();
-            await PowerCmd.Apply<AtFieldPower>(base.Owner, base.Amount, base.Owner, null);
+            await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner, base.Amount, base.Owner, null);
         }
     }
 }

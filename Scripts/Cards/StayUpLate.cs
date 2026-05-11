@@ -43,7 +43,7 @@ public class StayUpLate : BaseCardModel
     {
         if (IsUpgraded)
         {
-            await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, 2m, base.Owner.Creature, this);
+            await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, 2m, base.Owner.Creature, this);
         }
 
         int atFieldStacks = Owner.Creature.HasPower<AtFieldPower>()
@@ -56,7 +56,7 @@ public class StayUpLate : BaseCardModel
         }
 
         var midnightCoffee = base.CombatState!.CreateCard<MidnightCoffee>(Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(midnightCoffee, PileType.Hand, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(midnightCoffee, PileType.Hand, Owner);
     }
     
     protected override void OnUpgrade()

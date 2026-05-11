@@ -25,16 +25,17 @@ public class AnonReject() : BaseCardModel(-1, CardType.Curse, CardRarity.Curse, 
     public override bool HasTurnEndInHandEffect => true;
     
 
-    public override async Task OnTurnEndInHand(PlayerChoiceContext choiceContext)
+    protected override async Task OnTurnEndInHand(PlayerChoiceContext choiceContext)
     {
-        await AddPower<WeakPower>(DynamicVars.Weak.BaseValue);
-        await AddPower<FrailPower>(DynamicVars["FrailPower"].BaseValue);
+        await AddPower<WeakPower>(choiceContext, DynamicVars.Weak.BaseValue);
+        await AddPower<FrailPower>(choiceContext, DynamicVars["FrailPower"].BaseValue);
     }
+    
 
-    private async Task AddPower<T>(decimal amount) where T : PowerModel
+    private async Task AddPower<T>(PlayerChoiceContext choiceContext, decimal amount) where T : PowerModel
     {
         bool alreadyHasPower = Owner.Creature.HasPower<T>();
-        PowerModel? powerModel = await PowerCmd.Apply<T>(Owner.Creature, amount, null, this);
+        PowerModel? powerModel = await PowerCmd.Apply<T>(choiceContext, Owner.Creature, amount, null, this);
         if (powerModel != null && !alreadyHasPower)
         {
             powerModel.SkipNextDurationTick = true;

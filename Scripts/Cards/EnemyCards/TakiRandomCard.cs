@@ -35,7 +35,7 @@ public class TakiRandomCard() : BaseCardModel(-1, CardType.Status, CardRarity.St
         foreach (var card in cards)
         {
             card.EnergyCost.SetUntilPlayed(0);
-            await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, addedByPlayer: true);
+            await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, Owner);
         }
     }
 }

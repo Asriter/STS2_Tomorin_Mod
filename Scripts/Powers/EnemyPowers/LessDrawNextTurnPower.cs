@@ -27,7 +27,7 @@ public class LessDrawNextTurnPower : BasePowerModel
         return count - (decimal)base.Amount;
     }
 
-    public override async Task AfterSideTurnStart(CombatSide side, CombatState combatState)
+    public override async Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
     {
         if (side == base.Owner.Side && base.AmountOnTurnStart != 0)
         {

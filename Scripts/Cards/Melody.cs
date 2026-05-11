@@ -36,7 +36,7 @@ public class Melody : BaseCardModel
         {
             var randomCard = collectionsCards.TakeRandom(1, base.Owner.RunState.Rng.CombatCardGeneration).First();
             var newCard = base.CombatState!.CreateCard(randomCard, base.Owner);
-            await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, addedByPlayer: true);
+            await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
         }
     }
 

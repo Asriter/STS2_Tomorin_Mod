@@ -66,7 +66,7 @@ internal class HookAfterCardExhaustedPatch
             return;
         }
 
-        CombatState combatState = card.CombatState ?? card.Owner.Creature.CombatState;
+        ICombatState combatState = card.CombatState ?? card.Owner.Creature.CombatState;
 
         Creature target = null;
         //索敌

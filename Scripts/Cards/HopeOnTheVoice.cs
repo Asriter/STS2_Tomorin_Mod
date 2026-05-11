@@ -58,12 +58,12 @@ public class HopeOnTheVoice : BaseCardModel
         ArgumentNullException.ThrowIfNull(cardPlay.Target, "cardPlay.Target");
 
         // 给予目标一层虚弱和一层易伤
-        await PowerCmd.Apply<WeakPower>(cardPlay.Target, base.DynamicVars["WeakPower"].BaseValue, Owner.Creature, this);
-        await PowerCmd.Apply<VulnerablePower>(cardPlay.Target, base.DynamicVars["VulnerablePower"].BaseValue, Owner.Creature, this);
+        await PowerCmd.Apply<WeakPower>(choiceContext, cardPlay.Target, base.DynamicVars["WeakPower"].BaseValue, Owner.Creature, this);
+        await PowerCmd.Apply<VulnerablePower>(choiceContext, cardPlay.Target, base.DynamicVars["VulnerablePower"].BaseValue, Owner.Creature, this);
 
         // 将一张深夜的罐装咖啡加入手牌
         var midnightCoffee = base.CombatState!.CreateCard<MidnightCoffee>(Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(midnightCoffee, PileType.Hand, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(midnightCoffee, PileType.Hand, Owner);
     }
 
     protected override void OnUpgrade()

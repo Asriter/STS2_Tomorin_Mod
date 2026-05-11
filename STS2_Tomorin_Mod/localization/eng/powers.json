@@ -16,5 +16,8 @@
   "STS2_TOMORIN_MOD-TAKI_ADD_DAMAGE_POWER.smartDescription": "Whenever a card is Exhausted, your next Attack deals double damage.",
   "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.title": "AT Field Boost",
   "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.description": "At the start of each turn, gain temporary Strength equal to your AT Field. AT Field no longer halves at turn start.",
-  "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.smartDescription": "At the start of each turn, gain temporary Strength equal to your AT Field. AT Field no longer halves at turn start."
+  "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.smartDescription": "At the start of each turn, gain temporary Strength equal to your AT Field. AT Field no longer halves at turn start.",
+  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.title": "Crychic Memory",
+  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.description": "Crychic's lingering memory haunts you. Effects change based on stack count.",
+  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.smartDescription": "Stage {Amount}: Crychic's lingering memory haunts you. Effects change based on stack count."
 }

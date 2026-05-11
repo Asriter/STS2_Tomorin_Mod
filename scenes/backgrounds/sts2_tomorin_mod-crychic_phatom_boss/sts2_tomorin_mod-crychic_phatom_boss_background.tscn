@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3 uid="uid://1ype0enawjuu"]
+
+[ext_resource type="Script" uid="uid://dcwgtgxbpct6v" path="res://src/Core/Nodes/Rooms/NCombatBackground.cs" id="1_as730"]
+[ext_resource type="Texture2D" uid="uid://5rf626ohia1n" path="res://STS2_Tomorin_Mod/images/rooms/CrychicPhatomBossRoom.png" id="2_jsb1i"]
+
+[node name="Sts2TomorinModTakiBossBackground" type="TextureRect"]
+script = ExtResource("1_as730")
+
+[node name="TakiBossRoom2" type="Sprite2D" parent="."]
+position = Vector2(0, -475)
+scale = Vector2(2.25, 2.25)
+texture = ExtResource("2_jsb1i")
+
+[node name="Layer_00" type="Control" parent="."]
+unique_name_in_owner = true
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0

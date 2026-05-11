@@ -24,7 +24,7 @@ public class SilhouetteDanceTokenPower : BasePowerModel
         if (source != null)
         {
             CardModel card = source.CreateClone();
-            await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Discard, addedByPlayer: true);
+            await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Discard, Owner.Player);
         }
     }
 }

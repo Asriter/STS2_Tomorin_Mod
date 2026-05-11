@@ -51,7 +51,7 @@ public class StartOurNotes : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         await PlayerCmd.GainEnergy(1m, base.Owner);
-        await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, 2m, base.Owner.Creature, this);
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, 2m, base.Owner.Creature, this);
 
         // Select 1 card from draw pile
         var drawPile = base.Owner.PlayerCombatState?.DrawPile;
@@ -70,7 +70,7 @@ public class StartOurNotes : BaseCardModel
         }
 
         var starStone = base.CombatState!.CreateCard<StarStone>(base.Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(starStone, PileType.Hand, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(starStone, PileType.Hand, Owner);
     }
 
     protected override void OnUpgrade()

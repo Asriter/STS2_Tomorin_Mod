@@ -52,6 +52,6 @@ public class BrokenNote() :
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
-		await PowerCmd.Apply<BrokenNotePower>(base.Owner.Creature, 1m, base.Owner.Creature, this);
+		await PowerCmd.Apply<BrokenNotePower>(choiceContext, base.Owner.Creature, 1m, base.Owner.Creature, this);
     }
 }

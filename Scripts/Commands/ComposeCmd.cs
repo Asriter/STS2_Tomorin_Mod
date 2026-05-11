@@ -98,7 +98,7 @@ public static class ComposeCmd
             await CardPileCmd.AddGeneratedCardToCombat(
                 newCard,
                 PileType.Hand,
-                addedByPlayer: true);
+                player);
         }
 
         // 5. 消耗source卡牌（自身消失）

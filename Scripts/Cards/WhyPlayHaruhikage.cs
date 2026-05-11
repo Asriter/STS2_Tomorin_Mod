@@ -42,7 +42,7 @@ public class WhyPlayHaruhikage : BaseCardModel
         foreach (var card in randomCards)
         {
             var newCard = base.CombatState!.CreateCard(card, base.Owner);
-            await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, addedByPlayer: true);
+            await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
         }
     }
 

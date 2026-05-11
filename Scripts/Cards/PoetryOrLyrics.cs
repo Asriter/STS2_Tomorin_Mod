@@ -84,9 +84,9 @@ public class PoetryOrLyrics : BaseCardModel
 
         var count = exhaustPile.Cards.Count(c => collectibleTypes.Contains(c.GetType()));
 
-        await PowerCmd.Apply<DexterityPower>(Owner.Creature, base.DynamicVars["DexterityPower"].BaseValue * count,
+        await PowerCmd.Apply<DexterityPower>(choiceContext, Owner.Creature, base.DynamicVars["DexterityPower"].BaseValue * count,
             Owner.Creature, this);
-        await PowerCmd.Apply<AtFieldPower>(Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue * count,
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue * count,
             Owner.Creature, this);
     }
 

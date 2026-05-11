@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b452oitcjly5d"
-path="res://.godot/imported/white_saki_headIcon.png-7e6df9cd4be4115b0dcd06ceba5fe356.ctex"
+uid="uid://vh6jrby8tlhk"
+path="res://.godot/imported/CrychicPhantomPower.png-bab4e0efbe7fccd5dba6aca9256bbcc9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://STS2_Tomorin_Mod/images/enemy_headIcon/white_saki_headIcon.png"
-dest_files=["res://.godot/imported/white_saki_headIcon.png-7e6df9cd4be4115b0dcd06ceba5fe356.ctex"]
+source_file="res://STS2_Tomorin_Mod/images/powers/big/CrychicPhantomPower.png"
+dest_files=["res://.godot/imported/CrychicPhantomPower.png-bab4e0efbe7fccd5dba6aca9256bbcc9.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://c2yrfx7bd5gc2" path="res://src/Core/Nodes/Combat/NCreatureVisuals.cs" id="1_r1hmy"]
 [ext_resource type="Texture2D" uid="uid://ogxrcsr6vd8d" path="res://STS2_Tomorin_Mod/Enemies/Taki/Taki.png" id="2_r1hmy"]
 
-[node name="AnonBoss" type="Node2D"]
+[node name="TakiBoss" type="Node2D"]
 script = ExtResource("1_r1hmy")
 
 [node name="Visuals1" type="SpineSprite" parent="."]

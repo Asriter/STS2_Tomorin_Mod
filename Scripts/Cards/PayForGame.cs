@@ -49,12 +49,12 @@ public class PayForGame : BaseCardModel
             if (selected != null)
             {
                 selected.EnergyCost.SetThisTurn(0);
-                await CardPileCmd.AddGeneratedCardToCombat(selected, PileType.Hand, addedByPlayer: true);
+                await CardPileCmd.AddGeneratedCardToCombat(selected, PileType.Hand, Owner);
             }
         }
 
         var starStone = base.CombatState!.CreateCard<StarStone>(base.Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(starStone, PileType.Hand, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(starStone, PileType.Hand, Owner);
     }
 
     protected override void OnUpgrade()

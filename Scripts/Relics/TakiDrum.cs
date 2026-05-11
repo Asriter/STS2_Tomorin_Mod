@@ -27,7 +27,7 @@ public class TakiDrum : BaseRelicModel
     /// <summary>
     /// 每回合开始时重置计数器
     /// </summary>
-    public override Task AfterSideTurnStart(CombatSide side, CombatState combatState)
+    public override Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
     {
         if (side == Owner.Creature.Side)
         {

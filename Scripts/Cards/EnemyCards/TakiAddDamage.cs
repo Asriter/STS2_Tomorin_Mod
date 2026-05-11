@@ -24,6 +24,6 @@ public class TakiAddDamage() : BaseCardModel(-1, CardType.Status, CardRarity.Sta
 
     public async Task OnChosen()
     {
-        await PowerCmd.Apply<TakiAddDamagePower>(Owner.Creature, 1m, Owner.Creature, this);
+        await PowerCmd.Apply<TakiAddDamagePower>(new ThrowingPlayerChoiceContext(),Owner.Creature, 1m, Owner.Creature, this);
     }
 }

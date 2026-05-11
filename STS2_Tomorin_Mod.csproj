@@ -108,7 +108,6 @@
 
   <ItemGroup>
     <Content Include="CardDesign.txt" />
-    <Content Include="global.json" />
     <Content Include="Scripts\Relics\NormalPencil.cs.uid" />
   </ItemGroup>
 

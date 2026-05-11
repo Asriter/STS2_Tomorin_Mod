@@ -1,0 +1,17 @@
+{
+  "STS2_TOMORIN_MOD-CRYCHIC_DISCARD_CURSE.title": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_DISCARD_CURSE.extraCardText": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_DISCARD_CURSE.description": "打出此卡后，额外舍弃两张手牌。",
+  "STS2_TOMORIN_MOD-CRYCHIC_DRAW_LESS_CURSE.title": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_DRAW_LESS_CURSE.extraCardText": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_DRAW_LESS_CURSE.description": "打出此卡后，下回合少抽一张牌。",
+  "STS2_TOMORIN_MOD-CRYCHIC_ENERGY_CURSE.title": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_ENERGY_CURSE.extraCardText": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_ENERGY_CURSE.description": "打出此卡后，额外失去一点能量。",
+  "STS2_TOMORIN_MOD-CRYCHIC_EXHAUST_CURSE.title": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_EXHAUST_CURSE.extraCardText": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_EXHAUST_CURSE.description": "此卡额外获得[gold]虚无[/gold]和[gold]消耗[/gold]。",
+  "STS2_TOMORIN_MOD-CRYCHIC_DAMAGE_CURSE.title": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_DAMAGE_CURSE.extraCardText": "回忆漩涡",
+  "STS2_TOMORIN_MOD-CRYCHIC_DAMAGE_CURSE.description": "打出此卡后，受到6点伤害。"
+}

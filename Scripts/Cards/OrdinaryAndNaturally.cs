@@ -31,7 +31,7 @@ public class OrdinaryAndNaturally() : BaseCardModel(1, CardType.Skill, CardRarit
         {
             // 创建一张新的收集品副本并加入手牌
             var newCard = base.CombatState!.CreateCard(selected, Owner);
-            await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, addedByPlayer: true);
+            await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
         }
     }
 

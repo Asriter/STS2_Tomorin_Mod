@@ -42,7 +42,7 @@ public class Adayume() : BaseCardModel(1, CardType.Power, CardRarity.Ancient, Ta
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        await PowerCmd.Apply<AdayumePower>(base.Owner.Creature, base.DynamicVars["AdayumePower"].BaseValue,
+        await PowerCmd.Apply<AdayumePower>(choiceContext, base.Owner.Creature, base.DynamicVars["AdayumePower"].BaseValue,
             base.Owner.Creature, this);
     }
 

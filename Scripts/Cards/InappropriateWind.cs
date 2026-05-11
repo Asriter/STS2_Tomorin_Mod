@@ -46,7 +46,7 @@ public class InappropriateWind : BaseCardModel
             .Execute(choiceContext);
         
         var coldRedTea = base.CombatState!.CreateCard<ColdRedTea>(Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(coldRedTea, PileType.Draw, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(coldRedTea, PileType.Draw, Owner);
     }
 
     protected override void OnUpgrade()

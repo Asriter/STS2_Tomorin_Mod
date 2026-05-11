@@ -79,5 +79,11 @@
   "STS2_TOMORIN_MOD-TAKI_LOCK_HP_POWER.title": "手下留情",
   "STS2_TOMORIN_MOD-ENEMY_MAX_DAMAGE_RECEIVED_POWER.description": "这个生物当前阶段失去的生命值不会超过[blue]20[/blue]点。",
   "STS2_TOMORIN_MOD-ENEMY_MAX_DAMAGE_RECEIVED_POWER.smartDescription": "[gold]{OwnerName}[/gold]当前阶段失去的生命值不会超过[blue]{Amount}[/blue]点。",
-  "STS2_TOMORIN_MOD-ENEMY_MAX_DAMAGE_RECEIVED_POWER.title": "Fever!"
+  "STS2_TOMORIN_MOD-ENEMY_MAX_DAMAGE_RECEIVED_POWER.title": "Fever!",
+  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.title": "Crychic的回忆",
+  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.description": "Crychic的残影萦绕着你，根据当前层数循环执行不同效果：\n1. 回合结束时受到10点伤害\n2. 所有卡牌获得消耗\n3. 受到的伤害减半，回合开始时自动进入下一阶段\n4. 卡牌打出时额外消耗一费\n5. 回合结束时所有敌人获得1点力量和5点敏捷\n6. 造成伤害增加50%，回合开始时自动进入下一阶段\n7. 进入当前阶段，或回合开始时，强制结束当前回合",
+  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.smartDescription": "当前阶段{CurStage}：Crychic的残影萦绕着你。根据当前层数循环执行不同效果：\n1. 回合结束时受到10点伤害\n2. 所有卡牌获得消耗\n3. 受到的伤害减半，回合开始时自动进入下一阶段\n4. 卡牌打出时额外消耗一费\n5. 回合结束时所有敌人获得1点力量和5点敏捷\n6. 造成伤害增加50%，回合开始时自动进入下一阶段\n7. 进入当前阶段，或回合开始时，强制结束当前回合",
+  "STS2_TOMORIN_MOD-CRYCHIC_PHANTOM_POWER.description": "Crychic的幻影败北后会进行属于她的再演。",
+  "STS2_TOMORIN_MOD-CRYCHIC_PHANTOM_POWER.smartDescription": "Crychic的幻影败北后会进行属于她的再演。\n根据玩家的[gold]Crychic的回忆[/gold]增加最大生命值。\n将玩家消耗牌堆中状态以外的卡，弃牌堆中所有卡牌返回卡组，并随机赋予状态。",
+  "STS2_TOMORIN_MOD-CRYCHIC_PHANTOM_POWER.title": "再演"
 }

@@ -25,9 +25,9 @@ public class ThinkingYourselfPower : BasePowerModel
         {
             Flash();
             // 降低力量
-            await PowerCmd.Apply<StrengthPower>(base.Owner, Amount, base.Owner, null);
+            await PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, Amount, base.Owner, null);
             // 降低敏捷
-            await PowerCmd.Apply<DexterityPower>(base.Owner, Amount, base.Owner, null);
+            await PowerCmd.Apply<DexterityPower>(choiceContext, base.Owner, Amount, base.Owner, null);
             // 移除自身
             await PowerCmd.Remove(this);
         }

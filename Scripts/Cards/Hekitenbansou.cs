@@ -50,7 +50,7 @@ public class Hekitenbansou : BaseCardModel
         var copy = CreateClone();
         if (base.IsUpgraded)
             CardCmd.Upgrade(copy);
-        await CardPileCmd.AddGeneratedCardToCombat(copy, PileType.Hand, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(copy, PileType.Hand, Owner);
     }
 
     protected override void OnUpgrade()

@@ -68,11 +68,11 @@ public class AtField : BaseCardModel
         }
 
         await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
-        await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue,
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue,
             base.Owner.Creature, this);
 
         // var brokenNote = base.CombatState!.CreateCard<BrokenNote>(Owner);
-        // await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Hand, addedByPlayer: true);
+        // await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Hand, Owner);
     }
 
     protected override void OnUpgrade()

@@ -28,7 +28,7 @@ public class TakiAtFieldPower : BasePowerModel
             if (strengthGain > 0)
             {
                 Flash();
-                await PowerCmd.Apply<StrengthPower>(base.Owner, strengthGain, base.Owner, null);
+                await PowerCmd.Apply<StrengthPower>(choiceContext,base.Owner, strengthGain, base.Owner, null);
                 _appliedStrength = strengthGain;
             }
         }
@@ -43,7 +43,7 @@ public class TakiAtFieldPower : BasePowerModel
             int toRemove = Math.Min(_appliedStrength, (int)base.Owner.GetPower<StrengthPower>().Amount);
             if (toRemove > 0)
             {
-                await PowerCmd.ModifyAmount(base.Owner.GetPower<StrengthPower>(), -toRemove, null, null);
+                await PowerCmd.ModifyAmount(choiceContext, base.Owner.GetPower<StrengthPower>(), -toRemove, null, null);
             }
             _appliedStrength = 0;
         }

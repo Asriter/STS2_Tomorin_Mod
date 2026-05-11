@@ -62,9 +62,9 @@ public class WantToBeingHuman : BaseCardModel
             decimal currentAmount = atFieldPower.Amount;
             if (currentAmount > 0m)
             {
-                await PowerCmd.ModifyAmount(atFieldPower, -currentAmount, Owner.Creature, this);
+                await PowerCmd.ModifyAmount(choiceContext, atFieldPower, -currentAmount, Owner.Creature, this);
                 decimal strengthToGain = currentAmount * base.DynamicVars[nameof(FlexPotionPower)].BaseValue;
-                await PowerCmd.Apply<FlexPotionPower>(Owner.Creature, strengthToGain, Owner.Creature, this);
+                await PowerCmd.Apply<FlexPotionPower>(choiceContext, Owner.Creature, strengthToGain, Owner.Creature, this);
             }
         }
     }

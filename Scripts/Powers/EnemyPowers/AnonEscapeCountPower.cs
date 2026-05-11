@@ -30,7 +30,7 @@ public class AnonEscapeCountPower : BasePowerModel
     {
         if (cardPlay.Card is AnonPlayGuitar || cardPlay.Card is AnonLiveTogether || cardPlay.Card is AnonNeedYou)
         {
-                await PowerCmd.ModifyAmount(this, -1, cardPlay.Card.Owner.Creature, cardPlay.Card);
+                await PowerCmd.ModifyAmount(context, this, -1, cardPlay.Card.Owner.Creature, cardPlay.Card);
         }
     }
 
@@ -45,7 +45,7 @@ public class AnonEscapeCountPower : BasePowerModel
     {
         if (card is AnonLiveTogether)
         {
-            await PowerCmd.ModifyAmount(this, -1, card.Owner.Creature, card);
+            await PowerCmd.ModifyAmount(choiceContext, this, -1, card.Owner.Creature, card);
         }
     }
 

@@ -50,7 +50,7 @@ public class WantBeYourGod : BaseCardModel
     {
         await ComposeCmd.Compose<WantBeYourGodToken>(choiceContext, Owner, ComposeCost, this);
         await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
-        await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

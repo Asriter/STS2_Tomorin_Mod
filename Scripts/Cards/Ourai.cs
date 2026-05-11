@@ -33,7 +33,7 @@ public class Ourai : BaseCardModel
         await CardPileCmd.Draw(choiceContext, base.DynamicVars.Cards.BaseValue, Owner);
 
         // 获得保留手牌Power
-        await PowerCmd.Apply<RetainHandPower>(base.Owner.Creature, base.DynamicVars["RetainHandPower"].BaseValue, base.Owner.Creature, this);
+        await PowerCmd.Apply<RetainHandPower>(choiceContext, base.Owner.Creature, base.DynamicVars["RetainHandPower"].BaseValue, base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

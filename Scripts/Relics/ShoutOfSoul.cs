@@ -32,7 +32,7 @@ public class ShoutOfSoul : BaseRelicModel
     /// </summary>
     /// <param name="side"></param>
     /// <param name="combatState"></param>
-    public override Task AfterSideTurnStart(CombatSide side, CombatState combatState)
+    public override Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
     {
         if (side == Owner.Creature.Side && combatState.RoundNumber == 1)
         {

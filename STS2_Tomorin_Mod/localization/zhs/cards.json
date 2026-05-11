@@ -213,5 +213,7 @@
   "STS2_TOMORIN_MOD-TAKI_AT_FIELD.title": "心之壁",
   "STS2_TOMORIN_MOD-TAKI_AT_FIELD.description": "选择时：每回合开始时，获得[gold]心之壁[/gold]层数的临时力量。\n[gold]心之壁[/gold]不再每回合减半。",
   "STS2_TOMORIN_MOD-TAKI_INSPIRATION.title": "灵感赋予",
-  "STS2_TOMORIN_MOD-TAKI_INSPIRATION.description": "选择时：手牌、抽牌堆、弃牌堆、消耗堆中的所有卡牌获得本次战斗中获得[gold]灵感[/gold]。"
+  "STS2_TOMORIN_MOD-TAKI_INSPIRATION.description": "选择时：手牌、抽牌堆、弃牌堆、消耗堆中的所有卡牌获得本次战斗中获得[gold]灵感[/gold]。",
+  "STS2_TOMORIN_MOD-CRYCHIC_PHANTOM_STATE.description": "使[gold]Crychic的回忆[/gold]增加[blue]1[/blue]层",
+  "STS2_TOMORIN_MOD-CRYCHIC_PHANTOM_STATE.title": "往日的记忆"
 }

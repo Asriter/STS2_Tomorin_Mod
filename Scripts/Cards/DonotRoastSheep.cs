@@ -39,7 +39,7 @@ public class DonotRoastSheep : BaseCardModel
                 .FromCard(this)
                 .TargetingAllOpponents(CombatState)
                 .Execute(choiceContext);
-            await PowerCmd.Apply<WeakPower>(CombatState.HittableEnemies, base.DynamicVars["WeakPower"].BaseValue, base.Owner.Creature, this);
+            await PowerCmd.Apply<WeakPower>(choiceContext, CombatState.HittableEnemies, base.DynamicVars["WeakPower"].BaseValue, base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

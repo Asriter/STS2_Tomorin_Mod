@@ -47,7 +47,7 @@ public class Shiori : BaseCardModel
         // 1. 从手牌中选择并消耗一张状态卡（或灵感卡）
         await ComposeCmd.Compose<OrdinaryAndNaturally>(choiceContext, Owner, ComposeCost, this);
 
-        await PowerCmd.Apply<ArtifactPower>(Owner.Creature, base.DynamicVars["ArtifactPower"].BaseValue, Owner.Creature, this);
+        await PowerCmd.Apply<ArtifactPower>(choiceContext, Owner.Creature, base.DynamicVars["ArtifactPower"].BaseValue, Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

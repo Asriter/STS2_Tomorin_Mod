@@ -59,7 +59,7 @@ public class CrychicIsOver : BaseCardModel
             await CreatureCmd.GainBlock(base.Owner.Creature, totalBlock, ValueProp.Move, cardPlay);
 
             // 获得心之壁
-            await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue * discardedCount,
+            await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue * discardedCount,
                 base.Owner.Creature, this);
         }
     }

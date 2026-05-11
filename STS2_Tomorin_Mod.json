@@ -1,11 +1,12 @@
 {
   "id": "STS2_Tomorin_Mod",
-  "name": "STS2_Tomorin_Mod",
-  "author": "User",
+  "name": "高松灯Mod",
+  "author": "Asriter",
   "description": "Slay the Spire 2 mod created from a template for use with BaseLib",
-  "version": "v0.0.0",
+  "version": "v0.0.7",
   "has_pck": true,
   "has_dll": true,
   "dependencies": ["BaseLib"],
+  "min_game_version": "0.104.0",
   "affects_gameplay": true
 }

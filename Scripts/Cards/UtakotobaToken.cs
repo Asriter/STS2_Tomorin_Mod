@@ -42,7 +42,12 @@ public class UtakotobaToken : BaseCardModel
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        int count = ComposeCmd.ComposeCostCardDict[Owner] + (IsUpgraded ? 5 : 0);
+        if (!ComposeCmd.ComposeCostCardDict.TryGetValue(Owner, out var value))
+            return;
+        
+        int count = value + (IsUpgraded ? 5 : 0);
+        if (count == 0)
+            return;
 
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(count).FromCard(this)
             .TargetingAllOpponents(CombatState)
@@ -81,6 +86,6 @@ public class UtakotobaToken : BaseCardModel
 
     private void UpdateComposeNum()
     {
-        base.DynamicVars["ComposeNum"].BaseValue = ComposeCmd.ComposeCostCardDict[Owner];
+        base.DynamicVars["ComposeNum"].BaseValue = ComposeCmd.ComposeCostCardDict.ContainsKey(Owner) ? ComposeCmd.ComposeCostCardDict[Owner] : 0;
     }
 }

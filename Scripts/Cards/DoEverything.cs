@@ -29,7 +29,7 @@ public class DoEverything : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         // 获得金币（通过Power在战斗结束后获得）
-        await PowerCmd.Apply<DoEverythingPower>(base.Owner.Creature, base.DynamicVars["DoEverythingPower"].BaseValue, base.Owner.Creature, this);
+        await PowerCmd.Apply<DoEverythingPower>(choiceContext, base.Owner.Creature, base.DynamicVars["DoEverythingPower"].BaseValue, base.Owner.Creature, this);
 
         // 立刻结束回合
         PlayerCmd.EndTurn(base.Owner, canBackOut: false);

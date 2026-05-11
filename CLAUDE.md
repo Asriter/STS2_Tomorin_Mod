@@ -107,6 +107,87 @@ These are referenced from Godot scene files (`.tscn`) in `STS2_Tomorin_Mod/scene
 - **BepInEx.AssemblyPublicizer.MSBuild** — allows accessing private game members
 - Game assemblies referenced from the StS2 installation directory (`Sts2DataDir`)
 
+## Enemies
+
+### CrychicPhatom (Crychic亡灵)
+
+Boss enemy with a unique **CrychicRemember** buff + revive mechanic.
+
+**Files:**
+- `Scripts/Enemy/CrychicPhatom.cs` — enemy body
+- `Scripts/Powers/EnemyPowers/CrychicRememberPower.cs` — 7-stage state machine buff
+- `Scripts/Afflictions/CrychicEnergyCurse.cs` — affliction: -1 energy on play
+- `Scripts/Afflictions/CrychicExhaustCurse.cs` — affliction: Exhaust + Ethereal
+- `Scripts/Afflictions/CrychicDiscardCurse.cs` — affliction: player chooses 2 cards to discard on play
+- `Scripts/Afflictions/CrychicDrawLessCurse.cs` — affliction: draw 1 less next turn
+- `Scripts/Afflictions/CrychicSelfDamageCurse.cs` — affliction: take 6 damage on play
+- `Scripts/Afflictions/CrychicDamageReduceCurse.cs` — affliction: damage taken halved (marker for stage 3)
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/powers.json` — CrychicRememberPower localization
+
+**Phase 1** (500-550 HP): Cycles 3 moves — heavy single hit (25) → multi-hit (10×3) → heal (50) + block (30)
+
+**Phase 2** (after revive): Opens with 99 Vulnerable on both sides (once), then cycles — heavy hit (35) → multi-hit (3×10) → attack (20) + block (55)
+
+**Revive:** On first HP bar death, collects total CrychicRemember stacks from all players. New HP = 300 + totalStacks × 20 × playerCount. Recycles discard + exhausted non-status cards back to draw pile, assigning 5 afflictions in round-robin order.
+
+### CrychicRememberPower
+
+7-stage state machine buff applied to all players at combat start (1 stack).
+
+| Stage (`Amount%7`) | Effect | Hook |
+|---|---|---|
+| 1 | Take 10 unblockable damage at turn end | `BeforeTurnEnd` |
+| 2 | Cards entering hand gain Exhaust | `AfterCardDrawn` |
+| 3 | Damage taken halved (via affliction); auto +1 at turn start | `ModifyHpLostBeforeOstyLate` + `BeforeHandDraw` |
+| 4 | Cards cost +1 energy to play | `BeforeCardPlayed` |
+| 5 | All enemies gain +1 Str +5 Dex at turn end | `BeforeTurnEnd` |
+| 6 | Damage dealt +50%; auto +1 at turn start | `ModifyDamageMultiplicative` + `BeforeHandDraw` |
+| 0 | Force end player turn → +1 → enemy turn | `BeforeHandDraw` + `AfterPlayerTurnStart` fallback |
+
+Stages 3 and 6 auto-advance at turn start via `BeforeHandDraw`. Stage 0 forces end turn then advances. Stages 1/2/4/5 do not auto-advance (external logic handles it).
+
+## Afflictions
+
+Custom afflictions extend `BaseAfflictionModel` (`Scripts/Afflictions/Base/BaseAfflictionModel.cs`) which extends the game's `AfflictionModel` (from `MegaCrit.Sts2.Core.Models.Afflictions`).
+
+### Creating an Affliction
+
+```csharp
+using STS2_Tomorin_Mod.Afflictions.Base;
+
+public class MyAffliction : BaseAfflictionModel
+{
+    // Called when affliction is applied to a card
+    public override void AfterApplied() { /* sync setup */ }
+    // Called before affliction is removed
+    public override void BeforeRemoved() { /* sync cleanup */ }
+    // Called when the afflicted card is played
+    public override async Task OnPlay(PlayerChoiceContext ctx, Creature? target) { /* effect */ }
+    // Standard combat hooks also available (ShouldReceiveCombatHooks => true)
+}
+```
+
+### Applying Afflictions
+
+Use non-generic overload to avoid pool registration:
+```csharp
+await CardCmd.Afflict(new MyAffliction(), card, 1);
+// or batch:
+await CardCmd.AfflictAndPreview<Bound>(cards, amount, CardPreviewStyle.None); // requires pool
+```
+
+### Removing Afflictions
+```csharp
+CardCmd.ClearAffliction(card); // if card.Affliction is MyAffliction
+```
+
+### Key AfflictionModel Hooks
+- `AfterApplied()` — sync, after affliction successfully applied
+- `BeforeRemoved()` — sync, before affliction cleared
+- `OnPlay(PlayerChoiceContext, Creature?)` — async, when afflicted card is played
+- `CanAfflict(CardModel)` — virtual, filter which cards can receive this affliction
+- Standard combat hooks via `ShouldReceiveCombatHooks => true`: `AfterCardPlayed`, `BeforeCardPlayed`, `AfterCardDrawn`, etc.
+
 ## Path Configuration
 
 The `.csproj` auto-detects platform and sets `SteamLibraryPath`, `Sts2Path`, and `ModsPath`. If the build fails with path errors, check that StS2 is installed at the expected Steam library location or adjust the path variables in the `.csproj`.

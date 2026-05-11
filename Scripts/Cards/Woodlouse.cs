@@ -45,7 +45,7 @@ public class Woodlouse : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
-        await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
 
         // 随机一张收集品加入手牌
         // var allCollections = ModelDb.CardPool<CollectionsCardPool>().AllCards.ToList();
@@ -55,7 +55,7 @@ public class Woodlouse : BaseCardModel
         //     if (randomCard != null)
         //     {
         //         var newCard = base.CombatState!.CreateCard(randomCard, Owner);
-        //         await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, addedByPlayer: true);
+        //         await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
         //     }
         // }
     }

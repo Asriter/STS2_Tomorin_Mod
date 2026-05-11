@@ -154,7 +154,7 @@ public class Taki : CustomMonsterModel
     public override async Task AfterAddedToRoom()
     {
         await base.AfterAddedToRoom();
-        var power = await PowerCmd.Apply<EnemyMaxDamageReceivedPower>(base.Creature, PhaseOneHp, base.Creature, null);
+        var power = await PowerCmd.Apply<EnemyMaxDamageReceivedPower>(new ThrowingPlayerChoiceContext(),base.Creature, PhaseOneHp, base.Creature, null);
         power.DamageCallBack = PhaseOneClearCallBack;
         _currentPhase = Phase.One;
 
@@ -218,7 +218,7 @@ public class Taki : CustomMonsterModel
 
     private async Task InitState(IReadOnlyList<Creature> targets)
     {
-        await PowerCmd.Apply<VulnerablePower>(base.Creature, 2, base.Creature, null);
+        await PowerCmd.Apply<VulnerablePower>(new ThrowingPlayerChoiceContext(),base.Creature, 2, base.Creature, null);
         //说话
         TalkCmd.Play(_wait, base.Creature, _takiColor);
     }
@@ -244,7 +244,7 @@ public class Taki : CustomMonsterModel
             .Execute(null);
 
         //给buff
-        await PowerCmd.Apply<WeakPower>(targets, _phaseOneBuffCount, this.Creature, null);
+        await PowerCmd.Apply<WeakPower>(new ThrowingPlayerChoiceContext(),targets, _phaseOneBuffCount, this.Creature, null);
     }
 
     private async Task PhaseOneSecondState(IReadOnlyList<Creature> targets)
@@ -267,7 +267,7 @@ public class Taki : CustomMonsterModel
     {
         _currentPhase = Phase.Two;
 
-        var power = await PowerCmd.Apply<EnemyMaxDamageReceivedPower>(base.Creature, PhaseTwoHp, base.Creature, null);
+        var power = await PowerCmd.Apply<EnemyMaxDamageReceivedPower>(new ThrowingPlayerChoiceContext(),base.Creature, PhaseTwoHp, base.Creature, null);
         power.DamageCallBack = PhaseTwoClearCallBack;
 
         List<Task> list = new List<Task>();
@@ -289,7 +289,7 @@ public class Taki : CustomMonsterModel
             .Execute(null);
 
         //塞伤口
-        await CardPileCmd.AddToCombatAndPreview<Wound>(targets, PileType.Draw, PhaseTwoCardCount, addedByPlayer: false);
+        await CardPileCmd.AddToCombatAndPreview<Wound>(targets, PileType.Draw, PhaseTwoCardCount, null, CardPilePosition.Random);
     }
 
     private async Task PhaseTwoBuffState(IReadOnlyList<Creature> targets)
@@ -297,7 +297,7 @@ public class Taki : CustomMonsterModel
         await CreatureCmd.GainBlock(base.Creature, PhaseBlock, ValueProp.Move, null);
 
         //获得力量
-        await PowerCmd.Apply<StrengthPower>(Creature, _phasePower, Creature, null);
+        await PowerCmd.Apply<StrengthPower>(new ThrowingPlayerChoiceContext(),Creature, _phasePower, Creature, null);
     }
 
     private async Task ChangePhaseThreeState(IReadOnlyList<Creature> targets)
@@ -305,7 +305,7 @@ public class Taki : CustomMonsterModel
         _currentPhase = Phase.Three;
 
         //上buff
-        await PowerCmd.Apply<TakiLockHpPower>(targets, 1, this.Creature, null);
+        await PowerCmd.Apply<TakiLockHpPower>(new ThrowingPlayerChoiceContext(),targets, 1, this.Creature, null);
 
         List<Task> list = new List<Task>();
         foreach (Creature target in targets)

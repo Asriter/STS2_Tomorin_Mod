@@ -38,7 +38,7 @@ public class TakiSelectCard() : BaseCardModel(-1, CardType.Status, CardRarity.St
         {
             card.EnergyCost.SetUntilPlayed(0);
             card.SetStarCostUntilPlayed(0);
-            await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, addedByPlayer: true);
+            await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, Owner);
         }
     }
 }

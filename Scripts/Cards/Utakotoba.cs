@@ -40,7 +40,7 @@ public class Utakotoba() :
     {
         await ComposeCmd.Compose<UtakotobaToken>(choiceContext, Owner, ComposeCost, this);
         
-		var power = await PowerCmd.Apply<UtakotobaPower>(base.Owner.Creature, 1m, base.Owner.Creature, this);
+		var power = await PowerCmd.Apply<UtakotobaPower>(choiceContext, base.Owner.Creature, 1m, base.Owner.Creature, this);
         power.Player = Owner;
         power.LastTurnEnergy = Owner.PlayerCombatState.Energy;
         

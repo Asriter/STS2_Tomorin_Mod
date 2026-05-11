@@ -49,7 +49,7 @@ public class ThisNoNeed : BaseCardModel
 
         //不生成token
         // var coldRedTea = base.CombatState!.CreateCard<ColdRedTea>(Owner);
-        // await CardPileCmd.AddGeneratedCardToCombat(coldRedTea, PileType.Draw, addedByPlayer: true);
+        // await CardPileCmd.AddGeneratedCardToCombat(coldRedTea, PileType.Draw, Owner);
     }
 
     protected override void OnUpgrade()

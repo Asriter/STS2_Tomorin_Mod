@@ -42,7 +42,7 @@ public class TomoriFormPower : BasePowerModel
             if (cardModel != null)
             {
                 cardModel.EnergyCost.SetThisTurnOrUntilPlayed(0);
-                await CardPileCmd.AddGeneratedCardToCombat(cardModel, PileType.Hand, addedByPlayer: true);
+                await CardPileCmd.AddGeneratedCardToCombat(cardModel, PileType.Hand, Owner.Player);
             }
         }
 

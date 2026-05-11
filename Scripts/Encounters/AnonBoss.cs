@@ -13,9 +13,7 @@ public class AnonBoss : CustomEncounterModel
     }
     
     protected override bool HasCustomBackground => true;
-    // public override string CustomBgm => "{90e9ca7b-3b88-4cf6-88ab-a5eb9db02d5d}";
     public override string CustomBgm => "AnonBgm";
-	// public override string CustomBgm => "event:/music/act1_b_boss_waterfall_giant";
     
     public override float GetCameraScaling() => 0.9f;
     // public override Vector2 GetCameraOffset() => Vector2.Down * 60f;

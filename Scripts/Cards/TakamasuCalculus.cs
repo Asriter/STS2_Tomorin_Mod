@@ -120,7 +120,7 @@ public class TakamasuCalculus : BaseCardModel
             .Execute(choiceContext);
 
         // 获得心之壁
-        await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
 
         // 增加数值
         int increase = base.DynamicVars[_increaseKey].IntValue;

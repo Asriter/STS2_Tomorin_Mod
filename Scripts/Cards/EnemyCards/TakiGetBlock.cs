@@ -24,6 +24,6 @@ public class TakiGetBlock() : BaseCardModel(-1, CardType.Status, CardRarity.Stat
 
     public async Task OnChosen()
     {
-        await PowerCmd.Apply<TakiGetBlockPower>(Owner.Creature, 1m, Owner.Creature, this);
+        await PowerCmd.Apply<TakiGetBlockPower>(new ThrowingPlayerChoiceContext(),Owner.Creature, 1m, Owner.Creature, this);
     }
 }

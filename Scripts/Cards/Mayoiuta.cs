@@ -55,7 +55,7 @@ public class Mayoiuta : BaseCardModel
         
         foreach (Creature hittableEnemy in base.CombatState.HittableEnemies)
         {
-            await PowerCmd.Apply<VulnerablePower>(hittableEnemy, base.DynamicVars.Vulnerable.BaseValue,
+            await PowerCmd.Apply<VulnerablePower>(choiceContext, hittableEnemy, base.DynamicVars.Vulnerable.BaseValue,
                 base.Owner.Creature, this);
         }
        

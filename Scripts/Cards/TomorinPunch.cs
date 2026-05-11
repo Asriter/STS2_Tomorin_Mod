@@ -51,11 +51,11 @@ public class TomorinPunch : BaseCardModel
             .Targeting(cardPlay.Target)
             .Execute(choiceContext);
         
-		await CreatureCmd.GainBlock(base.Owner.Creature, attackCommand.Results.Sum((DamageResult r) => r.TotalDamage + r.OverkillDamage), ValueProp.Move, cardPlay);
+		await CreatureCmd.GainBlock(base.Owner.Creature, attackCommand.Results.SelectMany((List<DamageResult> r) => r).Sum((DamageResult r) => r.TotalDamage + r.OverkillDamage), ValueProp.Move, cardPlay);
         
 
         // 获得心之壁
-        await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars[AtFieldPower.DefaultName].BaseValue, base.Owner.Creature, this);
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars[AtFieldPower.DefaultName].BaseValue, base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

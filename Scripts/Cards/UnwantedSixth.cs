@@ -43,6 +43,7 @@ public class UnwantedSixth : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         await PowerCmd.Apply<UnwantedSixthPower>(
+            choiceContext,
             base.Owner.Creature,
             base.DynamicVars["UnwantedSixthPower"].BaseValue,
             base.Owner.Creature,
@@ -50,7 +51,7 @@ public class UnwantedSixth : BaseCardModel
         
         // 生成一张压皱的残页加入手牌
         var card = base.CombatState!.CreateCard<CrumpledPaper>(Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, Owner);
     }
 
     protected override void OnUpgrade()

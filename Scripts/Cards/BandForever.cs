@@ -48,7 +48,7 @@ public class BandForever : BaseCardModel
 
         var newCard = base.CombatState!.CreateCard(randomModel, base.Owner);
         newCard.EnergyCost.SetThisTurn(0);
-        await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
     }
     
     protected override void OnUpgrade()

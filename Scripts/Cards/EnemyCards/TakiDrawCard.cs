@@ -24,6 +24,6 @@ public class TakiDrawCard() : BaseCardModel(-1, CardType.Status, CardRarity.Stat
 
     public async Task OnChosen()
     {
-        await PowerCmd.Apply<TakiDrawCardPower>(Owner.Creature, 1m, Owner.Creature, this);
+        await PowerCmd.Apply<TakiDrawCardPower>(new ThrowingPlayerChoiceContext(),Owner.Creature, 1m, Owner.Creature, this);
     }
 }

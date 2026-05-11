@@ -26,15 +26,15 @@ public class UnwantedSixthPower : BasePowerModel
         if (creature == base.Owner && amount >= 1m)
         {
             Flash();
-            await PowerCmd.Apply<AtFieldPower>(base.Owner, base.Amount, base.Owner, null);
+            await PowerCmd.Apply<AtFieldPower>(new ThrowingPlayerChoiceContext(), base.Owner, base.Amount, base.Owner, null);
         }
     }
 
-    public override async Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, CombatState combatState)
+    public override async Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, ICombatState combatState)
     {
         if (side == base.Owner.Side)
         {
-            await PowerCmd.ModifyAmount(this, -base.Amount, null, null);
+            await PowerCmd.ModifyAmount(choiceContext, this, -base.Amount, null, null);
         }
     }
 }

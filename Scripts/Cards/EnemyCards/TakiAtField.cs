@@ -1,6 +1,7 @@
 using BaseLib.Utils;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models.CardPools;
 using STS2_Tomorin_Mod.Cards.Base;
 using STS2_Tomorin_Mod.Enemy.Ememies;
@@ -22,6 +23,6 @@ public class TakiAtField() : BaseCardModel(-1, CardType.Status, CardRarity.Statu
 
     public async Task OnChosen()
     {
-        await PowerCmd.Apply<TakiAtFieldPower>(Owner.Creature, 1m, Owner.Creature, this);
+        await PowerCmd.Apply<TakiAtFieldPower>(new ThrowingPlayerChoiceContext(),Owner.Creature, 1m, Owner.Creature, this);
     }
 }

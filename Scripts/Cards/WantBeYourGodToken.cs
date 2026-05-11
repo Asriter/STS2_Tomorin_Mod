@@ -59,7 +59,7 @@ public class WantBeYourGodToken : BaseCardModel
         foreach (Creature item in enumerable)
         {
             await CreatureCmd.GainBlock(item, base.DynamicVars.Block, cardPlay);
-            await PowerCmd.Apply<AtFieldPower>(item, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature,
+            await PowerCmd.Apply<AtFieldPower>(choiceContext, item, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature,
                 this);
         }
     }

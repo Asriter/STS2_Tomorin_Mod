@@ -39,7 +39,7 @@ public class OnceHome : BaseCardModel
     {
         if (IsUpgraded)
         {
-            await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, 2m, base.Owner.Creature, this);
+            await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, 2m, base.Owner.Creature, this);
         }
 
         // if (Owner.Creature.HasPower<AtFieldPower>())
@@ -53,10 +53,10 @@ public class OnceHome : BaseCardModel
         // }
         
         //挂buff
-        await PowerCmd.Apply<OnceHomePower>(Owner.Creature, 1m, Owner.Creature, this);
+        await PowerCmd.Apply<OnceHomePower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this);
 
         var brokenNote = base.CombatState!.CreateCard<BrokenNote>(Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Discard, addedByPlayer: true);
+        await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Discard, Owner);
     }
 
     protected override void OnUpgrade()

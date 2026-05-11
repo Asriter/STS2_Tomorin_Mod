@@ -52,7 +52,7 @@ public class ThinkingYourself : BaseCardModel
         await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
 
         // 获得心之壁
-        await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
 
         var value = base.DynamicVars["ThinkingYourselfPower"].BaseValue;
         // 降低力量

@@ -45,10 +45,10 @@ public class DuckAndCover : BaseCardModel
     {
         if (IsUpgraded)
         {
-            await PowerCmd.Apply<AtFieldPower>(base.Owner.Creature, DynamicVars["ATFieldAmount"].IntValue, base.Owner.Creature, this);
+            await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, DynamicVars["ATFieldAmount"].IntValue, base.Owner.Creature, this);
         }
 
-        await PowerCmd.Apply<DuckAndCoverPower>(base.Owner.Creature, 1m, base.Owner.Creature, this);
+        await PowerCmd.Apply<DuckAndCoverPower>(choiceContext, base.Owner.Creature, 1m, base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

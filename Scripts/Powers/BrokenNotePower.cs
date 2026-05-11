@@ -36,11 +36,11 @@ public class BrokenNotePower : BasePowerModel
     /// <param name="combatState"></param>
     /// <returns></returns>
     public override async Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side,
-        CombatState combatState)
+        ICombatState combatState)
     {
         if (side == base.Owner.Side)
         {
-            await PowerCmd.ModifyAmount(this, -1, null, null);
+            await PowerCmd.ModifyAmount(choiceContext,this, -1, null, null);
         }
     }
 }

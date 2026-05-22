@@ -181,7 +181,7 @@ public class CrychicRememberPower : BasePowerModel
     /// 阶段1: 回合结束时受到10点不可阻挡伤害
     /// 阶段5: 回合结束时所有敌人获得力量和敏捷
     /// </summary>
-    public override async Task BeforeTurnEnd(PlayerChoiceContext choiceContext, CombatSide side)
+    public override async Task BeforeSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side, IEnumerable<Creature> participants)
     {
         if (side != base.Owner.Side) return;
         await HandleStageTransition();
@@ -330,7 +330,7 @@ public class CrychicRememberPower : BasePowerModel
     /// <summary>
     /// 回合开始时重置阶段0触发标记
     /// </summary>
-    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side,
+    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, IReadOnlyList<Creature> participants,
         ICombatState combatState)
     {
         if (side == base.Owner.Side)

@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.CardPools;
 using STS2_Tomorin_Mod.Cards.Base;
 using STS2_Tomorin_Mod.Cards.Collections;
+using STS2_Tomorin_Mod.Powers;
 
 namespace STS2_Tomorin_Mod.Cards;
 
@@ -19,22 +20,27 @@ namespace STS2_Tomorin_Mod.Cards;
 public class InappropriateWind : BaseCardModel
 {
     protected override IEnumerable<DynamicVar> CanonicalVars =>
-        [new DamageVar(9m, ValueProp.Move)];
+    [
+        new PowerVar<AtFieldPower>(3m),
+        new DamageVar(9m, ValueProp.Move)
+    ];
 
     public InappropriateWind() :
         base(1, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)
     {
     }
-    
+
     protected override IEnumerable<IHoverTip> ExtraHoverTips
     {
         get
         {
             var list = new List<IHoverTip>().ToList();
             list.Add(HoverTipFactory.FromCard<ColdRedTea>());
+            list.Add(HoverTipFactory.FromPower<AtFieldPower>());
             return list;
         }
     }
+
     public override bool IsInspiration => true;
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
@@ -44,9 +50,12 @@ public class InappropriateWind : BaseCardModel
             .FromCard(this)
             .Targeting(cardPlay.Target)
             .Execute(choiceContext);
-        
+
         var coldRedTea = base.CombatState!.CreateCard<ColdRedTea>(Owner);
         await CardPileCmd.AddGeneratedCardToCombat(coldRedTea, PileType.Draw, Owner);
+        
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue,
+            base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

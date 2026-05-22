@@ -2,6 +2,7 @@
 using BaseLib.Utils;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -28,12 +29,13 @@ public class NormalPencil : BaseRelicModel
     /// </summary>
     /// <param name="side"></param>
     /// <param name="combatState"></param>
-    public override async Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
+    public override Task AfterSideTurnStart(CombatSide side, IReadOnlyList<Creature> participants, ICombatState combatState)
     {
         if (side == Owner.Creature.Side && combatState.RoundNumber == 1)
         {
             _canActice = true;
         }
+        return Task.CompletedTask;
     }
 
     public override async Task AfterCompose(PlayerChoiceContext choiceContext, Player player, CardModel source)

@@ -30,7 +30,8 @@ public class UnwantedSixthPower : BasePowerModel
         }
     }
 
-    public override async Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, ICombatState combatState)
+    public override async Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, IReadOnlyList<Creature> participants,
+        ICombatState combatState)
     {
         if (side == base.Owner.Side)
         {

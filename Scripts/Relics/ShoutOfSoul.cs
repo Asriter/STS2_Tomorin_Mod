@@ -2,6 +2,7 @@
 using BaseLib.Utils;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -27,12 +28,13 @@ public class ShoutOfSoul : BaseRelicModel
         new CardsVar(5),
         new EnergyVar(2)
     };
+
     /// <summary>
     /// 战斗开始时初始化状态，效果一场战斗只能生效一次
     /// </summary>
     /// <param name="side"></param>
     /// <param name="combatState"></param>
-    public override Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
+    public override Task AfterSideTurnStart(CombatSide side, IReadOnlyList<Creature> participants, ICombatState combatState)
     {
         if (side == Owner.Creature.Side && combatState.RoundNumber == 1)
         {

@@ -41,7 +41,7 @@ public class CrychicDiscardCurse : BaseAfflictionModel
             actualDiscard = remainingCards.Count;
         }
 
-        var cards = await CardSelectCmd.FromHand(
+        var cards = await CardSelectCmd.FromHandForDiscard(
             choiceContext,
             player,
             new CardSelectorPrefs(CardSelectorPrefs.DiscardSelectionPrompt, actualDiscard),

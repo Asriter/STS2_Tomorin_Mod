@@ -17,7 +17,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 拾起石子
-/// 白卡 1->0费 技能 获得心之壁层数的格挡
+/// 白卡 1->0费 技能 获得5层心之壁
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class PickStone : BaseCardModel
@@ -27,6 +27,12 @@ public class PickStone : BaseCardModel
     public PickStone() : base(1, CardType.Skill, CardRarity.Common, TargetType.Self)
     {
     }
+    
+    protected override IEnumerable<DynamicVar> CanonicalVars =>
+        new List<DynamicVar>()
+        {
+            new PowerVar<AtFieldPower>(5m),
+        };
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips
     {
@@ -38,34 +44,10 @@ public class PickStone : BaseCardModel
         }
     }
 
-    protected override IEnumerable<DynamicVar> CanonicalVars
-    {
-        get
-        {
-            var list = base.CanonicalVars.ToList();
-            list.Add(new DynamicVar(AtFieldVar.DefaultName, 0));
-            list.Add(new BlockVar(0m, ValueProp.Move));
-            return list;
-        }
-    }
-    
-    private decimal AtFieldAmount => Owner.Creature.HasPower<AtFieldPower>()
-        ? Owner.Creature.GetPower<AtFieldPower>().Amount
-        : 0m;
-
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        if (AtFieldAmount > 0m)
-        {
-            await CreatureCmd.GainBlock(base.Owner.Creature, AtFieldAmount, ValueProp.Move, cardPlay);
-        }
-    }
-
-    public override Task AfterCardPlayed(PlayerChoiceContext context, CardPlay cardPlay)
-    {
-        //同步心之壁层数
-        DynamicVars[AtFieldVar.DefaultName].BaseValue = AtFieldAmount;
-        return Task.CompletedTask;
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue,
+            base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()

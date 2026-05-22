@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.CardPools;
 using STS2_Tomorin_Mod.Cards.Base;
+using STS2_Tomorin_Mod.Commands;
 using STS2_Tomorin_Mod.Powers;
 
 namespace STS2_Tomorin_Mod.Cards;
@@ -19,12 +20,15 @@ namespace STS2_Tomorin_Mod.Cards;
 [Pool(typeof(TomorinCardPool))]
 public class ThinkingYourself : BaseCardModel
 {
+    protected override bool IsPlayable =>
+        Owner.PlayerCombatState.Hand.Cards.Count(card => card.Type == CardType.Status) > 0;
+    
     protected override IEnumerable<DynamicVar> CanonicalVars =>
     [
-		new HpLossVar(2m),
+		// new HpLossVar(2m),
         new BlockVar(12m, ValueProp.Move),
-        new PowerVar<AtFieldPower>(3m),
-        new PowerVar<ThinkingYourselfPower>(5m)
+        // new PowerVar<AtFieldPower>(3m),
+        // new PowerVar<ThinkingYourselfPower>(5m)
     ];
 
     public ThinkingYourself() :
@@ -44,17 +48,33 @@ public class ThinkingYourself : BaseCardModel
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
+        //如果有状态牌，选择一张状态牌并 Exhaust
+        if (IsPlayable)
+        {
+            var cardsToExhaust = await DisExhaustCmd.FromHandForExhaust(
+                choiceContext,
+                Owner,
+                1,
+                model => model.Type == CardType.Status,
+                this);
+            foreach (var card in cardsToExhaust)
+            {
+                await CardCmd.Exhaust(choiceContext, card);
+            }
+        }
+        
+        
         //扣血
-        await CreatureCmd.Damage(choiceContext, base.Owner.Creature, base.DynamicVars.HpLoss.BaseValue, ValueProp.Unblockable | ValueProp.Unpowered | ValueProp.Move, this);
+        // await CreatureCmd.Damage(choiceContext, base.Owner.Creature, base.DynamicVars.HpLoss.BaseValue, ValueProp.Unblockable | ValueProp.Unpowered | ValueProp.Move, this);
 
         
         // 获得格挡
         await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
 
         // 获得心之壁
-        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
+        // await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
 
-        var value = base.DynamicVars["ThinkingYourselfPower"].BaseValue;
+        // var value = base.DynamicVars["ThinkingYourselfPower"].BaseValue;
         // 降低力量
         // await PowerCmd.Apply<StrengthPower>(Owner.Creature, -value, Owner.Creature, null);
         // 降低敏捷

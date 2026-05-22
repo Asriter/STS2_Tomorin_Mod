@@ -1,6 +1,7 @@
 ﻿using BaseLib.Abstracts;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -18,7 +19,7 @@ public class BrokenNotePower : BasePowerModel
     protected override IEnumerable<IHoverTip> ExtraHoverTips => [HoverTipFactory.FromPower<AtFieldPower>()];
 
 
-    public override Task AfterTurnEnd(PlayerChoiceContext choiceContext, CombatSide side)
+    public override Task AfterSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side, IEnumerable<Creature> participants)
     {
         if (side == base.Owner.Side)
         {
@@ -35,7 +36,7 @@ public class BrokenNotePower : BasePowerModel
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
-    public override async Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side,
+    public override async Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, IReadOnlyList<Creature> participants,
         ICombatState combatState)
     {
         if (side == base.Owner.Side)

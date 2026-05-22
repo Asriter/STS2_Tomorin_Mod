@@ -15,7 +15,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 没能成为人类
-/// 白卡 1费 技能 灵感 获得1层敏捷，3->4层心之壁
+/// 白卡 1费 技能 灵感 获得1层敏捷，4->5层心之壁
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class CannotBeingHuman : BaseCardModel
@@ -26,7 +26,7 @@ public class CannotBeingHuman : BaseCardModel
         new List<DynamicVar>()
         {
             new PowerVar<DexterityPower>(1m),
-            new PowerVar<AtFieldPower>(3m),
+            new PowerVar<AtFieldPower>(4m),
         };
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips
@@ -52,7 +52,6 @@ public class CannotBeingHuman : BaseCardModel
 
     protected override void OnUpgrade()
     {
-        // base.DynamicVars["DexterityPower"].UpgradeValueBy(1m);
         base.DynamicVars["AtFieldPower"].UpgradeValueBy(1m);
     }
 }

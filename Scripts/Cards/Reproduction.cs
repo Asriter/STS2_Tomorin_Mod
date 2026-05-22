@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using STS2_Tomorin_Mod.CardPools;
 using STS2_Tomorin_Mod.Cards.Base;
+using STS2_Tomorin_Mod.Commands;
 
 namespace STS2_Tomorin_Mod.Cards;
 
@@ -36,10 +37,10 @@ public class Reproduction : BaseCardModel
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        var selected = await CardSelectCmd.FromHand(
+        var selected = await DisExhaustCmd.FromHandForExhaust(
             choiceContext,
             base.Owner,
-            new CardSelectorPrefs(CardSelectorPrefs.ExhaustSelectionPrompt, 1),
+            1,
             c => c.Type == CardType.Status,
             this);
 

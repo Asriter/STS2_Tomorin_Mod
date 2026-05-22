@@ -21,7 +21,7 @@ public class WantBeYourGodToken : BaseCardModel
         new List<DynamicVar>()
         {
             new BlockVar(9m, ValueProp.Move),
-            new PowerVar<AtFieldPower>(3m)
+            new PowerVar<AtFieldPower>(1m)
         };
 
     public WantBeYourGodToken() :
@@ -67,6 +67,6 @@ public class WantBeYourGodToken : BaseCardModel
     protected override void OnUpgrade()
     {
         base.DynamicVars.Block.UpgradeValueBy(3m);
-        base.DynamicVars["AtFieldPower"].UpgradeValueBy(2m);
+        base.DynamicVars["AtFieldPower"].UpgradeValueBy(1m);
     }
 }

@@ -24,8 +24,8 @@ public class WantBeYourGod : BaseCardModel
         new List<DynamicVar>()
         {
             new ComposeVar(new Dictionary<CardType, int>() { { CardType.Skill, 1 } }, ModelDb.Card<WantBeYourGodToken>()),
-            new BlockVar(7m, ValueProp.Move),
-            new PowerVar<AtFieldPower>(1m)
+            // new BlockVar(7m, ValueProp.Move),
+            new PowerVar<AtFieldPower>(5m)
         };
 
     public WantBeYourGod() :
@@ -33,7 +33,7 @@ public class WantBeYourGod : BaseCardModel
     {
     }
 
-    public override bool GainsBlock => true;
+    // public override bool GainsBlock => true;
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips
     {
@@ -49,13 +49,13 @@ public class WantBeYourGod : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         await ComposeCmd.Compose<WantBeYourGodToken>(choiceContext, Owner, ComposeCost, this);
-        await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
+        // await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
         await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
     }
 
     protected override void OnUpgrade()
     {
-        base.DynamicVars.Block.UpgradeValueBy(2m);
-        base.DynamicVars["AtFieldPower"].UpgradeValueBy(1m);
+        // base.DynamicVars.Block.UpgradeValueBy(2m);
+        base.DynamicVars["AtFieldPower"].UpgradeValueBy(2m);
     }
 }

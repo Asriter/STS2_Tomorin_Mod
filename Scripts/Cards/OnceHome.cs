@@ -31,7 +31,7 @@ public class OnceHome : BaseCardModel
         }
     }
 
-    public OnceHome() : base(1, CardType.Power, CardRarity.Rare, TargetType.Self)
+    public OnceHome() : base(2, CardType.Power, CardRarity.Rare, TargetType.Self)
     {
     }
 

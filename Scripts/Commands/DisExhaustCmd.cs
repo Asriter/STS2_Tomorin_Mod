@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Extensions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
+using STS2_Tomorin_Mod.Localization.CustomEnums;
 
 namespace STS2_Tomorin_Mod.Commands;
 
@@ -53,5 +54,31 @@ public static class DisExhaustCmd
         {
             await CardPileCmd.Add(card, PileType.Hand, CardPilePosition.Top, source);
         }
+    }
+
+    private static bool ShouldInspiration(CardModel card)
+    {
+        return card.Keywords.Contains(CustomKeyWord.Inspiration) ||
+               card.Keywords.Contains(CustomKeyWord.SingleTurnInspiration);
+    }
+
+    /// <summary>
+    /// 从手牌中消耗卡
+    /// </summary>
+    /// <param name="context"></param>
+    /// <param name="player"></param>
+    /// <param name="selectCount"></param>
+    /// <param name="filter"></param>
+    /// <param name="source"></param>
+    /// <returns></returns>
+    public static async Task<IEnumerable<CardModel>> FromHandForExhaust(PlayerChoiceContext context, Player player,
+        int selectCount, Func<CardModel, bool>? filter, AbstractModel source)
+    {
+        var prefs = new CardSelectorPrefs(CardSelectorPrefs.ExhaustSelectionPrompt, selectCount);
+        
+        //设置灵感发光
+        prefs.ShouldGlowGold = ShouldInspiration;
+        
+        return await CardSelectCmd.FromHand(context, player, prefs, filter, source);
     }
 }

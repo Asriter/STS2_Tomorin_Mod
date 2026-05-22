@@ -10,13 +10,14 @@ using MegaCrit.Sts2.Core.Models.CardPools;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.CardPools;
 using STS2_Tomorin_Mod.Cards.Base;
+using STS2_Tomorin_Mod.Cards.Collections;
 using STS2_Tomorin_Mod.Powers;
 
 namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 西瓜虫
-/// 白卡 1费 技能 获得8->10点格挡，3-4层心之壁
+/// 白卡 1费 技能 获得8->10点格挡，将一张笔记本加入手牌
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class Woodlouse : BaseCardModel
@@ -25,7 +26,6 @@ public class Woodlouse : BaseCardModel
         new List<DynamicVar>()
         {
             new BlockVar(8m, ValueProp.Move),
-            new PowerVar<AtFieldPower>(3m),
         };
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips
@@ -33,7 +33,7 @@ public class Woodlouse : BaseCardModel
         get
         {
             var list = base.ExtraHoverTips.ToList();
-            list.Add(HoverTipFactory.FromPower<AtFieldPower>());
+            list.Add(HoverTipFactory.FromCard<BrokenNote>(base.IsUpgraded));
             return list;
         }
     }
@@ -45,24 +45,14 @@ public class Woodlouse : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
-        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
+        // await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
 
-        // 随机一张收集品加入手牌
-        // var allCollections = ModelDb.CardPool<CollectionsCardPool>().AllCards.ToList();
-        // if (allCollections.Count > 0)
-        // {
-        //     var randomCard = allCollections.TakeRandom(1, Owner.RunState.Rng.CombatCardGeneration).FirstOrDefault();
-        //     if (randomCard != null)
-        //     {
-        //         var newCard = base.CombatState!.CreateCard(randomCard, Owner);
-        //         await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
-        //     }
-        // }
+        var brokenNote = base.CombatState!.CreateCard<BrokenNote>(Owner);
+        await CardPileCmd.AddGeneratedCardToCombat(brokenNote, PileType.Hand, Owner);
     }
 
     protected override void OnUpgrade()
     {
-        base.DynamicVars.Block.UpgradeValueBy(2m);
-        base.DynamicVars["AtFieldPower"].UpgradeValueBy(1m);
+        base.DynamicVars.Block.UpgradeValueBy(3m);
     }
 }

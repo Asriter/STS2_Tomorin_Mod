@@ -48,7 +48,7 @@ public class AtFieldPower : BasePowerModel
         return false;
     }
 
-    
+
     /// <summary>
     /// 回合开始时重置状态：受伤时是否减少层数
     /// </summary>
@@ -56,7 +56,7 @@ public class AtFieldPower : BasePowerModel
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
-    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side,
+    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, IReadOnlyList<Creature> participants,
         ICombatState combatState)
     {
         if (side == base.Owner.Side)
@@ -99,7 +99,7 @@ public class AtFieldPower : BasePowerModel
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
-    public override async Task AfterSideTurnStart(CombatSide side, ICombatState combatState)
+    public override async Task AfterSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side, IEnumerable<Creature> participants)
     {
         if (side == Owner.Side && !Owner.HasPower<OnceHomePower>() && !Owner.HasPower<TakiAtFieldPower>())
         {
@@ -123,7 +123,7 @@ public class AtFieldPower : BasePowerModel
         if (target == base.Owner && dealer != null && (props.IsPoweredAttack_() || cardSource is Omnislice))
         {
             //是否伤害翻倍
-            var damage = Amount * (Owner.HasPower<NameOfTearPower>() ? 2 : 1);
+            var damage = Amount * (Owner.HasPower<NameOfTearPower>() ? 1.5m : 1);
             Flash();
             await CreatureCmd.Damage(choiceContext, dealer, damage, ValueProp.Unpowered | ValueProp.SkipHurtAnim,
                 base.Owner, null);

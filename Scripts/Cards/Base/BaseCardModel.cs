@@ -150,10 +150,10 @@ public abstract class BaseCardModel(
     protected async Task ExhaustCard(PlayerChoiceContext choiceContext, int num)
     {
         //消耗一张手牌
-        var exhaustList = await CardSelectCmd.FromHand(
+        var exhaustList = await DisExhaustCmd.FromHandForExhaust(
             choiceContext,
             Owner,
-            new CardSelectorPrefs(CardSelectorPrefs.ExhaustSelectionPrompt, num),
+            num,
             null,
             this);
         foreach (var card in exhaustList)

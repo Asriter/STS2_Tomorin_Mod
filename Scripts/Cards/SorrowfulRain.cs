@@ -12,7 +12,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// “雨”
-/// 蓝卡 1费 能力 每次触发作词时，获得2->4层心之壁
+/// 蓝卡 1费 能力 每次触发作词时，获得3->5层心之壁
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class SorrowfulRain : BaseCardModel
@@ -20,7 +20,7 @@ public class SorrowfulRain : BaseCardModel
     protected override IEnumerable<DynamicVar> CanonicalVars =>
         new List<DynamicVar>()
         {
-            new PowerVar<SorrowfulRainPower>(2m),
+            new PowerVar<SorrowfulRainPower>(3m),
         };
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips

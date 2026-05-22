@@ -11,6 +11,7 @@ using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.CardPools;
 using STS2_Tomorin_Mod.Cards.Base;
 using STS2_Tomorin_Mod.Cards.Collections;
+using STS2_Tomorin_Mod.Commands;
 using STS2_Tomorin_Mod.Localization.CustomEnums;
 using STS2_Tomorin_Mod.Powers;
 
@@ -18,7 +19,7 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// AT立场
-/// 白卡 2费 技能 灵感 消耗一张状态牌 获得16->21点格挡，获得6-8点心之壁
+/// 白卡 2费 技能 灵感 消耗一张状态牌 获得13->15点格挡，获得5-6点心之壁
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class AtField : BaseCardModel
@@ -32,7 +33,7 @@ public class AtField : BaseCardModel
         new List<DynamicVar>()
         {
             new BlockVar(13m, ValueProp.Move),
-            new PowerVar<AtFieldPower>(6m),
+            new PowerVar<AtFieldPower>(5m),
         };
 
     protected override IEnumerable<IHoverTip> ExtraHoverTips
@@ -55,10 +56,10 @@ public class AtField : BaseCardModel
         //如果有状态牌，选择一张状态牌并 Exhaust
         if (IsPlayable)
         {
-            var cardsToExhaust = await CardSelectCmd.FromHand(
+            var cardsToExhaust = await DisExhaustCmd.FromHandForExhaust(
                 choiceContext,
                 Owner,
-                new CardSelectorPrefs(CardSelectorPrefs.ExhaustSelectionPrompt, 1),
+                1,
                 model => model.Type == CardType.Status,
                 this);
             foreach (var card in cardsToExhaust)
@@ -77,8 +78,8 @@ public class AtField : BaseCardModel
 
     protected override void OnUpgrade()
     {
-        base.DynamicVars.Block.UpgradeValueBy(4m);
-        base.DynamicVars["AtFieldPower"].UpgradeValueBy(2m);
+        base.DynamicVars.Block.UpgradeValueBy(2m);
+        base.DynamicVars["AtFieldPower"].UpgradeValueBy(1m);
     }
     
 }

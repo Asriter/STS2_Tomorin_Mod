@@ -56,7 +56,7 @@ public class CrychicPhatom : CustomMonsterModel
     /// <summary>
     /// 一阶段多段攻击段数 (2.2)
     /// </summary>
-    private const int PhaseOneMultiCount = 3;
+    private const int PhaseOneMultiCount = 4;
 
     /// <summary>
     /// 一阶段回复生命值 (2.3)
@@ -82,13 +82,13 @@ public class CrychicPhatom : CustomMonsterModel
     /// 二阶段单体重击伤害 (4.2)
     /// 基础35, 高进阶38
     /// </summary>
-    private int PhaseTwoBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 38, 35);
+    private int PhaseTwoBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 45, 40);
 
     /// <summary>
     /// 二阶段多段攻击每段伤害 (4.3)
     /// 基础3, 高进阶4
     /// </summary>
-    private int PhaseTwoMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3);
+    private int PhaseTwoMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 5, 4);
 
     /// <summary>
     /// 二阶段多段攻击段数 (4.3)
@@ -186,11 +186,11 @@ public class CrychicPhatom : CustomMonsterModel
         var states = new List<MonsterState>();
 
         // -- 一阶段 --
-        var initState = new MoveState("INIT_STATE", InitMove, [new BuffIntent(), new StatusIntent(PhaseOneState)]);
+        var initState = new MoveState("INIT_STATE", InitMove, [new BuffIntent()]);
         var phase1Atk1 = new MoveState("PHASE1_ATK1_STATE", Phase1Atk1Move,
-            new SingleAttackIntent(PhaseOneBigAtk), new DebuffIntent());
+            new SingleAttackIntent(PhaseOneBigAtk), new StatusIntent(PhaseOneState));
         var phase1Atk2 = new MoveState("PHASE1_ATK2_STATE", Phase1Atk2Move,
-            new MultiAttackIntent(PhaseOneMultiAtk, PhaseOneMultiCount), new DebuffIntent());
+            new MultiAttackIntent(PhaseOneMultiAtk, PhaseOneMultiCount), new StatusIntent(PhaseOneState));
         var phase1Heal = new MoveState("PHASE1_HEAL_STATE", Phase1HealMove,
             [new HealIntent(), new DefendIntent(), new StatusIntent(PhaseOneStates)]);
 
@@ -252,7 +252,10 @@ public class CrychicPhatom : CustomMonsterModel
             new MegaCrit.Sts2.Core.GameActions.Multiplayer.ThrowingPlayerChoiceContext(),
             targets, 1, base.Creature, null);
         
-        await CardPileCmd.AddToCombatAndPreview<CrychicPhantomState>(targets, PileType.Hand, PhaseOneState, null);
+        await PowerCmd.Apply<CrychicPhantomCounterPower>( new ThrowingPlayerChoiceContext(), targets, 1, base.Creature, null);
+        
+        
+        // await CardPileCmd.AddToCombatAndPreview<CrychicPhantomState>(targets, PileType.Hand, PhaseOneState, null);
         
     }
 
@@ -265,15 +268,17 @@ public class CrychicPhatom : CustomMonsterModel
             .WithHitFx("vfx/vfx_attack_blunt")
             .Execute(null);
         
-        for (int i = 0; i < targets.Count; i++)
-        {
-            var target = targets[i];
-            if (target.HasPower<CrychicRememberPower>())
-            {
-                var power = target.GetPower<CrychicRememberPower>();
-                await PowerCmd.ModifyAmount(new BlockingPlayerChoiceContext(), power, PhaseOneBuff, Creature, null);
-            }
-        }
+        // for (int i = 0; i < targets.Count; i++)
+        // {
+        //     var target = targets[i];
+        //     if (target.HasPower<CrychicRememberPower>())
+        //     {
+        //         var power = target.GetPower<CrychicRememberPower>();
+        //         await PowerCmd.ModifyAmount(new BlockingPlayerChoiceContext(), power, PhaseOneBuff, Creature, null);
+        //     }
+        // }
+        
+        await CardPileCmd.AddToCombatAndPreview<CrychicPhantomState>(targets, PileType.Hand, PhaseOneState, null, CardPilePosition.Random);
     }
 
     /// <summary>
@@ -286,15 +291,16 @@ public class CrychicPhatom : CustomMonsterModel
             .WithHitFx("vfx/vfx_attack_blunt")
             .Execute(null);
 
-        for (int i = 0; i < targets.Count; i++)
-        {
-            var target = targets[i];
-            if (target.HasPower<CrychicRememberPower>())
-            {
-                var power = target.GetPower<CrychicRememberPower>();
-                await PowerCmd.ModifyAmount(new BlockingPlayerChoiceContext(), power, PhaseOneBuffs, Creature, null);
-            }
-        }
+        // for (int i = 0; i < targets.Count; i++)
+        // {
+        //     var target = targets[i];
+        //     if (target.HasPower<CrychicRememberPower>())
+        //     {
+        //         var power = target.GetPower<CrychicRememberPower>();
+        //         await PowerCmd.ModifyAmount(new BlockingPlayerChoiceContext(), power, PhaseOneBuffs, Creature, null);
+        //     }
+        // }
+        await CardPileCmd.AddToCombatAndPreview<CrychicPhantomState>(targets, PileType.Hand, PhaseOneState, null, CardPilePosition.Random);
     }
 
     /// <summary>

@@ -13,12 +13,11 @@ namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
 /// 熬夜作曲
-/// 蓝卡 1费 技能 升级后先获得2层心之壁；抽等于心之壁层数的牌；将一张深夜的罐装咖啡加入手牌
+/// 蓝卡 1费 技能 抽2-3， 获得4-5点心之壁
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
 public class StayUpLate : BaseCardModel
 {
-    private const string _isUpgradeKey = "IsUpgrade";
     protected override IEnumerable<IHoverTip> ExtraHoverTips
     {
         get
@@ -32,7 +31,8 @@ public class StayUpLate : BaseCardModel
 
     protected override IEnumerable<DynamicVar> CanonicalVars =>
     [
-        new IntVar(_isUpgradeKey, 0),
+        new PowerVar<AtFieldPower>(3),
+        new CardsVar(2),
     ];
 
     public StayUpLate() : base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)
@@ -41,27 +41,19 @@ public class StayUpLate : BaseCardModel
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        if (IsUpgraded)
-        {
-            await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, 2m, base.Owner.Creature, this);
-        }
+        await CardPileCmd.Draw(choiceContext, base.DynamicVars.Cards.BaseValue, base.Owner);
+        
+        await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue,
+            base.Owner.Creature, this);
 
-        int atFieldStacks = Owner.Creature.HasPower<AtFieldPower>()
-            ? (int)Owner.Creature.GetPower<AtFieldPower>().Amount
-            : 0;
-
-        if (atFieldStacks > 0)
-        {
-            await CardPileCmd.Draw(choiceContext, (decimal)atFieldStacks, base.Owner);
-        }
-
-        var midnightCoffee = base.CombatState!.CreateCard<MidnightCoffee>(Owner);
-        await CardPileCmd.AddGeneratedCardToCombat(midnightCoffee, PileType.Hand, Owner);
+        // var midnightCoffee = base.CombatState!.CreateCard<MidnightCoffee>(Owner);
+        // await CardPileCmd.AddGeneratedCardToCombat(midnightCoffee, PileType.Hand, Owner);
     }
-    
+
     protected override void OnUpgrade()
     {
         // 升级效果通过 IsUpgraded 在 OnPlay 中处理
-        base.DynamicVars[_isUpgradeKey].UpgradeValueBy(1);
+        base.DynamicVars.Cards.UpgradeValueBy(1);
+        DynamicVars[AtFieldPower.DefaultName].UpgradeValueBy(1);
     }
 }

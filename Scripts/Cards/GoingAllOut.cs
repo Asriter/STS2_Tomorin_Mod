@@ -19,7 +19,7 @@ namespace STS2_Tomorin_Mod.Cards;
 [Pool(typeof(TomorinCardPool))]
 public class GoingAllOut() : BaseCardModel(3, CardType.Skill, CardRarity.Rare, TargetType.AnyEnemy)
 {
-    public override IEnumerable<CardKeyword> CanonicalKeywords => [CardKeyword.Exhaust];
+    public override IEnumerable<CardKeyword> CanonicalKeywords => [CardKeyword.Exhaust, CardKeyword.Retain];
 
     protected override IEnumerable<DynamicVar> CanonicalVars
     {

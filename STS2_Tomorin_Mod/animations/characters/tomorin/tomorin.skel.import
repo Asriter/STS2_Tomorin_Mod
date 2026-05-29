@@ -1,0 +1,14 @@
+[remap]
+
+importer="spine.skel"
+type="SpineSkeletonFileResource"
+uid="uid://b3t8282nccdxf"
+path="res://.godot/imported/tomorin.skel-d276f9cb67049ac38be69749314e2ca9.spskel"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/animations/characters/tomorin/tomorin.skel"
+dest_files=["res://.godot/imported/tomorin.skel-d276f9cb67049ac38be69749314e2ca9.spskel"]
+
+[params]
+

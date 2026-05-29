@@ -2,11 +2,16 @@
   "id": "STS2_Tomorin_Mod",
   "name": "高松灯Mod",
   "author": "Asriter",
-  "description": "Slay the Spire 2 mod created from a template for use with BaseLib",
-  "version": "v0.0.7",
+  "description": "基于baselib的塔2mod，目前包含一个角色，三个boss；可以在模组设置界面设置是否启用模组boss。",
+  "version": "v0.0.9",
   "has_pck": true,
   "has_dll": true,
-  "dependencies": ["BaseLib"],
-  "min_game_version": "0.104.0",
+  "dependencies": [
+    {
+      "id": "BaseLib",
+      "min_version": "3.1.8"
+    }
+  ],
+  "min_game_version": "0.106.0",
   "affects_gameplay": true
 }

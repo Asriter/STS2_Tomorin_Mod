@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
@@ -45,18 +46,18 @@ public class CrychicPhatom : CustomMonsterModel
     /// 一阶段单体重击伤害 (2.1)
     /// 基础25, 高进阶28
     /// </summary>
-    private int PhaseOneBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 28, 25);
+    private int PhaseOneBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 18, 15);
 
     /// <summary>
     /// 一阶段多段攻击每段伤害 (2.2)
     /// 基础10, 高进阶12
     /// </summary>
-    private int PhaseOneMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 12, 10);
+    private int PhaseOneMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 10, 8);
 
     /// <summary>
     /// 一阶段多段攻击段数 (2.2)
     /// </summary>
-    private const int PhaseOneMultiCount = 4;
+    private const int PhaseOneMultiCount = 3;
 
     /// <summary>
     /// 一阶段回复生命值 (2.3)
@@ -82,18 +83,18 @@ public class CrychicPhatom : CustomMonsterModel
     /// 二阶段单体重击伤害 (4.2)
     /// 基础35, 高进阶38
     /// </summary>
-    private int PhaseTwoBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 45, 40);
+    private int PhaseTwoBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 27, 24);
 
     /// <summary>
     /// 二阶段多段攻击每段伤害 (4.3)
     /// 基础3, 高进阶4
     /// </summary>
-    private int PhaseTwoMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 5, 4);
+    private int PhaseTwoMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 10, 8);
 
     /// <summary>
     /// 二阶段多段攻击段数 (4.3)
     /// </summary>
-    private const int PhaseTwoMultiCount = 10;
+    private const int PhaseTwoMultiCount = 4;
 
     /// <summary>
     /// 二阶段混合攻击伤害 (4.4)
@@ -188,7 +189,7 @@ public class CrychicPhatom : CustomMonsterModel
         // -- 一阶段 --
         var initState = new MoveState("INIT_STATE", InitMove, [new BuffIntent()]);
         var phase1Atk1 = new MoveState("PHASE1_ATK1_STATE", Phase1Atk1Move,
-            new SingleAttackIntent(PhaseOneBigAtk), new StatusIntent(PhaseOneState));
+            new SingleAttackIntent(PhaseOneBigAtk));
         var phase1Atk2 = new MoveState("PHASE1_ATK2_STATE", Phase1Atk2Move,
             new MultiAttackIntent(PhaseOneMultiAtk, PhaseOneMultiCount), new StatusIntent(PhaseOneState));
         var phase1Heal = new MoveState("PHASE1_HEAL_STATE", Phase1HealMove,
@@ -278,7 +279,7 @@ public class CrychicPhatom : CustomMonsterModel
         //     }
         // }
         
-        await CardPileCmd.AddToCombatAndPreview<CrychicPhantomState>(targets, PileType.Hand, PhaseOneState, null, CardPilePosition.Random);
+        // await CardPileCmd.AddToCombatAndPreview<CrychicPhantomState>(targets, PileType.Hand, PhaseOneState, null, CardPilePosition.Random);
     }
 
     /// <summary>
@@ -353,6 +354,11 @@ public class CrychicPhatom : CustomMonsterModel
             if (creature.HasPower<CrychicRememberPower>())
             {
                 await PowerCmd.Remove<CrychicRememberPower>(creature);
+            }
+            //移除counter buff
+            if (creature.HasPower<CrychicPhantomCounterPower>())
+            {
+                await PowerCmd.Remove<CrychicPhantomCounterPower>(creature);
             }
         }
         

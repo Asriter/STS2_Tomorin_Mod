@@ -30,7 +30,7 @@
     <AutoSteamPath>D:/SteamLibrary/steamapps</AutoSteamPath>
     <SteamLibraryPath Condition="'$(SteamLibraryPath)' == '' and Exists('$(AutoSteamPath)/common/Slay the Spire 2')">$(AutoSteamPath)</SteamLibraryPath>
 
-    <GodotPath Condition="'$(GodotPath)' == ''">C:/Program Files/Godot/Godot_v4.5.1-stable_mono_win64/Godot_v4.5.1-stable_mono_win64.exe</GodotPath>
+    <GodotPath Condition="'$(GodotPath)' == ''">E:/Resources/sts2/godot4.5.1_spineRuntime/godot-4.2-4.5.1-stable-mono.exe</GodotPath>
     <!-- If on Windows and Slay the Spire 2 is not installed in your default steam library, adjust the following.-->
     <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">D:/SteamLibrary/steamapps</SteamLibraryPath>
 

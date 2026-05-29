@@ -72,11 +72,6 @@ public class CrychicRememberPower : BasePowerModel
     /// </summary>
     private int _lastCheckedAmount = 1;
 
-    /// <summary>
-    /// 阶段0是否已在当前回合触发过强制结束
-    /// </summary>
-    private bool _stage0TriggeredThisTurn;
-
     public override PowerType Type => PowerType.Buff;
     public override PowerStackType StackType => PowerStackType.Counter;
     public override bool AllowNegative => false;
@@ -87,7 +82,7 @@ public class CrychicRememberPower : BasePowerModel
     /// 检测阶段切换并执行清理/初始化
     /// 在所有阶段相关钩子开始时调用
     /// </summary>
-    private async Task HandleStageTransition()
+    private async Task HandleStageTransition(PlayerChoiceContext choiceContext)
     {
         int currentAmount = (int)base.Amount;
         if (currentAmount == _lastCheckedAmount) return;
@@ -99,13 +94,12 @@ public class CrychicRememberPower : BasePowerModel
         await HandleStageExit(oldStage);
 
         // 应用新阶段
-        await HandleStageEnter(newStage);
+        await HandleStageEnter(newStage, choiceContext);
 
         _lastCheckedAmount = currentAmount;
-        
+
         //更新显示层数
         base.DynamicVars["CurStage"].BaseValue = (Amount - 1) % 7 + 1;
-
     }
 
     /// <summary>
@@ -129,7 +123,7 @@ public class CrychicRememberPower : BasePowerModel
     /// <summary>
     /// 进入阶段时的初始化逻辑
     /// </summary>
-    private async Task HandleStageEnter(int stage)
+    private async Task HandleStageEnter(int stage, PlayerChoiceContext choiceContext)
     {
         switch (stage)
         {
@@ -142,8 +136,10 @@ public class CrychicRememberPower : BasePowerModel
             //     await ApplyStage3Affliction();
             //     break;
             case 0:
-                // 重置强制结束标记，供新的阶段0触发
-                _stage0TriggeredThisTurn = false;
+                // 直接结束当前回合，然后流转状态
+                Flash();
+                PlayerCmd.EndTurn(base.Owner.Player, canBackOut: false);
+                // await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
                 break;
         }
     }
@@ -159,8 +155,11 @@ public class CrychicRememberPower : BasePowerModel
 
         foreach (var card in player.PlayerCombatState.Hand.Cards)
         {
-            card.AddKeyword(CardKeyword.Exhaust);
-            _stage2TrackedCards.Add(card);
+            if (!card.Keywords.Contains(CardKeyword.Exhaust))
+            {
+                card.AddKeyword(CardKeyword.Exhaust);
+                _stage2TrackedCards.Add(card);
+            }
         }
     }
 
@@ -170,6 +169,7 @@ public class CrychicRememberPower : BasePowerModel
         {
             card.RemoveKeyword(CardKeyword.Exhaust);
         }
+
         _stage2TrackedCards.Clear();
     }
 
@@ -181,10 +181,11 @@ public class CrychicRememberPower : BasePowerModel
     /// 阶段1: 回合结束时受到10点不可阻挡伤害
     /// 阶段5: 回合结束时所有敌人获得力量和敏捷
     /// </summary>
-    public override async Task BeforeSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side, IEnumerable<Creature> participants)
+    public override async Task BeforeSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side,
+        IEnumerable<Creature> participants)
     {
         if (side != base.Owner.Side) return;
-        await HandleStageTransition();
+        await HandleStageTransition(choiceContext);
 
         int stage = (int)base.Amount % 7;
 
@@ -214,11 +215,11 @@ public class CrychicRememberPower : BasePowerModel
     public override async Task AfterCardDrawn(PlayerChoiceContext choiceContext, CardModel card, bool fromHandDraw)
     {
         if (card.Owner != base.Owner.Player) return;
-        await HandleStageTransition();
+        await HandleStageTransition(choiceContext);
 
         int stage = (int)base.Amount % 7;
 
-        if (stage == 2)
+        if (stage == 2 && !card.Keywords.Contains(CardKeyword.Exhaust))
         {
             card.AddKeyword(CardKeyword.Exhaust);
             _stage2TrackedCards.Add(card);
@@ -246,7 +247,7 @@ public class CrychicRememberPower : BasePowerModel
         //6阶段
         if (dealer == base.Owner && (int)base.Amount % 7 == 6)
             return amount * Stage6DamageMultiplier;
-        
+
         //3阶段
         if ((int)base.Amount % 7 == 3 && target == Owner)
         {
@@ -258,28 +259,6 @@ public class CrychicRememberPower : BasePowerModel
     }
 
     /// <summary>
-    /// 阶段3: 受到伤害减半
-    /// </summary>
-    // public override decimal ModifyHpLostBeforeOstyLate(Creature target, decimal amount, ValueProp props,
-    //     Creature? dealer, CardModel? cardSource)
-    // {
-    //     if (target != base.Owner) return amount;
-    //     if ((int)base.Amount % 7 != 3) return amount;
-    //     if (amount <= 0) return amount;
-    //
-    //     // 检查手牌中是否有减伤Affliction标记
-    //     // var player = base.Owner.Player;
-    //     // if (player == null) return amount;
-    //     //
-    //     // bool hasAfflictionInHand = player.PlayerCombatState.Hand.Cards
-    //     //     .Any(c => c.Affliction is CrychicDamageReduceCurse);
-    //     //
-    //     // return hasAfflictionInHand ? amount / 2 : amount;
-    //
-    //     return amount / 2;
-    // }
-    
-    /// <summary>
     /// 阶段3+6: 玩家回合开始时自动推进层数
     /// 阶段0: 玩家回合开始时强制结束回合
     /// </summary>
@@ -287,25 +266,28 @@ public class CrychicRememberPower : BasePowerModel
         ICombatState combatState)
     {
         if (player != base.Owner.Player) return;
-        await HandleStageTransition();
+        await HandleStageTransition(choiceContext);
 
         int stage = (int)base.Amount % 7;
 
-        if (stage == 3 || stage == 6)
-        {
-            // 自动推进到下一阶段
-            Flash();
-            await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
-        }
-        else if (stage == 0 && !_stage0TriggeredThisTurn)
-        {
-            // 强制结束当前玩家回合
-            _stage0TriggeredThisTurn = true;
-            Flash();
-            PlayerCmd.EndTurn(base.Owner.Player, canBackOut: false);
-            // 层数+1 → 进入阶段1
-            await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
-        }
+        //所有情况下都是回合开始时自动流转状态
+        await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
+
+        // if (stage == 3 || stage == 6)
+        // {
+        //     // 自动推进到下一阶段
+        //     Flash();
+        //     await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
+        // }
+        // else if (stage == 0 && !_stage0TriggeredThisTurn)
+        // {
+        //     // 强制结束当前玩家回合
+        //     _stage0TriggeredThisTurn = true;
+        //     Flash();
+        //     PlayerCmd.EndTurn(base.Owner.Player, canBackOut: false);
+        //     // 层数+1 → 进入阶段1
+        //     await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
+        // }
     }
 
     /// <summary>
@@ -314,30 +296,31 @@ public class CrychicRememberPower : BasePowerModel
     public override async Task AfterPlayerTurnStart(PlayerChoiceContext choiceContext, Player player)
     {
         if (player != base.Owner.Player) return;
-        await HandleStageTransition();
+        await HandleStageTransition(choiceContext);
 
         int stage = (int)base.Amount % 7;
 
-        if (stage == 0 && !_stage0TriggeredThisTurn)
-        {
-            _stage0TriggeredThisTurn = true;
-            Flash();
-            PlayerCmd.EndTurn(base.Owner.Player, canBackOut: false);
-            await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
-        }
+        // if (stage == 0 && !_stage0TriggeredThisTurn)
+        // {
+        //     _stage0TriggeredThisTurn = true;
+        //     Flash();
+        //     PlayerCmd.EndTurn(base.Owner.Player, canBackOut: false);
+        //     await PowerCmd.ModifyAmount(choiceContext, this, 1, base.Owner, null);
+        // }
     }
 
     /// <summary>
     /// 回合开始时重置阶段0触发标记
     /// </summary>
-    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, IReadOnlyList<Creature> participants,
+    public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side,
+        IReadOnlyList<Creature> participants,
         ICombatState combatState)
     {
         if (side == base.Owner.Side)
         {
-            _stage0TriggeredThisTurn = false;
             _lastCheckedAmount = (int)base.Amount;
         }
+
         return Task.CompletedTask;
     }
 
@@ -351,13 +334,15 @@ public class CrychicRememberPower : BasePowerModel
         {
             CleanupStage2Exhaust();
         }
+
         await base.AfterRemoved(oldOwner);
     }
 
-    public override async Task AfterPowerAmountChanged(PlayerChoiceContext choiceContext, PowerModel power, decimal amount, Creature? applier,
+    public override async Task AfterPowerAmountChanged(PlayerChoiceContext choiceContext, PowerModel power,
+        decimal amount, Creature? applier,
         CardModel? cardSource)
     {
-        await HandleStageTransition();
+        await HandleStageTransition(choiceContext);
     }
 
     #endregion

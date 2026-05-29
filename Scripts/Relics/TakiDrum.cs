@@ -24,28 +24,17 @@ public class TakiDrum : BaseRelicModel
 
     private int _cardPlayCount = 0;
 
-    public int CardPlayCount
-    {
-        get => _cardPlayCount;
-        set
-        {
-            AssertMutable();
-            _cardPlayCount = value;
-            UpdateDisplay();
-        }
-    }
-    
-    //显示计数
-    public override int DisplayAmount => CardPlayCount;
+    // public override bool ShowCounter => true;
+    // public override int DisplayAmount => _cardPlayCount;
 
     /// <summary>
     /// 每回合开始时重置计数器
     /// </summary>
-    public override Task AfterSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side, IEnumerable<Creature> participants)
+    public override Task AfterSideTurnStart(CombatSide side, IReadOnlyList<Creature> participants, ICombatState combatState)
     {
         if (side == Owner.Creature.Side)
         {
-            CardPlayCount = 0;
+            _cardPlayCount = 0;
         }
         return Task.CompletedTask;
     }
@@ -57,8 +46,9 @@ public class TakiDrum : BaseRelicModel
     {
         if (cardPlay.Card.Owner == Owner && !cardPlay.IsAutoPlay)
         {
-            CardPlayCount++;
-            if (CardPlayCount == 5)
+            _cardPlayCount++;
+            UpdateDisplay();
+            if (_cardPlayCount == 5)
             {
                 Flash();
             }
@@ -73,18 +63,18 @@ public class TakiDrum : BaseRelicModel
     /// </summary>
     public override int ModifyCardPlayCount(CardModel card, Creature? target, int playCount)
     {
-        if (card.Owner == Owner && CardPlayCount == 4)
+        if (card.Owner == Owner && _cardPlayCount == 4)
         {
             return playCount + 1;
         }
         return playCount;
     }
-
+    
     private void UpdateDisplay()
     {
-        if (CardPlayCount < 4)
+        if (_cardPlayCount < 4)
             Status = RelicStatus.Normal;
-        else if (CardPlayCount == 4)
+        else if (_cardPlayCount == 4)
             Status = RelicStatus.Active;
         else
         {

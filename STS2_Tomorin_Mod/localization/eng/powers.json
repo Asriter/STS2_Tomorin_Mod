@@ -19,5 +19,14 @@
   "STS2_TOMORIN_MOD-TAKI_AT_FIELD_POWER.smartDescription": "At the start of each turn, gain temporary Strength equal to your AT Field. AT Field no longer halves at turn start.",
   "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.title": "Crychic Memory",
   "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.description": "Crychic's lingering memory haunts you. Effects change based on stack count.",
-  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.smartDescription": "Stage {Amount}: Crychic's lingering memory haunts you. Effects change based on stack count."
+  "STS2_TOMORIN_MOD-CRYCHIC_REMEMBER_POWER.smartDescription": "Stage {Amount}: Crychic's lingering memory haunts you. Effects change based on stack count.",
+  "STS2_TOMORIN_MOD-TAKE_NAP_POWER.title": "Take a Nap",
+  "STS2_TOMORIN_MOD-TAKE_NAP_POWER.description": "At the start of your next turn, gain [blue]{Amount}[/blue] Block, then remove this effect.",
+  "STS2_TOMORIN_MOD-TAKE_NAP_POWER.smartDescription": "At the start of your next turn, gain [blue]{Amount}[/blue] Block, then remove this effect.",
+  "STS2_TOMORIN_MOD-HEART_BEAT_POWER.title": "Guided Heartbeat",
+  "STS2_TOMORIN_MOD-HEART_BEAT_POWER.description": "Whenever a card is Exhausted, gain [blue]{Amount}[/blue] Block.",
+  "STS2_TOMORIN_MOD-HEART_BEAT_POWER.smartDescription": "Whenever a card is Exhausted, gain [blue]{Amount}[/blue] Block.",
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN_POWER.title": "Cracked Heart",
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN_POWER.description": "Whenever you gain ATField, gain [blue]{Amount}[/blue] additional ATField.",
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN_POWER.smartDescription": "Whenever you gain ATField, gain [blue]{Amount}[/blue] additional ATField."
 }

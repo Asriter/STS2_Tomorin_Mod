@@ -99,7 +99,7 @@ public class AtFieldPower : BasePowerModel
     /// <param name="side"></param>
     /// <param name="combatState"></param>
     /// <returns></returns>
-    public override async Task AfterSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side, IEnumerable<Creature> participants)
+    public override async Task AfterSideTurnStart(CombatSide side, IReadOnlyList<Creature> participants, ICombatState combatState)
     {
         if (side == Owner.Side && !Owner.HasPower<OnceHomePower>() && !Owner.HasPower<TakiAtFieldPower>())
         {

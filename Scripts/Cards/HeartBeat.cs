@@ -1,7 +1,6 @@
 using BaseLib.Utils;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
-using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using STS2_Tomorin_Mod.CardPools;
@@ -11,30 +10,27 @@ using STS2_Tomorin_Mod.Powers;
 namespace STS2_Tomorin_Mod.Cards;
 
 /// <summary>
-/// 猫窝般的录音室
-/// 金卡 能力 1费 强化后固有 每次触发"作词"时，回复一点费用
+/// 被引导的心跳
+/// 蓝卡 能力 1费 每当卡被消耗获得2->3点防御
 /// </summary>
 [Pool(typeof(TomorinCardPool))]
-public class RaanaStudio : BaseCardModel
+public class HeartBeat : BaseCardModel
 {
-
     protected override IEnumerable<DynamicVar> CanonicalVars =>
-        [new EnergyVar(1)];
+        [new PowerVar<HeartBeatPower>(2m)];
 
-    public RaanaStudio() :
-        base(1, CardType.Power, CardRarity.Rare, TargetType.Self)
+    public HeartBeat() :
+        base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)
     {
     }
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        await PowerCmd.Apply<RaanaStudioPower>(choiceContext, base.Owner.Creature, 1, base.Owner.Creature, this);
-
+        await PowerCmd.Apply<HeartBeatPower>(choiceContext, base.Owner.Creature, base.DynamicVars["HeartBeatPower"].BaseValue, base.Owner.Creature, this);
     }
-    
+
     protected override void OnUpgrade()
     {
-        // AddKeyword(CardKeyword.Innate);
-        MockSetEnergyCost(new CardEnergyCost(this, 0, false));
+        base.DynamicVars["HeartBeatPower"].UpgradeValueBy(1m);
     }
 }

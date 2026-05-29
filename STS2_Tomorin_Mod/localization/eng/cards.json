@@ -193,5 +193,17 @@
   "STS2_TOMORIN_MOD-TAKI_AT_FIELD.title": "AT Field",
   "STS2_TOMORIN_MOD-TAKI_AT_FIELD.description": "When chosen: At the start of each turn, gain temporary Strength equal to your AT Field. NL AT Field no longer halves at turn start.",
   "STS2_TOMORIN_MOD-TAKI_INSPIRATION.title": "Inspiration",
-  "STS2_TOMORIN_MOD-TAKI_INSPIRATION.description": "When chosen: All cards in your hand, draw pile, discard pile, NL and exhaust pile gain Inspiration this turn."
+  "STS2_TOMORIN_MOD-TAKI_INSPIRATION.description": "When chosen: All cards in your hand, draw pile, discard pile, NL and exhaust pile gain Inspiration this turn.",
+  "STS2_TOMORIN_MOD-TAKE_NAP.title": "Take a Nap",
+  "STS2_TOMORIN_MOD-TAKE_NAP.description": "Gain [blue]{Block:diff()}[/blue] Block. Next turn, gain [blue]{Block:diff()}[/blue] Block.",
+  "STS2_TOMORIN_MOD-TAKE_NAP.upgrade_description": "Gain [blue]{Block:diff()}[/blue] Block. Next turn, gain [blue]{Block:diff()}[/blue] Block.",
+  "STS2_TOMORIN_MOD-HEART_BEAT.title": "Guided Heartbeat",
+  "STS2_TOMORIN_MOD-HEART_BEAT.description": "Whenever a card is [gold]Exhausted[/gold], gain [blue]{HeartBeatPower}[/blue] Block.",
+  "STS2_TOMORIN_MOD-HEART_BEAT.upgrade_description": "Whenever a card is [gold]Exhausted[/gold], gain [blue]{HeartBeatPower}[/blue] Block.",
+  "STS2_TOMORIN_MOD-LONELY_LOT.title": "Onslaught of Loneliness",
+  "STS2_TOMORIN_MOD-LONELY_LOT.description": "[gold]COMPOSE[/gold]\nSkill*1\nChoose a card from your discard pile and add it to your hand.",
+  "STS2_TOMORIN_MOD-LONELY_LOT.upgrade_description": "[gold]COMPOSE[/gold]\nSkill*1\nChoose a card from your discard pile and add it to your hand.",
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.title": "Cracked Heart",
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.description": "Whenever you gain [gold]ATField[/gold], gain [blue]{LonelyLotTokenPower}[/blue] additional [gold]ATField[/gold].",
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.upgrade_description": "Gain [blue]{AtFieldPower:diff()}[/blue] [gold]ATField[/gold]. Whenever you gain [gold]ATField[/gold], gain [blue]{LonelyLotTokenPower}[/blue] additional [gold]ATField[/gold]."
 }

@@ -25,7 +25,8 @@ public class WantBeYourGod : BaseCardModel
         {
             new ComposeVar(new Dictionary<CardType, int>() { { CardType.Skill, 1 } }, ModelDb.Card<WantBeYourGodToken>()),
             // new BlockVar(7m, ValueProp.Move),
-            new PowerVar<AtFieldPower>(5m)
+            new PowerVar<AtFieldPower>(5m),
+            new CardsVar(1)
         };
 
     public WantBeYourGod() :
@@ -51,11 +52,12 @@ public class WantBeYourGod : BaseCardModel
         await ComposeCmd.Compose<WantBeYourGodToken>(choiceContext, Owner, ComposeCost, this);
         // await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
         await PowerCmd.Apply<AtFieldPower>(choiceContext, base.Owner.Creature, base.DynamicVars["AtFieldPower"].BaseValue, base.Owner.Creature, this);
+        await CardPileCmd.Draw(choiceContext, base.DynamicVars.Cards.BaseValue, base.Owner);
     }
 
     protected override void OnUpgrade()
     {
         // base.DynamicVars.Block.UpgradeValueBy(2m);
-        base.DynamicVars["AtFieldPower"].UpgradeValueBy(2m);
+        base.DynamicVars["AtFieldPower"].UpgradeValueBy(3m);
     }
 }

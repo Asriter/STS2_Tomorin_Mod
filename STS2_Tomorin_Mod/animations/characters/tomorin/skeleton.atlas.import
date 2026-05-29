@@ -1,0 +1,16 @@
+[remap]
+
+importer="spine.atlas"
+type="SpineAtlasResource"
+uid="uid://cwojhk1hnstxe"
+path="res://.godot/imported/skeleton.atlas-81bd6288a84fc769ab18b99a62344280.spatlas"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/animations/characters/tomorin/skeleton.atlas"
+dest_files=["res://.godot/imported/skeleton.atlas-81bd6288a84fc769ab18b99a62344280.spatlas"]
+
+[params]
+
+normal_map_prefix="n"
+specular_map_prefix="s"

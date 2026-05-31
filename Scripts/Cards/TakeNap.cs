@@ -31,6 +31,8 @@ public class TakeNap() : BaseCardModel(
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
+        await CreatureCmd.GainBlock(base.Owner.Creature, base.DynamicVars.Block, cardPlay);
+       
         var cardSource = this;
         await CreatureCmd.TriggerAnim(cardSource.Owner.Creature, "Cast", cardSource.Owner.Character.CastAnimDelay);
         BlockVar dynamicVar = (BlockVar) cardSource.DynamicVars["BlockNextTurn"];

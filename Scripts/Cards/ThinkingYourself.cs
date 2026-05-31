@@ -36,15 +36,15 @@ public class ThinkingYourself : BaseCardModel
     {
     }
 
-    protected override IEnumerable<IHoverTip> ExtraHoverTips
-    {
-        get
-        {
-            var list = base.ExtraHoverTips.ToList();
-            list.Add(HoverTipFactory.FromPower<AtFieldPower>());
-            return list;
-        }
-    }
+    // protected override IEnumerable<IHoverTip> ExtraHoverTips
+    // {
+    //     get
+    //     {
+    //         var list = base.ExtraHoverTips.ToList();
+    //         list.Add(HoverTipFactory.FromPower<AtFieldPower>());
+    //         return list;
+    //     }
+    // }
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {

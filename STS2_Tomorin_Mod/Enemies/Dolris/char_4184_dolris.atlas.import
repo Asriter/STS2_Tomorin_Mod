@@ -1,0 +1,16 @@
+[remap]
+
+importer="spine.atlas"
+type="SpineAtlasResource"
+uid="uid://dyn76dhvy7ohc"
+path="res://.godot/imported/char_4184_dolris.atlas-7f329e76b3100cfd5544445e6f290fa0.spatlas"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Dolris/char_4184_dolris.atlas"
+dest_files=["res://.godot/imported/char_4184_dolris.atlas-7f329e76b3100cfd5544445e6f290fa0.spatlas"]
+
+[params]
+
+normal_map_prefix="n"
+specular_map_prefix="s"

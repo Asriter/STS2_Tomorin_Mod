@@ -1,0 +1,8 @@
+[gd_resource type="SpineSkeletonDataResource" load_steps=3 format=3 uid="uid://b4xphhe1ud7ix"]
+
+[ext_resource type="SpineAtlasResource" uid="uid://dyn76dhvy7ohc" path="res://STS2_Tomorin_Mod/Enemies/Dolris/char_4184_dolris.atlas" id="1_1oo42"]
+[ext_resource type="SpineSkeletonFileResource" uid="uid://c4q04i3812nki" path="res://STS2_Tomorin_Mod/Enemies/Dolris/dolris.skel" id="2_qp7x6"]
+
+[resource]
+atlas_res = ExtResource("1_1oo42")
+skeleton_file_res = ExtResource("2_qp7x6")

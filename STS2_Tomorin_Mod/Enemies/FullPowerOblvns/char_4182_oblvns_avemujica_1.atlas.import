@@ -1,0 +1,16 @@
+[remap]
+
+importer="spine.atlas"
+type="SpineAtlasResource"
+uid="uid://cgdh2os3ltt04"
+path="res://.godot/imported/char_4182_oblvns_avemujica_1.atlas-39cf3ebd0b84a2d88b548c53d2831341.spatlas"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/FullPowerOblvns/char_4182_oblvns_avemujica_1.atlas"
+dest_files=["res://.godot/imported/char_4182_oblvns_avemujica_1.atlas-39cf3ebd0b84a2d88b548c53d2831341.spatlas"]
+
+[params]
+
+normal_map_prefix="n"
+specular_map_prefix="s"

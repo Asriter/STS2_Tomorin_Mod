@@ -1,0 +1,8 @@
+[gd_resource type="SpineSkeletonDataResource" load_steps=3 format=3 uid="uid://coi8n33dd32a3"]
+
+[ext_resource type="SpineAtlasResource" uid="uid://da1cx0wsxvpji" path="res://STS2_Tomorin_Mod/Enemies/Amoris/char_4185_amoris.atlas" id="1_pf42a"]
+[ext_resource type="SpineSkeletonFileResource" uid="uid://mgbwbtwlo3vk" path="res://STS2_Tomorin_Mod/Enemies/Amoris/amoris.skel" id="2_auaii"]
+
+[resource]
+atlas_res = ExtResource("1_pf42a")
+skeleton_file_res = ExtResource("2_auaii")

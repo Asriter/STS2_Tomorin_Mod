@@ -146,6 +146,43 @@ Boss enemy with a unique **CrychicRemember** buff + revive mechanic.
 
 Stages 3 and 6 auto-advance at turn start via `BeforeHandDraw`. Stage 0 forces end turn then advances. Stages 1/2/4/5 do not auto-advance (external logic handles it).
 
+### OblivionisBoss (Oblivionis + 4子Boss)
+
+Complex boss encounter with **Center Position (C位)** mechanic, multi-phase transitions, and a hidden boss.
+
+**Files:**
+- `Scripts/Enemy/Oblivionis.cs` — Boss (600HP), Phase1/Phase2 state machine
+- `Scripts/Enemy/FullPowerOblivionis.cs` — Hidden boss (1000HP)
+- `Scripts/Enemy/Doloris.cs` — Sub-boss (200HP), default C位
+- `Scripts/Enemy/Mortis.cs` — Sub-boss (200HP)
+- `Scripts/Enemy/Timoris.cs` — Sub-boss (200HP)
+- `Scripts/Enemy/Amoris.cs` — Sub-boss (200HP)
+- `Scripts/Encounters/OblivionisBoss.cs` — Encounter registration
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/CenterPositionManagerPower.cs` — C位 manager (core)
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenRevivalPower.cs` — Hidden boss revival (DoorRevivalPower pattern)
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisPhase2Power.cs` — Phase 2: exhaust random hand card per turn
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenInheritPower.cs` — Hidden: inherit sub-boss passive each turn
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenBlockPower.cs` — Hidden: consecutive same-type block
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/MortisPassivePower.cs` — Mortis: Attack×0.5, non-Attack×2
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/TimorisPassivePower.cs` — Timoris: hit cap 3×playerCount per turn
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/AmorisPassivePower.cs` — Amoris: max 15 damage per hit
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/DolorisPassivePower.cs` — Doloris: draw-based damage reduction
+- `Scripts/Powers/MortisKillBuffPower.cs` — +5 Thorns, +10 block/turn
+- `Scripts/Powers/TimorisKillBuffPower.cs` — First Attack +50% damage
+- `Scripts/Powers/AmorisKillBuffPower.cs` — 3rd Attack +1 energy
+- `Scripts/Powers/DolorisKillBuffPower.cs` — +1 draw
+- `Scripts/Cards/EnemyCards/PositionZero.cs` — Status card, select C位
+- `Scripts/Cards/EnemyCards/PressureCurse.cs` — Curse card, 2-cost Inspiration, BloodLoss 2
+
+**C位 Mechanic:** Non-C enemies gain Intangible. Players switch C位 by playing PositionZero (detected via `AfterCardPlayed`). Each enemy has two self-looping MoveStates (CState/NonCState) switched by `SetMoveImmediate`. C位 death auto-switches in order: Doloris→Mortis→Timoris→Amoris→Oblivionis.
+
+**Phase Transitions (in CenterPositionManagerPower.AfterDeath):**
+- Boss death + 0 sub-bosses killed → Hidden Boss (OblivionisHiddenRevivalPower creates FullPowerOblivionis, sub-bosses escape)
+- Boss death + 1-3 sub-bosses killed → Phase 2 (HP = current max + 500)
+- All 4 sub-bosses killed → Phase 2 (HP = 500)
+
+**Sub-Boss Kill Effects:** Each kill reduces Oblivionis max HP by 150 and grants all players a permanent buff power.
+
 ## Afflictions
 
 Custom afflictions extend `BaseAfflictionModel` (`Scripts/Afflictions/Base/BaseAfflictionModel.cs`) which extends the game's `AfflictionModel` (from `MegaCrit.Sts2.Core.Models.Afflictions`).

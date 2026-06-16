@@ -1,0 +1,8 @@
+[gd_resource type="SpineSkeletonDataResource" load_steps=3 format=3 uid="uid://di0x7wkl8h0qt"]
+
+[ext_resource type="SpineAtlasResource" uid="uid://6cjua2obw8f5" path="res://STS2_Tomorin_Mod/Enemies/Tmoris/char_4186_tmoris.atlas" id="1_vvx2h"]
+[ext_resource type="SpineSkeletonFileResource" uid="uid://dv3pkhuxqcqsq" path="res://STS2_Tomorin_Mod/Enemies/Tmoris/tmoris.skel" id="2_a50ro"]
+
+[resource]
+atlas_res = ExtResource("1_vvx2h")
+skeleton_file_res = ExtResource("2_a50ro")

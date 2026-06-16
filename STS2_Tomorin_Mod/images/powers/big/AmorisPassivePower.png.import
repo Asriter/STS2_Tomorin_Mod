@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://caebmn1eli0wl"
-path="res://.godot/imported/black_saki_headIcon.png-4055f8b560b0ec2656ed42bc8a6d2969.ctex"
+uid="uid://rnse2gxph7gk"
+path="res://.godot/imported/AmorisPassivePower.png-2ea0c06e4d7395d1eedc0d28aea151e7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://STS2_Tomorin_Mod/images/enemy_headIcon/black_saki_headIcon.png"
-dest_files=["res://.godot/imported/black_saki_headIcon.png-4055f8b560b0ec2656ed42bc8a6d2969.ctex"]
+source_file="res://STS2_Tomorin_Mod/images/powers/big/AmorisPassivePower.png"
+dest_files=["res://.godot/imported/AmorisPassivePower.png-2ea0c06e4d7395d1eedc0d28aea151e7.ctex"]
 
 [params]
 

@@ -1,0 +1,16 @@
+[remap]
+
+importer="spine.atlas"
+type="SpineAtlasResource"
+uid="uid://pqvbgbmlsxvk"
+path="res://.godot/imported/char_4182_oblvns.atlas-57fc03cf4890ecc58f2fef9adce02954.spatlas"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Oblvns/char_4182_oblvns.atlas"
+dest_files=["res://.godot/imported/char_4182_oblvns.atlas-57fc03cf4890ecc58f2fef9adce02954.spatlas"]
+
+[params]
+
+normal_map_prefix="n"
+specular_map_prefix="s"

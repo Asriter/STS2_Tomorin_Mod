@@ -1,0 +1,14 @@
+[remap]
+
+importer="spine.skel"
+type="SpineSkeletonFileResource"
+uid="uid://c4q04i3812nki"
+path="res://.godot/imported/dolris.skel-3d97e0b16e74c8d157742ee8b440e0b4.spskel"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Dolris/dolris.skel"
+dest_files=["res://.godot/imported/dolris.skel-3d97e0b16e74c8d157742ee8b440e0b4.spskel"]
+
+[params]
+

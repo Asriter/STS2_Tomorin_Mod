@@ -1,0 +1,14 @@
+[remap]
+
+importer="spine.skel"
+type="SpineSkeletonFileResource"
+uid="uid://mgbwbtwlo3vk"
+path="res://.godot/imported/amoris.skel-b4d6d6d4351b0d09d041ee3068b7c1a9.spskel"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Amoris/amoris.skel"
+dest_files=["res://.godot/imported/amoris.skel-b4d6d6d4351b0d09d041ee3068b7c1a9.spskel"]
+
+[params]
+

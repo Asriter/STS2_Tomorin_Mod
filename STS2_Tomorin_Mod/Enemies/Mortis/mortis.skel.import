@@ -1,0 +1,14 @@
+[remap]
+
+importer="spine.skel"
+type="SpineSkeletonFileResource"
+uid="uid://bmu5p3xydxlqt"
+path="res://.godot/imported/mortis.skel-8d64b80053565063d5583749c51519bb.spskel"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Mortis/mortis.skel"
+dest_files=["res://.godot/imported/mortis.skel-8d64b80053565063d5583749c51519bb.spskel"]
+
+[params]
+

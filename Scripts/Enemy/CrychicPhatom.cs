@@ -157,21 +157,7 @@ public class CrychicPhatom : CustomMonsterModel
         //添加复活buff
         await PowerCmd.Apply<CrychicPhantomPower>( new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
     }
-
-    /// <summary>
-    /// 死亡回调: 一血死亡 → 触发复活状态; 二阶段死亡 → 正常结算
-    /// </summary>
-    // private void AfterDeath(Creature creature)
-    // {
-    //     if (!_isSecondPhase)
-    //     {
-    //         SetMoveImmediate(RespawnState, forceTransition: true);
-    //     }
-    //     else
-    //     {
-    //         base.Creature.Died -= AfterDeath;
-    //     }
-    // }
+    
     public Task TriggerDeadState()
     {
         SetMoveImmediate(RespawnState, forceTransition: true);

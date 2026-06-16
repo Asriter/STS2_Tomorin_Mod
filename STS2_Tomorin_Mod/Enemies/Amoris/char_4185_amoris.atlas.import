@@ -1,0 +1,16 @@
+[remap]
+
+importer="spine.atlas"
+type="SpineAtlasResource"
+uid="uid://da1cx0wsxvpji"
+path="res://.godot/imported/char_4185_amoris.atlas-79e983017fe1abd7e47388b0d8c4ccf3.spatlas"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Amoris/char_4185_amoris.atlas"
+dest_files=["res://.godot/imported/char_4185_amoris.atlas-79e983017fe1abd7e47388b0d8c4ccf3.spatlas"]
+
+[params]
+
+normal_map_prefix="n"
+specular_map_prefix="s"

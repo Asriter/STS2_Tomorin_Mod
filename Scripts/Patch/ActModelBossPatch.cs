@@ -22,7 +22,11 @@ public class ActModelBossPatch
             if (__instance is Overgrowth)
                 __result = [ModelDb.Encounter<TakiBoss>()];
             if (__instance is Glory)
-                __result = [ModelDb.Encounter<CrychicPhatomBoss>()];
+                __result =
+                [
+                    ModelDb.Encounter<CrychicPhatomBoss>(),
+                    ModelDb.Encounter<OblivionisBoss>()
+                ];
         }
     }
 }

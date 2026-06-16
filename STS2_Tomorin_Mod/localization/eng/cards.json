@@ -205,5 +205,9 @@
   "STS2_TOMORIN_MOD-LONELY_LOT.upgrade_description": "[gold]COMPOSE[/gold]\nSkill*1\nChoose a card from your discard pile and add it to your hand.",
   "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.title": "Cracked Heart",
   "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.description": "Whenever you gain [gold]ATField[/gold], gain [blue]{LonelyLotTokenPower}[/blue] additional [gold]ATField[/gold].",
-  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.upgrade_description": "Gain [blue]{AtFieldPower:diff()}[/blue] [gold]ATField[/gold]. Whenever you gain [gold]ATField[/gold], gain [blue]{LonelyLotTokenPower}[/blue] additional [gold]ATField[/gold]."
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.upgrade_description": "Gain [blue]{AtFieldPower:diff()}[/blue] [gold]ATField[/gold]. Whenever you gain [gold]ATField[/gold], gain [blue]{LonelyLotTokenPower}[/blue] additional [gold]ATField[/gold].",
+  "STS2_TOMORIN_MOD-POSITION_ZERO.title": "Position Zero",
+  "STS2_TOMORIN_MOD-POSITION_ZERO.description": "Choose an enemy to become the Center Position. Non-Center Position enemies are Intangible.",
+  "STS2_TOMORIN_MOD-PRESSURE_CURSE.title": "Pressure",
+  "STS2_TOMORIN_MOD-PRESSURE_CURSE.description": "Lose 2 HP. [gold]Inspiration[/gold]."
 }

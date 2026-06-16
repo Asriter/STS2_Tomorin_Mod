@@ -1,0 +1,77 @@
+# Oblivionis Boss 遭遇战 文档
+
+## 需求描述
+实现一个Boss+4子Boss的复合遭遇战，包含C位机制、多阶段转换、隐藏Boss。
+
+## 敌人一览
+
+| 敌人 | HP | 定位 | 命名空间 |
+|------|-----|------|----------|
+| Oblivionis | 600 | Boss，C位机制宿主 | STS2_Tomorin_Mod.Enemy |
+| Doloris | 200 | 子Boss，默认C位，抽牌对策 | STS2_Tomorin_Mod.Enemy |
+| Mortis | 200 | 子Boss，伤害类型对策 | STS2_Tomorin_Mod.Enemy |
+| Timoris | 200 | 子Boss，单段高伤对策 | STS2_Tomorin_Mod.Enemy |
+| Amoris | 200 | 子Boss，多段伤害对策 | STS2_Tomorin_Mod.Enemy |
+| FullPowerOblivionis | 1000 | 隐藏Boss（独立敌人） | STS2_Tomorin_Mod.Enemy |
+
+## 核心机制
+
+### C位系统
+- 非C位敌人获得Intangible（游戏内置Power），C位移除Intangible
+- 玩家通过打出PositionZero状态卡切换C位
+- C位切换时调用SetMoveImmediate切换敌人的C位/非C位行为状态（两个自循环MoveState）
+- C位死亡按Doloris→Mortis→Timoris→Amoris→Oblivionis顺序自动切换
+
+### HP削减与击杀Buff
+- 每击杀一个子Boss，Oblivionis最大HP-150
+- 击杀后所有玩家获得对应的永久Buff Power
+
+### 阶段转换
+| 条件 | 结果 |
+|------|------|
+| Boss死亡 + 0子Boss死 | 隐藏Boss（创建FullPowerOblivionis） |
+| Boss死亡 + 1-3子Boss死 | 二阶段（HP+500回满） |
+| 4子Boss全死 | 二阶段（HP=500回满） |
+
+## 文件清单（22个代码文件）
+
+### 卡片（2）
+- Scripts/Cards/EnemyCards/PositionZero.cs — 状态卡，1费保留，选择C位
+- Scripts/Cards/EnemyCards/PressureCurse.cs — 诅咒卡，2费灵感，体力流失2点
+
+### 敌人（6）
+- Scripts/Enemy/Oblivionis.cs — Boss（Phase1/Phase2状态机）
+- Scripts/Enemy/FullPowerOblivionis.cs — 隐藏Boss
+- Scripts/Enemy/Doloris.cs — 子Boss，默认C位
+- Scripts/Enemy/Mortis.cs — 子Boss
+- Scripts/Enemy/Timoris.cs — 子Boss
+- Scripts/Enemy/Amoris.cs — 子Boss
+
+### Powers（13 + 1 Encounter）
+- Scripts/Powers/EnemyPowers/OblivionisPowers/CenterPositionManagerPower.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenRevivalPower.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisPhase2Power.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenInheritPower.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenBlockPower.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/MortisPassivePower.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/TimorisPassivePower.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/AmorisPassivePower.cs
+- Scripts/Powers/EnemyPowers/OblivionisPowers/DolorisPassivePower.cs
+- Scripts/Powers/MortisKillBuffPower.cs
+- Scripts/Powers/TimorisKillBuffPower.cs
+- Scripts/Powers/AmorisKillBuffPower.cs
+- Scripts/Powers/DolorisKillBuffPower.cs
+
+### Encounter（1）
+- Scripts/Encounters/OblivionisBoss.cs
+
+## 本地化
+- STS2_Tomorin_Mod/localization/eng/ — cards.json, powers.json
+- STS2_Tomorin_Mod/localization/zhs/ — cards.json, powers.json
+
+## 关键设计决策
+
+1. C位切换不通过直接API调用，而是PositionZero卡打出后由CenterPositionManagerPower.AfterCardPlayed监听
+2. 使用游戏内置IntangiblePower
+3. 阶段切换通过SetMoveImmediate + 自循环MoveState实现
+4. 隐藏Boss参照DoorRevivalPower模式

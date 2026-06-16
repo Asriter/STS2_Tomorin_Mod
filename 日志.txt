@@ -1,0 +1,29 @@
+# 修改记录
+
+## 2026-06-13: Oblivionis Boss 遭遇战实现
+
+### 新增文件（22个）
+1. Scripts/Cards/EnemyCards/PositionZero.cs
+2. Scripts/Cards/EnemyCards/PressureCurse.cs
+3. Scripts/Enemy/Oblivionis.cs
+4. Scripts/Enemy/FullPowerOblivionis.cs
+5. Scripts/Enemy/Doloris.cs
+6. Scripts/Enemy/Mortis.cs
+7. Scripts/Enemy/Timoris.cs
+8. Scripts/Enemy/Amoris.cs
+9. Scripts/Encounters/OblivionisBoss.cs
+10-18. Scripts/Powers/EnemyPowers/OblivionisPowers/*.cs (9个Power)
+19-22. Scripts/Powers/*KillBuffPower.cs (4个击杀Buff Power)
+
+### 修改文件
+- Scripts/Enemy/CrychicPhatom.cs — 修复预置编译错误（移除残留TestSubject）
+- STS2_Tomorin_Mod/localization/eng/cards.json — 添加PositionZero、PressureCurse本地化
+- STS2_Tomorin_Mod/localization/eng/powers.json — 添加13个Power本地化
+- STS2_Tomorin_Mod/localization/zhs/cards.json — 添加中文翻译
+- STS2_Tomorin_Mod/localization/zhs/powers.json — 添加中文翻译
+- CLAUDE.md — 添加Oblivionis Boss敌人文档引用
+- 文档.txt — 新建设计文档
+- 日志.txt — 新建修改日志
+
+### 编译状态
+- 0个错误，163个警告（均为预置nullable警告）

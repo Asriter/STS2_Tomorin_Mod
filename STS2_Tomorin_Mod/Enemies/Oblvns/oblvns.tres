@@ -1,0 +1,8 @@
+[gd_resource type="SpineSkeletonDataResource" load_steps=3 format=3 uid="uid://cr1sb2af36cp8"]
+
+[ext_resource type="SpineAtlasResource" uid="uid://pqvbgbmlsxvk" path="res://STS2_Tomorin_Mod/Enemies/Oblvns/char_4182_oblvns.atlas" id="1_qpe6k"]
+[ext_resource type="SpineSkeletonFileResource" uid="uid://ci70xcjq78mve" path="res://STS2_Tomorin_Mod/Enemies/Oblvns/oblvns.skel" id="2_xtn5s"]
+
+[resource]
+atlas_res = ExtResource("1_qpe6k")
+skeleton_file_res = ExtResource("2_xtn5s")

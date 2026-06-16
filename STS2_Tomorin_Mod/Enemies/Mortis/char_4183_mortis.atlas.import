@@ -1,0 +1,16 @@
+[remap]
+
+importer="spine.atlas"
+type="SpineAtlasResource"
+uid="uid://1c0hhectk7hp"
+path="res://.godot/imported/char_4183_mortis.atlas-41852be718d16e7fc6ac4bff5da43f4d.spatlas"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Mortis/char_4183_mortis.atlas"
+dest_files=["res://.godot/imported/char_4183_mortis.atlas-41852be718d16e7fc6ac4bff5da43f4d.spatlas"]
+
+[params]
+
+normal_map_prefix="n"
+specular_map_prefix="s"

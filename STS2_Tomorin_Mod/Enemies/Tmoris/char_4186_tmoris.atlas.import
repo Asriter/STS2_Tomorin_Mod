@@ -1,0 +1,16 @@
+[remap]
+
+importer="spine.atlas"
+type="SpineAtlasResource"
+uid="uid://6cjua2obw8f5"
+path="res://.godot/imported/char_4186_tmoris.atlas-9f0f4a0a2b21b91dc6f791be208d8c35.spatlas"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Tmoris/char_4186_tmoris.atlas"
+dest_files=["res://.godot/imported/char_4186_tmoris.atlas-9f0f4a0a2b21b91dc6f791be208d8c35.spatlas"]
+
+[params]
+
+normal_map_prefix="n"
+specular_map_prefix="s"

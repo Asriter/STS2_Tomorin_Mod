@@ -1,0 +1,14 @@
+[remap]
+
+importer="spine.skel"
+type="SpineSkeletonFileResource"
+uid="uid://ci70xcjq78mve"
+path="res://.godot/imported/oblvns.skel-b7e4997feefbdef7e98bb43fad22a2dd.spskel"
+
+[deps]
+
+source_file="res://STS2_Tomorin_Mod/Enemies/Oblvns/oblvns.skel"
+dest_files=["res://.godot/imported/oblvns.skel-b7e4997feefbdef7e98bb43fad22a2dd.spskel"]
+
+[params]
+

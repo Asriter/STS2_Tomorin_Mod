@@ -1,0 +1,35 @@
+[gd_scene load_steps=3 format=3 uid="uid://b7fbrpgx3lqan"]
+
+[ext_resource type="Script" uid="uid://c2yrfx7bd5gc2" path="res://src/Core/Nodes/Combat/NCreatureVisuals.cs" id="1_jok70"]
+[ext_resource type="SpineSkeletonDataResource" uid="uid://di0x7wkl8h0qt" path="res://STS2_Tomorin_Mod/Enemies/Tmoris/tmoris.tres" id="2_q22og"]
+
+[node name="Tmoris" type="Node2D"]
+script = ExtResource("1_jok70")
+metadata/_edit_group_ = true
+
+[node name="Visuals" type="SpineSprite" parent="."]
+skeleton_data_res = ExtResource("2_q22og")
+preview_skin = "Default"
+preview_animation = "-- Empty --"
+preview_frame = false
+preview_time = 0.0
+unique_name_in_owner = true
+position = Vector2(4, -12.000015)
+scale = Vector2(-0.7, 0.7)
+
+[node name="Bounds" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 0
+offset_left = -79.0
+offset_top = -282.0
+offset_right = 85.0
+offset_bottom = -4.0
+
+[node name="IntentPos" type="Marker2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(1, -299)
+
+[node name="CenterPos" type="Marker2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(5, -154)

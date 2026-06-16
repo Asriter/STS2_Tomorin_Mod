@@ -1,0 +1,8 @@
+[gd_resource type="SpineSkeletonDataResource" load_steps=3 format=3 uid="uid://c2eqc7y2rd0j4"]
+
+[ext_resource type="SpineAtlasResource" uid="uid://cgdh2os3ltt04" path="res://STS2_Tomorin_Mod/Enemies/FullPowerOblvns/char_4182_oblvns_avemujica_1.atlas" id="1_gydoy"]
+[ext_resource type="SpineSkeletonFileResource" uid="uid://dq6biish5t4pj" path="res://STS2_Tomorin_Mod/Enemies/FullPowerOblvns/fullPowerOblvns.skel" id="2_8glum"]
+
+[resource]
+atlas_res = ExtResource("1_gydoy")
+skeleton_file_res = ExtResource("2_8glum")

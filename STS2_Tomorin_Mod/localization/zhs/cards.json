@@ -221,5 +221,9 @@
   "STS2_TOMORIN_MOD-LONELY_LOT.description": "[gold]作词[/gold]\n从弃牌堆中选择一张卡加入手牌。",
   "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.title": "皲裂的心",
   "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.description": "每当获得[gold]心之壁[/gold]时，额外获得[blue]{LonelyLotTokenPower}[/blue]层[gold]心之壁[/gold]。",
-  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.upgrade_description": "获得[blue]{AtFieldPower:diff()}[/blue]层[gold]心之壁[/gold]。每当获得[gold]心之壁[/gold]时，额外获得[blue]{LonelyLotTokenPower}[/blue]层[gold]心之壁[/gold]。"
+  "STS2_TOMORIN_MOD-LONELY_LOT_TOKEN.upgrade_description": "获得[blue]{AtFieldPower:diff()}[/blue]层[gold]心之壁[/gold]。\n每当获得[gold]心之壁[/gold]时，额外获得[blue]{LonelyLotTokenPower}[/blue]层[gold]心之壁[/gold]。",
+  "STS2_TOMORIN_MOD-POSITION_ZERO.title": "Position Zero",
+  "STS2_TOMORIN_MOD-POSITION_ZERO.description": "选择一名敌人，立于Position Zero。\n不在Position Zero的敌人获得[gold]无实体[/gold]，会给予Position Zero的敌人增益。",
+  "STS2_TOMORIN_MOD-PRESSURE_CURSE.title": "压迫感",
+  "STS2_TOMORIN_MOD-PRESSURE_CURSE.description": "失去2点生命。"
 }

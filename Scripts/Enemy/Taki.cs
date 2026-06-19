@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Localization;
@@ -358,7 +359,7 @@ public class Taki : CustomMonsterModel
         foreach (var player in players)
         {
             var relic = ModelDb.Relic<TakiDrum>().ToMutable();
-            room.AddExtraReward(player, new RelicReward(relic, player));
+            room.AddExtraReward(player, new RelicReward(RelicRarity.Rare, player));
         }
 
         Creature.Died -= PhaseThreeClearCallBack;

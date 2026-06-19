@@ -17,7 +17,7 @@ namespace STS2_Tomorin_Mod.Cards;
 /// </summary>
 
 [Pool(typeof(TomorinCardPool))]
-public class Adayume() : BaseCardModel(1, CardType.Power, CardRarity.Ancient, TargetType.Self)
+public class Adayume() : BaseCardModel(1, CardType.Power, CardRarity.Rare, TargetType.Self)
 {
     protected override IEnumerable<DynamicVar> CanonicalVars
     {

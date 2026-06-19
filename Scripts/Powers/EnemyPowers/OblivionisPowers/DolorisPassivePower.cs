@@ -24,7 +24,7 @@ namespace STS2_Tomorin_Mod.Powers;
 /// </summary>
 public class DolorisPassivePower : BasePowerModel
 {
-    protected override IEnumerable<IHoverTip> ExtraHoverTips => [HoverTipFactory.FromPower<DolorisKillBuffPower>()];
+    // protected override IEnumerable<IHoverTip> ExtraHoverTips => [HoverTipFactory.FromPower<DolorisKillBuffPower>()];
     private class Data
     {
         /// <summary>
@@ -33,9 +33,11 @@ public class DolorisPassivePower : BasePowerModel
         public int DrawCount = 0;
     }
 
-    private const int _drawCount = 3;
+    private const int _drawCount = 1;
     private const string _drawCountName = "DrawCount";
     private const string _damageReduceName = "DamegeReduce";
+    
+    public int DrawCount => _drawCount * Owner.CombatState.Players.Count;
 
     protected override IEnumerable<DynamicVar> CanonicalVars =>
     [
@@ -48,8 +50,8 @@ public class DolorisPassivePower : BasePowerModel
     public override PowerStackType StackType => PowerStackType.Counter;
 
     public override int DisplayAmount => GetInternalData<Data>().DrawCount < 5
-        ? _drawCount
-        : _drawCount - ((GetInternalData<Data>().DrawCount - 5) % _drawCount);
+        ? DrawCount
+        : DrawCount - ((GetInternalData<Data>().DrawCount - 5) % DrawCount);
 
     protected override object InitInternalData() => new Data();
 
@@ -84,7 +86,7 @@ public class DolorisPassivePower : BasePowerModel
 
         // 前5张为基础抽卡，超出部分每5张额外抽卡减少10%减伤
         int extraDraws = Math.Max(0, totalDraws - 5);
-        int extraDrawGroups = extraDraws / _drawCount; // 整数除法，每5张一组
+        int extraDrawGroups = extraDraws / DrawCount; // 整数除法，每5张一组
         decimal reductionFactor = Math.Max(0m, 1m - extraDrawGroups * 0.1m);
 
         // reductionFactor: 1.0 = 100%减伤（免疫）, 0.0 = 0%减伤（全额受伤）
@@ -94,15 +96,15 @@ public class DolorisPassivePower : BasePowerModel
 
     private void ModifyDrawCount(int count)
     {
+        DynamicVars[_drawCountName].BaseValue = DrawCount;
         var data = GetInternalData<Data>();
         data.DrawCount += count;
         if (data.DrawCount > 5)
         {
             int extraDraws = data.DrawCount - 5;
-            int extraDrawGroups = extraDraws / _drawCount; // 整数除法
+            int extraDrawGroups = extraDraws / DrawCount; // 整数除法
             decimal reductionFactor = Math.Max(0m, 100m - extraDrawGroups * 10m);
             DynamicVars[_damageReduceName].BaseValue = reductionFactor;
-            Log.Warn("该更新减伤了！当前减伤倍率："+reductionFactor);
         }
 
         InvokeDisplayAmountChanged();

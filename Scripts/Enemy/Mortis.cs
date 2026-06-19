@@ -19,7 +19,7 @@ namespace STS2_Tomorin_Mod.Enemy;
 public class Mortis : CustomMonsterModel
 {
     private int AttackDamage => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 18, 15);
-    private int AtFieldAmount => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 8, 5);
+    private int AtFieldAmount => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 10, 8);
     
     private const int DexAmount = 3;
 
@@ -38,7 +38,7 @@ public class Mortis : CustomMonsterModel
         private set { AssertMutable(); _nonCState = value; }
     }
 
-    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 211, 200);
+    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 200, 180);
     public override int MaxInitialHp => MinInitialHp;
 
     public override string? CustomVisualPath =>

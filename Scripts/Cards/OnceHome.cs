@@ -26,12 +26,12 @@ public class OnceHome : BaseCardModel
         {
             var list = base.ExtraHoverTips.ToList();
             list.Add(HoverTipFactory.FromPower<AtFieldPower>());
-            list.Add(HoverTipFactory.FromCard<BrokenNote>(base.IsUpgraded));
+            list.Add(HoverTipFactory.FromCard<BrokenNote>());
             return list;
         }
     }
 
-    public OnceHome() : base(2, CardType.Power, CardRarity.Rare, TargetType.Self)
+    public OnceHome() : base(1, CardType.Power, CardRarity.Ancient, TargetType.Self)
     {
     }
 

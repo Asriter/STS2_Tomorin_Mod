@@ -17,7 +17,7 @@ namespace STS2_Tomorin_Mod.Enemy;
 
 public class Doloris : CustomMonsterModel
 {
-    private int HealAmount => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 40, 30);
+    private int HealAmount => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 30, 20);
     private int AttackDamage => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 18, 15);
     
 
@@ -45,7 +45,7 @@ public class Doloris : CustomMonsterModel
         }
     }
 
-    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 211, 200);
+    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 200, 180);
 
     public override int MaxInitialHp => MinInitialHp;
 
@@ -86,7 +86,7 @@ public class Doloris : CustomMonsterModel
             .Execute(null);
         
         // 给2张伤口
-        await CardPileCmd.AddToCombatAndPreview<Wound>(targets, PileType.Hand, WoundCount, null, CardPilePosition.Random);
+        await CardPileCmd.AddToCombatAndPreview<Wound>(targets, PileType.Discard, WoundCount, null, CardPilePosition.Random);
 
         // 下回合抽卡-1
         await PowerCmd.Apply<LessDrawNextTurnPower>(new ThrowingPlayerChoiceContext(), targets, 1, base.Creature, null);

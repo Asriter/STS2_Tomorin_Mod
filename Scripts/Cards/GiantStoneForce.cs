@@ -29,7 +29,7 @@ public class GiantStoneForce : BaseCardModel
         get
         {
             var list = base.ExtraHoverTips.ToList();
-            list.Add(HoverTipFactory.FromCard<GiantRock>());
+            list.Add(HoverTipFactory.FromCard<GiantRock>(base.IsUpgraded));
             return list;
         }
     }

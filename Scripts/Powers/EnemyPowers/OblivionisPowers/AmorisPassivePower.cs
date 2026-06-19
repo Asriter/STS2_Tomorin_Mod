@@ -11,12 +11,12 @@ using MegaCrit.Sts2.Core.ValueProps;
 namespace STS2_Tomorin_Mod.Powers;
 
 /// <summary>
-/// Amoris被动：单次攻击最多造成15点伤害。
+/// Amoris被动：受到的非直接伤害减半；单次攻击最多造成15点伤害。
 /// 通过 ModifyHpLostBeforeOstyLate 将超过15的伤害截断为15。
 /// </summary>
 public class AmorisPassivePower : BasePowerModel
 {
-    protected override IEnumerable<IHoverTip> ExtraHoverTips => [HoverTipFactory.FromPower<AmorisKillBuffPower>(), HoverTipFactory.ForEnergy(this)];
+    // protected override IEnumerable<IHoverTip> ExtraHoverTips => [HoverTipFactory.FromPower<AmorisKillBuffPower>(), HoverTipFactory.ForEnergy(this)];
     
     public override PowerType Type => PowerType.Buff;
     public override PowerStackType StackType => PowerStackType.Single;
@@ -27,6 +27,9 @@ public class AmorisPassivePower : BasePowerModel
         Creature? dealer, CardModel? cardSource)
     {
         if (target != base.Owner) return amount;
+        if (props.HasFlag(ValueProp.Unpowered))
+            amount /= 2m;
+
         var maxDamage = DynamicVars["MaxDamage"].BaseValue;
         Log.Warn(DynamicVars.Energy.BaseValue.ToString());
         return amount > maxDamage ? maxDamage : amount;

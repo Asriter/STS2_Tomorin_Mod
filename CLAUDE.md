@@ -174,7 +174,9 @@ Complex boss encounter with **Center Position (C位)** mechanic, multi-phase tra
 - `Scripts/Cards/EnemyCards/PositionZero.cs` — Status card, select C位
 - `Scripts/Cards/EnemyCards/PressureCurse.cs` — Curse card, 2-cost Inspiration, BloodLoss 2
 
-**C位 Mechanic:** Non-C enemies gain Intangible. Players switch C位 by playing PositionZero (detected via `AfterCardPlayed`). Each enemy has two self-looping MoveStates (CState/NonCState) switched by `SetMoveImmediate`. C位 death auto-switches in order: Doloris→Mortis→Timoris→Amoris→Oblivionis.
+**C位 Mechanic:** Non-C enemies gain Intangible. Players switch C位 by playing PositionZero (detected via `AfterCardPlayed`). Sub-bosses use self-looping CState/NonCState MoveStates switched by `SetMoveImmediate`. C位 death auto-switches in order: Doloris→Mortis→Timoris→Amoris→Oblivionis.
+
+- Oblivionis phase 1 uses its existing non-C behavior while outside C position. When it is C position, its move loop depends on the number of defeated sub-boss allies and restarts at the first move whenever that count changes.
 
 **Phase Transitions (in CenterPositionManagerPower.AfterDeath):**
 - Boss death + 0 sub-bosses killed → Hidden Boss (OblivionisHiddenRevivalPower creates FullPowerOblivionis, sub-bosses escape)

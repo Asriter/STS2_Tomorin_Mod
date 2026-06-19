@@ -33,7 +33,7 @@ public class Woodlouse : BaseCardModel
         get
         {
             var list = base.ExtraHoverTips.ToList();
-            list.Add(HoverTipFactory.FromCard<BrokenNote>(base.IsUpgraded));
+            list.Add(HoverTipFactory.FromCard<BrokenNote>());
             return list;
         }
     }

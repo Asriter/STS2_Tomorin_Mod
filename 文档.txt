@@ -75,3 +75,15 @@
 2. 使用游戏内置IntangiblePower
 3. 阶段切换通过SetMoveImmediate + 自循环MoveState实现
 4. 隐藏Boss参照DoorRevivalPower模式
+
+Oblivionis 一阶段 C 位状态机接口说明
+
+需求：
+- Oblivionis 不在 C 位时，不受队友死亡数量影响，沿用非 C 位行为。
+- Oblivionis 在 C 位时，根据 Doloris/Mortis/Timoris/Amoris 已死亡数量选择 0/1/2/3 死亡状态机。
+- 队友死亡时，如果 Oblivionis 当前为 C 位，立即进入对应死亡数量状态机第 1 招。
+
+新增接口：
+- Oblivionis.SetPhase1CStateByDeadAllies(int deadAllyCount, bool forceTransition = true)
+  - deadAllyCount 会被限制在 0..3。
+  - 用于 CenterPositionManagerPower 在切换 C 位或死亡数量变化时设置一阶段 C 位入口状态。

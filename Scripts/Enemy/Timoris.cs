@@ -17,8 +17,8 @@ namespace STS2_Tomorin_Mod.Enemy;
 
 public class Timoris : CustomMonsterModel
 {
-    private const int AttackDamage = 30;
-    private const int BlockAmount = 25;
+    private int AttackDamage => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 25, 22);
+    private const int BlockAmount = 20;
 
     private MoveState _cState;
     private MoveState _nonCState;
@@ -35,7 +35,7 @@ public class Timoris : CustomMonsterModel
         private set { AssertMutable(); _nonCState = value; }
     }
 
-    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 211, 200);
+    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 200, 180);
     public override int MaxInitialHp => MinInitialHp;
 
     public override string? CustomVisualPath =>

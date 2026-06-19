@@ -176,6 +176,11 @@ public class CenterPositionManagerPower : BasePowerModel
                 // 所有子Boss死亡 → 二阶段
                 await TransitionToPhase2(data);
             }
+            else if (data.centerPositionCreature?.Monster is Oblivionis oblivionis)
+            {
+                // Oblivionis为C位时，队友死亡会切到对应死亡数量状态机的第1招
+                oblivionis.SetPhase1CStateByDeadAllies(data.killRegistry.Count);
+            }
             // 如果C位死亡，自动切换
             if (creature == data.centerPositionCreature && data.cPositionMechanismActive)
             {
@@ -250,7 +255,7 @@ public class CenterPositionManagerPower : BasePowerModel
         }
 
         // 新C位切换到C位行为
-        SwitchToCState(newTarget.Monster);
+        SwitchToCState(newTarget.Monster, data.killRegistry.Count);
 
         data.centerPositionCreature = newTarget;
        
@@ -273,11 +278,11 @@ public class CenterPositionManagerPower : BasePowerModel
         PowerCmd.Remove<PositionZeroShowPower>(monster.Creature);
     }
 
-    private static void SwitchToCState(MonsterModel? monster)
+    private static void SwitchToCState(MonsterModel? monster, int deadAllyCount)
     {
         switch (monster)
         {
-            case Oblivionis o: o.SetMoveImmediate(o.CState); break;
+            case Oblivionis o: o.SetPhase1CStateByDeadAllies(deadAllyCount); break;
             case Doloris d: d.SetMoveImmediate(d.CState); break;
             case Mortis m: m.SetMoveImmediate(m.CState); break;
             case Timoris t: t.SetMoveImmediate(t.CState); break;
@@ -302,7 +307,7 @@ public class CenterPositionManagerPower : BasePowerModel
                     if (data.centerPositionCreature != null && data.centerPositionCreature.IsAlive)
                         SwitchToNonCState(data.centerPositionCreature.Monster);
 
-                    SwitchToCState(enemy.Monster);
+                    SwitchToCState(enemy.Monster, data.killRegistry.Count);
                     data.centerPositionCreature = enemy;
                 }
                 return;

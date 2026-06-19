@@ -27,3 +27,7 @@
 
 ### 编译状态
 - 0个错误，163个警告（均为预置nullable警告）
+2026-06-20
+- 修改 Oblivionis 一阶段 C 位机制：根据已死亡队友数量切换不同状态机；队友死亡时若 Oblivionis 当前为 C 位，则切换到对应状态机第 1 招。
+- 保留 Oblivionis 非 C 位旧行为：所有存活敌人回复 18 点生命值。
+- CenterPositionManagerPower 负责在切换 C 位和队友死亡时传递死亡队友数量。

@@ -134,7 +134,7 @@ public class Anon : CustomMonsterModel
             foreach (var player in players)
             {
                 var relic = ModelDb.Relic<AnonGuitar>().ToMutable();
-                room.AddExtraReward(player, new RelicReward(relic, player));
+                room.AddExtraReward(player, new RelicReward(RelicRarity.Rare, player));
             }
         }
     }

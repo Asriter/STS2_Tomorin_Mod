@@ -93,7 +93,7 @@
   "STS2_TOMORIN_MOD-ONCE_HOME.description": "{IfUpgraded:show:获得[blue]2[/blue]层[gold]心之壁[/gold]。\n}回合开始时[gold]心之壁[/gold]不再自动减少。\n将一张[gold]满是划痕的笔记本[/gold]加入弃牌堆。",
   "STS2_TOMORIN_MOD-POETRY_OR_LYRICS.title": "诗与歌",
   "STS2_TOMORIN_MOD-POETRY_OR_LYRICS.description": "消耗手牌、牌组和弃牌堆中所有[gold]收集品[/gold]。\n消耗牌堆中每有一张[gold]收集品[/gold]，获得[blue]{DexterityPower}[/blue]层[gold]敏捷[/gold]和[blue]{AtFieldPower}[/blue]层[gold]心之壁[/gold]。",
-  "STS2_TOMORIN_MOD-AT_FIELD.title": "AT立场",
+  "STS2_TOMORIN_MOD-AT_FIELD.title": "AT力场",
   "STS2_TOMORIN_MOD-AT_FIELD.description": "消耗一张[gold]状态牌[/gold]。\n获得[blue]{Block:diff()}[/blue]点[gold]格挡[/gold]。\n获得[blue]{AtFieldPower}[/blue]层[gold]心之壁[/gold]。",
   "STS2_TOMORIN_MOD-AT_FIELD.upgrade_description": "消耗一张[gold]状态牌[/gold]。\n获得[blue]{Block:diff()}[/blue]点[gold]格挡[/gold]。\n获得[blue]{AtFieldPower}[/blue]层[gold]心之壁[/gold]。",
   "STS2_TOMORIN_MOD-SORROWFUL_RAIN.title": "雨",

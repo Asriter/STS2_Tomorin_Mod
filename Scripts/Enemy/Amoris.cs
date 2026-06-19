@@ -16,8 +16,8 @@ namespace STS2_Tomorin_Mod.Enemy;
 
 public class Amoris : CustomMonsterModel
 {
-    private const int MultiAtkDamage = 5;
-    private const int MultiAtkCount = 5;
+    private const int MultiAtkDamage = 6;
+    private const int MultiAtkCount = 3;
     private const int StrengthAmount = 1;
 
     private MoveState _cState;
@@ -35,7 +35,7 @@ public class Amoris : CustomMonsterModel
         private set { AssertMutable(); _nonCState = value; }
     }
 
-    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 211, 200);
+    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 200, 180);
 
     public override int MaxInitialHp => MinInitialHp;
 
@@ -70,6 +70,9 @@ public class Amoris : CustomMonsterModel
             .FromMonster(this)
             .WithHitFx("vfx/vfx_attack_blunt")
             .Execute(null);
+        
+        //自成长
+        await PowerCmd.Apply<StrengthPower>(new ThrowingPlayerChoiceContext(), Creature, StrengthAmount, base.Creature, null);
     }
 
     private async Task NonCMove(IReadOnlyList<Creature> targets)

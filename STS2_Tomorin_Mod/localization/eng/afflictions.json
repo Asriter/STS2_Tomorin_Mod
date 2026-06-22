@@ -1,0 +1,17 @@
+{
+  "STS2_TOMORIN_MOD-CRYCHIC_DISCARD_CURSE.title": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_DISCARD_CURSE.extraCardText": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_DISCARD_CURSE.description": "After you play this card, discard 2 additional cards from your hand.",
+  "STS2_TOMORIN_MOD-CRYCHIC_DRAW_LESS_CURSE.title": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_DRAW_LESS_CURSE.extraCardText": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_DRAW_LESS_CURSE.description": "After you play this card, draw 1 fewer card next turn.",
+  "STS2_TOMORIN_MOD-CRYCHIC_ENERGY_CURSE.title": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_ENERGY_CURSE.extraCardText": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_ENERGY_CURSE.description": "After you play this card, lose 1 additional Energy.",
+  "STS2_TOMORIN_MOD-CRYCHIC_EXHAUST_CURSE.title": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_EXHAUST_CURSE.extraCardText": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_EXHAUST_CURSE.description": "This card additionally gains [gold]Ethereal[/gold] and [gold]Exhaust[/gold].",
+  "STS2_TOMORIN_MOD-CRYCHIC_DAMAGE_CURSE.title": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_DAMAGE_CURSE.extraCardText": "Memory Vortex",
+  "STS2_TOMORIN_MOD-CRYCHIC_DAMAGE_CURSE.description": "After you play this card, take 6 damage."
+}

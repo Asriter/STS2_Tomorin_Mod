@@ -23,20 +23,29 @@ public class OrdinaryAndNaturally() : BaseCardModel(1, CardType.Skill, CardRarit
         var allCollectionCards = ModelDb.CardPool<CollectionsCardPool>().AllCards.ToList();
         if (allCollectionCards.Count == 0) return;
 
+        var runtimeCards = new List<CardModel>();
+        foreach (var model in allCollectionCards)
+        {
+            var card = base.CombatState!.CreateCard(model, base.Owner);
+            runtimeCards.Add(card);
+        }
+
         // 展示选择界面，选择一张收集品
         var prefs = new CardSelectorPrefs(base.SelectionScreenPrompt, 1);
-        var selected = (await CardSelectCmd.FromSimpleGrid(choiceContext, allCollectionCards, Owner, prefs)).FirstOrDefault();
+        var selected = (await CardSelectCmd.FromSimpleGrid(choiceContext, runtimeCards, Owner, prefs)).FirstOrDefault();
 
         if (selected != null)
         {
             // 创建一张新的收集品副本并加入手牌
-            var newCard = base.CombatState!.CreateCard(selected, Owner);
-            await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
+            // var newCard = base.CombatState!.CreateCard(selected, Owner);
+            // await CardPileCmd.AddGeneratedCardToCombat(newCard, PileType.Hand, Owner);
+            await CardPileCmd.AddGeneratedCardToCombat(selected, PileType.Hand, Owner);
         }
     }
 
     // 如果此卡被消耗，重新将此卡加入手牌
-    public override async Task AfterCardExhausted(PlayerChoiceContext choiceContext, CardModel card, bool causedByEthereal)
+    public override async Task AfterCardExhausted(PlayerChoiceContext choiceContext, CardModel card,
+        bool causedByEthereal)
     {
         await base.AfterCardExhausted(choiceContext, card, causedByEthereal);
         if (card == this)

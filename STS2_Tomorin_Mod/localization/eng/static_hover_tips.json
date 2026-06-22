@@ -1,6 +1,6 @@
 {
-  "STS2_TOMORIN_MOD-COMPOSE.title": "作词",
-  "STS2_TOMORIN_MOD-COMPOSE.description": "消耗{0.isCostAttack:攻击卡*{0.atkCost} |}{0.isCostSkill:技能卡*{0.skillCost} |}{0.isCostState:状态卡*{0.stateCost} |}，将一张[gold]{0.cardName}[/gold]加入手牌，随后这张卡消耗。如果那张卡已经存在于你的卡组里，则改加入手牌为增加一层重放。",
-  "STS2_TOMORIN_MOD-INSPIRATION.title": "灵感",
-  "STS2_TOMORIN_MOD-INSPIRATION.description": "这张卡被消耗时会生效一次，然后进入消耗牌堆。"
+  "STS2_TOMORIN_MOD-COMPOSE.title": "Compose",
+  "STS2_TOMORIN_MOD-COMPOSE.description": "Exhaust {0.isCostAttack:Attack cards*{0.atkCost} |}{0.isCostSkill:Skill cards*{0.skillCost} |}{0.isCostState:Status cards*{0.stateCost} |}to add a [gold]{0.cardName}[/gold] to your hand, then Exhaust this card. If that card is already in your deck, add 1 stack of Replay instead of adding it to your hand.",
+  "STS2_TOMORIN_MOD-INSPIRATION.title": "Inspiration",
+  "STS2_TOMORIN_MOD-INSPIRATION.description": "This card's effect triggers once when it is Exhausted, then it goes to the Exhaust pile."
 }

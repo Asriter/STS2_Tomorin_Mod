@@ -1,6 +1,7 @@
 {
-  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN_CHARACTER.0-0r.char": "...",
-  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN_CHARACTER.0-0r.next": "Press on.",
-  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN_CHARACTER.0-1r.ancient": "Another stubborn one. Very well.",
-  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN_CHARACTER.0-attack": "She won't stop."
+  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN.0-0r.ancient": "You've come again.",
+  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN.0-0r.char": "I will... return to everyone!",
+  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN.0-0r.next": "Continue.",
+  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN.0-1r.ancient": "I told you before. There is no road here that leads you back.",
+  "THE_ARCHITECT.talk.STS2_TOMORIN_MOD-TOMORIN.0-attack": "She won't stop."
 }

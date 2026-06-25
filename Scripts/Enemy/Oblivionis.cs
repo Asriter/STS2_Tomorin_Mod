@@ -100,7 +100,8 @@ public class Oblivionis : CustomMonsterModel
     public override async Task AfterAddedToRoom()
     {
         await base.AfterAddedToRoom();
-        await PowerCmd.Apply<CenterPositionManagerPower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
+        var centerPower = await PowerCmd.Apply<CenterPositionManagerPower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
+        centerPower.HpReductionPerKill = MaxInitialHp / 4m;
         await PowerCmd.Apply<OblivionisHiddenRevivalPower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
     }
 
@@ -183,7 +184,10 @@ public class Oblivionis : CustomMonsterModel
         NonCState.FollowUpState = NonCState;
 
         // Phase 2
-        WaitRelive = new MoveState("Relive", WaitReliveMove, new BuffIntent(), new HealIntent());
+        WaitRelive = new MoveState("Relive", WaitReliveMove, new BuffIntent(), new HealIntent())
+        {
+            MustPerformOnceBeforeTransitioning = true
+        };
         Phase2State = new MoveState("OBLIVIONIS_P2_S1", Phase2S1Move,
             new SingleAttackIntent(Phase2Atk1), new DebuffIntent());
         _phase2State2 = new MoveState("OBLIVIONIS_P2_S2", Phase2S2Move,

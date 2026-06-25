@@ -22,5 +22,12 @@
   "STS2_TOMORIN_MOD-MORTIS.name": "Motrit",
   "STS2_TOMORIN_MOD-TIMORIS.name": "Timoris",
   "STS2_TOMORIN_MOD-AMORIS.name": "Amoris",
-  "STS2_TOMORIN_MOD-FULL_POWER_OBLIVIONIS.name": "Oblivionis"
+  "STS2_TOMORIN_MOD-FULL_POWER_OBLIVIONIS.name": "Oblivionis",
+  
+  "STS2_TOMORIN_MOD-SOYO.name": "长崎素世",
+  "STS2_TOMORIN_MOD-SOYO.moves.enter": "我会摘下Top Star，为了再一次站在那个舞台上！",
+  "STS2_TOMORIN_MOD-SOYO.moves.changePhase": "为了Crychic，我会做任何事！我能做任何事！",
+  "STS2_TOMORIN_MOD-SOYO.moves.whyPlayHaru": "为什么要演奏春日影？！",
+  "STS2_TOMORIN_MOD-SOYO.moves.doEverything": "你要怎样才会回来？我什么都会做的！",
+  "STS2_TOMORIN_MOD-SOYO.moves.forEnding": "不要误会，我是为了结束才来的！"
 }

@@ -44,7 +44,7 @@ public class HopeOnTheVoice : BaseCardModel
             var list = base.ExtraHoverTips.ToList();
             list.Add(HoverTipFactory.FromPower<WeakPower>());
             list.Add(HoverTipFactory.FromPower<VulnerablePower>());
-            list.Add(HoverTipFactory.FromCard<MidnightCoffee>(base.IsUpgraded));
+            list.Add(HoverTipFactory.FromCard<MidnightCoffee>());
             return list;
         }
     }

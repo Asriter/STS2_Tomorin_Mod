@@ -109,6 +109,27 @@ These are referenced from Godot scene files (`.tscn`) in `STS2_Tomorin_Mod/scene
 
 ## Enemies
 
+### Soyo (Nagasaki Soyo)
+
+Boss enemy body only; Encounter and Act patch registration are intentionally not handled here.
+
+**Files:**
+- `Scripts/Enemy/Soyo.cs` - enemy body and mask/true phase move state machine
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoEstrangementPower.cs` - Estrangement counter, clamped at 0
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoPhaseControllerPower.cs` - player-turn phase switching and easter egg triggers
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoTaskPower.cs` - shared random task powers
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/powers.json` - Soyo power/task localization
+
+**Phase switching:** Soyo switches only at the start of the player turn. If task failure raises Estrangement above 5, the current enemy turn still uses the mask-phase move already queued. When switching away from a phase, Soyo preserves that phase's next move index and resumes from it when switching back.
+
+**Mask phase:** cycles block+Weak, multi-attack, heal+Estrangement -2+Strength. A shared random task is placed on Soyo at room entry and after each player-turn task settlement while Soyo is still in mask phase.
+
+**True phase:** cycles heavy attack + Wounds and multi-attack based on Estrangement. Each true-phase move reduces Estrangement by 2; when Estrangement is 5 or lower at the next player-turn start, Soyo returns to mask phase.
+
+**Tasks:** all players share one task. Requirements scale by player count: 3 attacks, 3 skills, 4 played cards, or 4 total hand cards at turn end per player. Failure increases Estrangement by the missing count. Rewards use built-in `TemporaryStrengthPower`, `TemporaryDexterityPower`, `EnergyNextTurnPower`, and `DrawCardsNextTurnPower`.
+
+**Easter eggs:** first `PrideManSaki` per player stuns Soyo with `CreatureCmd.Stun` and adds 5 Estrangement; first `DoEverything` per player gives Soyo 2 Weak and 2 Vulnerable; first `UtakotobaToken` per player reduces Estrangement by 5.
+
 ### CrychicPhatom (Crychic亡灵)
 
 Boss enemy with a unique **CrychicRemember** buff + revive mechanic.
@@ -180,8 +201,10 @@ Complex boss encounter with **Center Position (C位)** mechanic, multi-phase tra
 
 **Phase Transitions (in CenterPositionManagerPower.AfterDeath):**
 - Boss death + 0 sub-bosses killed → Hidden Boss (OblivionisHiddenRevivalPower creates FullPowerOblivionis, sub-bosses escape)
-- Boss death + 1-3 sub-bosses killed → Phase 2 (HP = current max + 500)
-- All 4 sub-bosses killed → Phase 2 (HP = 500)
+- Boss death + 1-3 sub-bosses killed → living sub-bosses escape immediately, then Phase 2 (HP = current max + 500)
+- Current implementation does not auto-transition when all 4 sub-bosses are killed. If Oblivionis later dies after all 4 max-HP reductions, phase 2 performs the same living sub-boss escape step and revives from current max HP + 500.
+
+**Revive Edge Case:** If Oblivionis dies during its own enemy-turn move, such as from player Thorns gained after killing Mortis, `WaitRelive` must perform once before transitioning to phase-2 attacks. `OblivionisHiddenRevivalPower` should only keep half-dead state for the hidden-boss path; normal phase-2 revival is owned by `CenterPositionManagerPower`.
 
 **Sub-Boss Kill Effects:** Each kill reduces Oblivionis max HP by 150 and grants all players a permanent buff power.
 

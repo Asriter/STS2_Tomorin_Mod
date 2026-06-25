@@ -11,6 +11,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
+using STS2_Tomorin_Mod.Audio;
 using STS2_Tomorin_Mod.Encounters;
 using STS2_Tomorin_Mod.Enemy;
 
@@ -65,6 +66,12 @@ public sealed class OblivionisHiddenRevivalPower : BasePowerModel
             return;
         }
 
+        if (subBossCount < 4)
+        {
+            GetInternalData<Data>().isHalfDead = false;
+            return;
+        }
+
         // 1. 所有存活子Boss逃脱
         var subBosses = base.CombatState.Enemies
             .Where(e => e != base.Owner && e.IsAlive)
@@ -74,26 +81,28 @@ public sealed class OblivionisHiddenRevivalPower : BasePowerModel
             await CreatureCmd.Escape(subBoss);
         }
 
-        if (subBossCount < 4)
-            return;
-
-
         // 2. Oblivionis进入DeadState
         if (base.Owner.Monster is Oblivionis oblivionis)
         {
             oblivionis.PrepareForHiddenDeath();
             oblivionis.SetMoveImmediate(oblivionis.DeadState);
         }
+        
+        //播放bgm
+        CustomAudioController.PlayMusic("FullPowerOblivionisBgm");
+        
+        //等一段时间
+        await Cmd.Wait(2.5f);
 
         // 3. 创建FullPowerOblivionis
         var fullPowerMonster = ModelDb.Monster<FullPowerOblivionis>().ToMutable();
         var newCreature = await CreatureCmd.Add(fullPowerMonster, base.CombatState, CombatSide.Enemy,
             OblivionisBoss.DolrisSlot);
 
-        // 4. 播放入场动画
+        // 4. 初始化敌人
         if (newCreature.Monster is FullPowerOblivionis fpo)
         {
-            await fpo.AnimIn();
+            await fpo.Init();
         }
 
         // 5. 移除原Oblivionis尸体

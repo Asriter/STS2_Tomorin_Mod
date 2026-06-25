@@ -87,3 +87,73 @@ Oblivionis 一阶段 C 位状态机接口说明
 - Oblivionis.SetPhase1CStateByDeadAllies(int deadAllyCount, bool forceTransition = true)
   - deadAllyCount 会被限制在 0..3。
   - 用于 CenterPositionManagerPower 在切换 C 位或死亡数量变化时设置一阶段 C 位入口状态。
+
+## 2026-06-26 Oblivionis enemy-turn revive fix
+
+Requirement:
+- Fix the case where Oblivionis dies during its own enemy-turn attack, for example from player Thorns after Mortis is killed, then remains at 0 HP and unattackable while rolling phase-2 moves.
+
+Implementation notes:
+- `Scripts/Enemy/Oblivionis.cs`: `WaitRelive` is marked `MustPerformOnceBeforeTransitioning = true`, so the revive move cannot be skipped by the next `RollMove`.
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenRevivalPower.cs`: non-hidden paths clear `isHalfDead` and return before escaping sub-bosses. Hidden-boss handling remains limited to the 0-sub-boss-killed path.
+- `Scripts/Powers/EnemyPowers/OblivionisPowers/CenterPositionManagerPower.cs`: normal Phase 2 transition now immediately escapes every living sub-boss before applying the Phase 2 passive and revive move. Hidden-boss handling is unchanged.
+
+Manual reproduction:
+- Kill Mortis to gain player Thorns, kill Amoris, switch Oblivionis to C position, leave Oblivionis at 1-5 HP with no block, then end turn and let Thorns kill it during its own attack. After the fix, Oblivionis should show and perform `Relive` before phase-2 attacks.
+- For the normal player-kill path, kill any 1-3 sub-bosses, then kill Oblivionis directly on the player turn. The remaining living sub-bosses should escape immediately before Oblivionis finishes entering Phase 2.
+
+Current phase-transition note:
+- The current implementation does not auto-transition immediately when all 4 sub-bosses are killed. Phase 2 is entered when Oblivionis later dies; living sub-bosses escape during that transition, and after all 4 max-HP reductions the revive HP is based on current max HP + 500.
+
+# Soyo Boss logic document
+
+Scope:
+- Implements only boss-related logic.
+- Does not implement Encounter registration.
+- Does not modify Act boss patch logic.
+
+Main files:
+- `Scripts/Enemy/Soyo.cs`
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoEstrangementPower.cs`
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoPhaseControllerPower.cs`
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoTaskPower.cs`
+- `STS2_Tomorin_Mod/localization/eng/powers.json`
+- `STS2_Tomorin_Mod/localization/zhs/powers.json`
+
+Core APIs:
+- `Soyo.RefreshPhaseByEstrangement()`: called at player turn start to switch between mask and true state.
+- `Soyo.StunOneTurn()`: uses built-in `CreatureCmd.Stun`.
+- `SoyoEstrangementPower.GetAmount(Creature owner)`: reads Estrangement.
+- `SoyoEstrangementPower.Modify(PlayerChoiceContext choiceContext, Creature owner, int delta, AbstractModel? source)`: modifies Estrangement and clamps it to minimum 0.
+- `SoyoTaskPower.ApplyRandomTask(PlayerChoiceContext choiceContext, Creature owner)`: applies one random shared task.
+- `SoyoTaskPower.RemoveCurrentTask(Creature owner)`: removes existing Soyo tasks.
+
+Mask state moves:
+- Gain 20 -> 25 Block, apply 2 Weak to all players.
+- Attack 9 -> 10 x2.
+- Heal 18 -> 23 HP, Estrangement -2, gain 1 Strength.
+
+True state moves:
+- Attack 24 -> 27 and add `min(Estrangement - 5, 4)` Wounds to each player's draw pile.
+- Attack 3 -> 4 x current Estrangement.
+- Each true-state move reduces Estrangement by 2.
+
+Task rules:
+- All players share a single task.
+- Requirements scale by current player count.
+- Attack task: play `3 * playerNum` Attack cards.
+- Skill task: play `3 * playerNum` Skill cards.
+- Play Cards task: play at least `4 * playerNum` cards.
+- Keep Hand task: all players need at least `4 * playerNum` cards in hand in total at player turn end.
+- On failure, Soyo gains Estrangement equal to the missing count.
+
+Task rewards and penalties:
+- Attack success: all players gain 3 built-in temporary Strength. Failure: all players gain 1 Weak.
+- Skill success: all players gain 3 built-in temporary Dexterity. Failure: all players gain 1 Frail.
+- Play Cards success: all players gain 1 built-in Energy next turn. Failure: all players lose 3 HP.
+- Keep Hand success: all players draw 1 extra card next turn. Failure: all players gain 1 Vulnerable.
+
+Easter eggs:
+- First `PrideManSaki` per player: Soyo is stunned one turn and Estrangement +5.
+- First `DoEverything` per player: Soyo gains 2 Weak and 2 Vulnerable.
+- First `UtakotobaToken` per player: Estrangement -5.

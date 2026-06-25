@@ -251,7 +251,6 @@ public class CrychicRememberPower : BasePowerModel
         //3阶段
         if ((int)base.Amount % 7 == 3 && target == Owner)
         {
-            Log.Error("进入阶段3了，更新受到的伤害");
             return -amount * Stage6DamageMultiplier;
         }
 

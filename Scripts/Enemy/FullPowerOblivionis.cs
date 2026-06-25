@@ -1,17 +1,21 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using BaseLib.Abstracts;
+using MegaCrit.Sts2.Core.Animation;
+using MegaCrit.Sts2.Core.Bindings.MegaSpine;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
+using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Audio;
 using STS2_Tomorin_Mod.Cards.EnemyCards;
@@ -34,21 +38,42 @@ public class FullPowerOblivionis : CustomMonsterModel
 
     public override string? CustomVisualPath =>
         "res://STS2_Tomorin_Mod/scenes/creature_visuals/enemies/full_power_oblivionis.tscn";
-
-    public override async Task AfterAddedToRoom()
+    
+    public override CreatureAnimator GenerateAnimator(MegaSprite controller)
     {
-        await base.AfterAddedToRoom();
+        AnimState loop = new AnimState("idle_loop", true);
+        AnimState state1 = new AnimState("cast");
+        AnimState state2 = new AnimState("attack");
+        AnimState state3 = new AnimState("hurt");
+        AnimState state4 = new AnimState("die");
+        AnimState start = new AnimState("start");
+        state1.NextState = loop;
+        state2.NextState = loop;
+        state3.NextState = loop;
+        start.NextState = loop;
+        CreatureAnimator animator = new CreatureAnimator(loop, controller);
+        animator.AddAnyState("Idle", loop);
+        animator.AddAnyState("Cast", state1);
+        animator.AddAnyState("Attack", state2);
+        animator.AddAnyState("Dead", state4);
+        animator.AddAnyState("Hit", state3);
+        animator.AddAnyState("Start", start);
+        return animator;
+    }
+
+    public async Task Init()
+    {
+        // SfxCmd.Play("start");
+        // await Cmd.Wait(2);
+        await CreatureCmd.TriggerAnim(base.Creature, "Start", 0);
+        await Cmd.Wait(1);
+        // await CreatureCmd.TriggerAnim(base.Creature, "Attack", 3);
+        // // Log.Warn("测试Log，正在播放动画！！！");
+        // await CreatureCmd.TriggerAnim(base.Creature, "TestName", 3);
+
         var power = await PowerCmd.Apply<OblivionisHiddenInheritPower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
         await power.SetNewPower();
         await PowerCmd.Apply<OblivionisHiddenBlockPower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
-        
-        //播放bgm
-        CustomAudioController.PlayMusic("FullPowerOblivionisBgm");
-    }
-
-    public async Task AnimIn()
-    {
-        await CreatureCmd.TriggerAnim(base.Creature, "Start", 3.0f);
     }
 
     protected override MonsterMoveStateMachine GenerateMoveStateMachine()

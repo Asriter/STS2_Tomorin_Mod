@@ -31,3 +31,25 @@
 - 修改 Oblivionis 一阶段 C 位机制：根据已死亡队友数量切换不同状态机；队友死亡时若 Oblivionis 当前为 C 位，则切换到对应状态机第 1 招。
 - 保留 Oblivionis 非 C 位旧行为：所有存活敌人回复 18 点生命值。
 - CenterPositionManagerPower 负责在切换 C 位和队友死亡时传递死亡队友数量。
+
+## 2026-06-23: Soyo Boss logic
+
+- Added `Scripts/Enemy/Soyo.cs` for Nagasaki Soyo boss body, mask/true phase moves, delayed player-turn phase switching support, and preserved next move index per phase.
+- Added `SoyoEstrangementPower` as the clamped Estrangement counter API.
+- Added `SoyoPhaseControllerPower` for phase checks and per-player easter egg tracking.
+- Added `SoyoTaskPower` and four shared task powers: Attack, Skill, Play Cards, Keep Hand.
+- Used built-in `CreatureCmd.Stun`, `TemporaryStrengthPower`, `TemporaryDexterityPower`, `EnergyNextTurnPower`, and `DrawCardsNextTurnPower`.
+- Added Soyo task/power localization keys to `eng/zhs/powers.json`.
+- Updated `CLAUDE.md` and `文档.txt` with Soyo implementation notes.
+- Scope intentionally excludes Encounter and Act patch registration.
+- Verification: `dotnet build` passed with 0 errors.
+
+## 2026-06-26: Oblivionis enemy-turn revive fix
+
+- Fixed Oblivionis getting stuck at 0 HP/unattackable when it dies during its own enemy-turn move from reflected damage such as player Thorns.
+- Updated `Scripts/Enemy/Oblivionis.cs`: `WaitRelive` now has `MustPerformOnceBeforeTransitioning = true`, preventing `RollMove` from skipping the revive move and going straight to phase-2 attacks.
+- Updated `Scripts/Powers/EnemyPowers/OblivionisPowers/OblivionisHiddenRevivalPower.cs`: non-hidden phase-2 death paths now clear `isHalfDead` and return before hidden-boss escape logic.
+- Updated `Scripts/Powers/EnemyPowers/OblivionisPowers/CenterPositionManagerPower.cs`: normal Phase 2 transition now immediately escapes all living sub-bosses before applying the Phase 2 passive and revive move.
+- Updated `CLAUDE.md` and `文档.txt` with the revive edge-case notes and reproduction expectation.
+- Clarified existing documentation drift: current code does not immediately transition when all 4 sub-bosses are killed; phase 2 still occurs when Oblivionis later dies.
+- Verification: `dotnet build` passed with 0 errors and 176 warnings.

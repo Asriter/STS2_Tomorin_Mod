@@ -55,7 +55,7 @@ public class Doloris : CustomMonsterModel
     public override async Task AfterAddedToRoom()
     {
         await base.AfterAddedToRoom();
-        await PowerCmd.Apply<DolorisPassivePower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
+        // await PowerCmd.Apply<DolorisPassivePower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
     }
 
     protected override MonsterMoveStateMachine GenerateMoveStateMachine()

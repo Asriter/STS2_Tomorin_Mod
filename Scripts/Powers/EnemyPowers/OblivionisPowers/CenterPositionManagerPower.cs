@@ -50,7 +50,7 @@ public class CenterPositionManagerPower : BasePowerModel
         typeof(Oblivionis)
     ];
 
-    private const decimal HpReductionPerKill = 150m;
+    public decimal HpReductionPerKill = 150m;
     private const decimal Phase2HpBonus = 500m;
 
     public override PowerType Type => PowerType.Buff;
@@ -171,16 +171,18 @@ public class CenterPositionManagerPower : BasePowerModel
             await ReduceOblivionisMaxHp(HpReductionPerKill);
             await ApplyKillBuffToAllPlayers(creature);
 
-            if (data.killRegistry.Count >= 4)
-            {
-                // 所有子Boss死亡 → 二阶段
-                await TransitionToPhase2(data);
-            }
-            else if (data.centerPositionCreature?.Monster is Oblivionis oblivionis)
+            // if (data.killRegistry.Count >= 4)
+            // {
+            //     // 所有子Boss死亡 → 二阶段
+            //     await TransitionToPhase2(data);
+            // }
+            // else if (data.centerPositionCreature?.Monster is Oblivionis oblivionis)
+            if (data.centerPositionCreature?.Monster is Oblivionis oblivionis)
             {
                 // Oblivionis为C位时，队友死亡会切到对应死亡数量状态机的第1招
                 oblivionis.SetPhase1CStateByDeadAllies(data.killRegistry.Count);
             }
+            
             // 如果C位死亡，自动切换
             if (creature == data.centerPositionCreature && data.cPositionMechanismActive)
             {
@@ -321,6 +323,15 @@ public class CenterPositionManagerPower : BasePowerModel
     {
         data.cPositionMechanismActive = false;
         data.phaseState = 1;
+
+        // 普通二阶段转场：隐藏Boss路径由OblivionisHiddenRevivalPower单独处理。
+        var subBosses = base.CombatState.Enemies
+            .Where(e => IsSubBoss(e) && e.IsAlive)
+            .ToList();
+        foreach (var subBoss in subBosses)
+        {
+            await CreatureCmd.Escape(subBoss);
+        }
 
         // 移除所有敌人的Intangible
         foreach (var enemy in base.CombatState.Enemies)

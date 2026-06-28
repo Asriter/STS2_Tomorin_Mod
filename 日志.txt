@@ -53,3 +53,21 @@
 - Updated `CLAUDE.md` and `文档.txt` with the revive edge-case notes and reproduction expectation.
 - Clarified existing documentation drift: current code does not immediately transition when all 4 sub-bosses are killed; phase 2 still occurs when Oblivionis later dies.
 - Verification: `dotnet build` passed with 0 errors and 176 warnings.
+
+## 2026-06-28: Soyo Boss 假面裂痕与虚伪假面重构
+
+- 将 Soyo 的真实阶段阈值改为 6，counter 大于 6 时进入真实状态。
+- 拆分 Soyo 阶段 API：`EnterTruePhase`、`EnterMaskPhase`、`RefreshPhaseAfterCounterChanged`、`RefreshPhaseForPlayerTurnStart`。
+- 新增 `SoyoMaskedDamageReductionPower`，用于表示“虚伪的假面”：受到 HP 损失降低 75%，玩家回合结束时减少 1 层。
+- 进入真实状态时立即移除 Soyo 身上的所有“虚伪的假面”。
+- 假面状态敌人回合开始时获得 1 层“虚伪的假面”；玩家回合开始回到假面不会立刻恢复减伤。
+- 移除 `MaskHealMove` 原本的 counter -2；真实状态行动后保留 counter -2。
+- `SoyoEstrangementPower` 新增 `SetAmount` 和 `Clear`，并在 counter 变更后触发阶段刷新。
+- 任务成功保留原奖励并增加 2 层假面裂痕；任务失败只保留原失败惩罚，不再按缺口增加 counter。
+- 新增 `SoyoTaskPower.CompleteCurrentTask`，供 DoEverything 彩蛋强制完成当前任务。
+- 三个 Soyo 彩蛋改为本场战斗全局一次：PrideManSaki 设置 counter 为 7 并进真实；DoEverything 完成当前任务；UtakotobaToken 清空 counter 并移除减伤。
+- PrideManSaki 的处理顺序调整为先设置 counter 进入真实，再调用 `StunOneTurn()`，避免切阶段覆盖眩晕意图。
+- `SoyoMaskedDamageReductionPower` 显式复用 `SoyoEstrangementPower` 的现有图标路径，避免默认查找不存在的新图标资源。
+- 更新中英 powers/cards 本地化，补充新 counter、False Mask、任务结算和彩蛋每场一次说明。
+- 更新 `CLAUDE.md`、`文档.txt`、`日志.txt`。
+- Verification: `powershell -NoProfile -ExecutionPolicy Bypass -File tests\SoyoTaskPowerBehavior.Tests.ps1` passed; localization JSON parsing passed; `dotnet build` passed with 0 errors and 172 warnings. `dotnet publish` top-level command exited 0, but Godot `--export-pack` emitted MSB3073 warning with exit code -1, so pck export success is not confirmed.

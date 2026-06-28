@@ -3,6 +3,8 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
+using STS2_Tomorin_Mod.Enemy;
 
 namespace STS2_Tomorin_Mod.Powers;
 
@@ -40,10 +42,51 @@ public class SoyoEstrangementPower : BasePowerModel
             if (power == null)
             {
                 await PowerCmd.Apply<SoyoEstrangementPower>(choiceContext, owner, next, owner, source as CardModel);
-                return;
             }
+            else
+            {
+                await PowerCmd.ModifyAmount(choiceContext, power, actualDelta, owner, source as CardModel);
+            }
+        }
 
+        await RefreshSoyoPhaseAfterCounterChanged(owner);
+    }
+
+    public static async Task SetAmount(PlayerChoiceContext choiceContext, Creature owner, int value,
+        AbstractModel? source)
+    {
+        var power = owner.HasPower<SoyoEstrangementPower>()
+            ? owner.GetPower<SoyoEstrangementPower>()
+            : null;
+        int current = Math.Max(0, power?.Amount ?? 0);
+        int next = Math.Max(0, value);
+        int actualDelta = next - current;
+
+        if (power == null)
+        {
+            if (next > 0)
+            {
+                await PowerCmd.Apply<SoyoEstrangementPower>(choiceContext, owner, next, owner, source as CardModel);
+            }
+        }
+        else if (actualDelta != 0)
+        {
             await PowerCmd.ModifyAmount(choiceContext, power, actualDelta, owner, source as CardModel);
         }
+
+        await RefreshSoyoPhaseAfterCounterChanged(owner);
+    }
+
+    public static Task Clear(PlayerChoiceContext choiceContext, Creature owner, AbstractModel? source) =>
+        SetAmount(choiceContext, owner, 0, source);
+
+    private static Task RefreshSoyoPhaseAfterCounterChanged(Creature owner)
+    {
+        if (owner.Monster is Soyo soyo)
+        {
+            return soyo.RefreshPhaseAfterCounterChanged();
+        }
+
+        return Task.CompletedTask;
     }
 }

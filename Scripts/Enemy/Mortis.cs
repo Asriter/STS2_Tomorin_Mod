@@ -47,7 +47,7 @@ public class Mortis : CustomMonsterModel
     public override async Task AfterAddedToRoom()
     {
         await base.AfterAddedToRoom();
-        // await PowerCmd.Apply<MortisPassivePower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
+        await PowerCmd.Apply<MortisPassivePower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
     }
 
     protected override MonsterMoveStateMachine GenerateMoveStateMachine()

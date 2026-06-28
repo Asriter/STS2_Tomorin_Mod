@@ -13,7 +13,7 @@ dest_files=["res://.godot/imported/FullPowerOblivionisBgm.mp3-3df607ebc80ae36099
 [params]
 
 loop=true
-loop_offset=0.0
+loop_offset=15.77
 bpm=0.0
 beat_count=0
 bar_beats=4

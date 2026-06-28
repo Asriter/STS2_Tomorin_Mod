@@ -32,10 +32,9 @@ public class Soyo : CustomMonsterModel
         True
     }
 
-    private const int TruePhaseThreshold = 5;
+    private const int TruePhaseThreshold = 6;
     private const int TrueAttackWoundCap = 4;
     private const int TruePhaseEstrangementLoss = 2;
-    private const int MaskHealEstrangementLoss = 2;
 
     private int MaskBlock => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 25, 20);
     private int MaskMultiAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 10, 9);
@@ -44,7 +43,7 @@ public class Soyo : CustomMonsterModel
     private int TrueAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 27, 24);
     private int TrueMultiAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3);
 
-    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 550, 500);
+    public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 430, 400);
     public override int MaxInitialHp => MinInitialHp;
 
     //记录是否第一次切换状态，用于显示文字
@@ -107,6 +106,8 @@ public class Soyo : CustomMonsterModel
         await base.AfterAddedToRoom();
 
         var context = new ThrowingPlayerChoiceContext();
+        await PowerCmd.Apply<SoyoMaskedDamageReductionPower>(context, Creature, 1, Creature, null);
+        await PowerCmd.Apply<SoyoMaskVisualPower>(context, Creature, 1, Creature, null);
         await PowerCmd.Apply<SoyoEstrangementPower>(context, Creature, 0, Creature, null);
         await PowerCmd.Apply<SoyoPhaseControllerPower>(context, Creature, 1, Creature, null);
         await SoyoTaskPower.ApplyRandomTask(context, Creature);
@@ -146,26 +147,61 @@ public class Soyo : CustomMonsterModel
         return new MonsterMoveStateMachine(states, _maskBlockWeakState);
     }
 
-    public void RefreshPhaseByEstrangement()
+    public async Task EnterTruePhase()
+    {
+        if (Phase == SoyoPhase.True) return;
+
+        //如果是第一次切换则播放语音；
+        if (_isFirstChangeState)
+        {
+            _isFirstChangeState = false;
+            TalkCmd.Play(_changePhaseSpeak, base.Creature, _soyoColor);
+        }
+
+        Phase = SoyoPhase.True;
+        SetMoveImmediate(GetNextTrueState(), forceTransition: true);
+
+        await PowerCmd.Remove<SoyoMaskVisualPower>(Creature);
+        await PowerCmd.Apply<SoyoTruthVisualPower>(new ThrowingPlayerChoiceContext(), Creature, 1, Creature, null);
+
+        foreach (var maskPower in Creature.Powers.OfType<SoyoMaskedDamageReductionPower>().ToList())
+        {
+            await PowerCmd.Remove(maskPower);
+        }
+    }
+
+    public async Task EnterMaskPhase()
+    {
+        Phase = SoyoPhase.Mask;
+        SetMoveImmediate(GetNextMaskState(), forceTransition: true);
+        await PowerCmd.Remove<SoyoTruthVisualPower>(Creature);
+        await PowerCmd.Apply<SoyoMaskVisualPower>(new ThrowingPlayerChoiceContext(), Creature, 1, Creature, null);
+    }
+
+    public async Task RefreshPhaseAfterCounterChanged()
     {
         int estrangement = SoyoEstrangementPower.GetAmount(Creature);
         if (Phase == SoyoPhase.Mask && estrangement > TruePhaseThreshold)
         {
-            //如果是第一次切换则播放语音；
-            if (_isFirstChangeState)
+            await EnterTruePhase();
+        }
+    }
+
+    public async Task<SoyoPhase> RefreshPhaseForPlayerTurnStart()
+    {
+        int estrangement = SoyoEstrangementPower.GetAmount(Creature);
+        if (Phase == SoyoPhase.True)
+        {
+            if (estrangement <= TruePhaseThreshold)
             {
-                _isFirstChangeState = false;
-                TalkCmd.Play(_changePhaseSpeak, base.Creature, _soyoColor);
+                await EnterMaskPhase();
             }
 
-            Phase = SoyoPhase.True;
-            SetMoveImmediate(GetNextTrueState(), forceTransition: true);
+            return Phase;
         }
-        else if (Phase == SoyoPhase.True && estrangement <= TruePhaseThreshold)
-        {
-            Phase = SoyoPhase.Mask;
-            SetMoveImmediate(GetNextMaskState(), forceTransition: true);
-        }
+
+        await SoyoEstrangementPower.Modify(new ThrowingPlayerChoiceContext(), Creature, 1, this);
+        return Phase;
     }
 
     public Task StunOneTurn()
@@ -196,7 +232,8 @@ public class Soyo : CustomMonsterModel
     private async Task MaskBlockWeakMove(IReadOnlyList<Creature> targets)
     {
         await CreatureCmd.GainBlock(Creature, MaskBlock, ValueProp.Move, null);
-        await PowerCmd.Apply<WeakPower>(new ThrowingPlayerChoiceContext(), targets, 2, Creature, null);
+        await PowerCmd.Apply<WeakPower>(new ThrowingPlayerChoiceContext(), targets, 1, Creature, null);
+        await PowerCmd.Apply<CustomConstrictPower>(new ThrowingPlayerChoiceContext(), targets, 2, Creature, null);
         _nextMaskIndex = 1;
     }
 
@@ -212,8 +249,6 @@ public class Soyo : CustomMonsterModel
     private async Task MaskHealMove(IReadOnlyList<Creature> targets)
     {
         await CreatureCmd.Heal(Creature, MaskHeal);
-        await SoyoEstrangementPower.Modify(new ThrowingPlayerChoiceContext(), Creature, -MaskHealEstrangementLoss,
-            this);
         await PowerCmd.Apply<StrengthPower>(new ThrowingPlayerChoiceContext(), Creature, 1, Creature, null);
         _nextMaskIndex = 0;
     }

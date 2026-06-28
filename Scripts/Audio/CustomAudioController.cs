@@ -7,21 +7,21 @@ namespace STS2_Tomorin_Mod.Audio;
 
 public static class CustomAudioController
 {
-    private static AudioStreamPlayer _customBgmPlayer;
-    private static AudioStreamPlayer _customSfxPlayer;
+    private static AudioStreamPlayer? _customBgmPlayer;
+    private static AudioStreamPlayer? _customSfxPlayer;
     
-    private static Dictionary<string, AudioStream> _sfxDict = new Dictionary<string, AudioStream>();
+    private static readonly Dictionary<string, AudioStream> _sfxDict = new Dictionary<string, AudioStream>();
 
     public static AudioStreamPlayer CustomBgmPlayer
     {
         get
         {
-            if (_customBgmPlayer == null)
+            if (_customBgmPlayer == null || !GodotObject.IsInstanceValid(_customBgmPlayer))
             {
                 _customBgmPlayer = new AudioStreamPlayer();
                 // 添加到全局的场景树中，确保跨场景不会被销毁
                 var tree = Engine.GetMainLoop() as SceneTree;
-                tree.Root.AddChild(_customBgmPlayer);
+                tree?.Root.AddChild(_customBgmPlayer);
             
                 // 可选：设置音频总线，可以直接连到 Godot 的主音量
                 _customBgmPlayer.Bus = "Master";
@@ -35,12 +35,12 @@ public static class CustomAudioController
     {
         get
         {
-            if (_customSfxPlayer == null)
+            if (_customSfxPlayer == null || !GodotObject.IsInstanceValid(_customSfxPlayer))
             {
                 _customSfxPlayer = new AudioStreamPlayer();
                 // 添加到全局的场景树中，确保跨场景不会被销毁
                 var tree = Engine.GetMainLoop() as SceneTree;
-                tree.Root.AddChild(_customSfxPlayer);
+                tree?.Root.AddChild(_customSfxPlayer);
             
                 // 可选：设置音频总线，可以直接连到 Godot 的主音量
                 _customSfxPlayer.Bus = "Master";
@@ -73,27 +73,22 @@ public static class CustomAudioController
     //音效相关
     public static void PlaySfx(string path)
     {
-        CustomSfxPlayer.VolumeDb = SaveManager.Instance.SettingsSave.VolumeSfx;
+        var player = CustomSfxPlayer;
+        player.VolumeDb = SaveManager.Instance.SettingsSave.VolumeSfx;
 
-        AudioStream sfxStream;
-        if (_sfxDict.ContainsKey(path))
-        {
-            sfxStream = _sfxDict[path];
-        }
-        else
+        if (!_sfxDict.TryGetValue(path, out var sfxStream))
         {
             sfxStream = GD.Load<AudioStream>(GetSfxPath(path));
+            if (sfxStream == null)
+                return;
+
             _sfxDict[path] = sfxStream;
         }
-
-        if (sfxStream == null)
-            return;
         
-        CustomSfxPlayer.Stream = sfxStream;
-        CustomSfxPlayer.Finished += CustomSfxPlayer.QueueFree;
+        player.Stream = sfxStream;
 
         // 6. 开始播放
-        CustomSfxPlayer.Play();
+        player.Play();
     }
 
     private static string GetSfxPath(string path)

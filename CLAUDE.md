@@ -115,20 +115,23 @@ Boss enemy body only; Encounter and Act patch registration are intentionally not
 
 **Files:**
 - `Scripts/Enemy/Soyo.cs` - enemy body and mask/true phase move state machine
-- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoEstrangementPower.cs` - Estrangement counter, clamped at 0
-- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoPhaseControllerPower.cs` - player-turn phase switching and easter egg triggers
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoEstrangementPower.cs` - Mask Cracks counter, clamped at 0
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoMaskedDamageReductionPower.cs` - False Mask damage reduction window
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoPhaseControllerPower.cs` - side-turn phase timing and easter egg triggers
 - `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoTaskPower.cs` - shared random task powers
 - `STS2_Tomorin_Mod/localization/{eng,zhs}/powers.json` - Soyo power/task localization
 
-**Phase switching:** Soyo switches only at the start of the player turn. If task failure raises Estrangement above 5, the current enemy turn still uses the mask-phase move already queued. When switching away from a phase, Soyo preserves that phase's next move index and resumes from it when switching back.
+**Phase switching:** The threshold is 6, and Soyo enters true phase when Mask Cracks are greater than 6. Counter changes during mask phase can immediately push Soyo into true phase. True phase only falls back to mask at player-turn start when the counter is 6 or lower. If Soyo starts the player turn in true phase and falls back to mask, she does not auto-gain 1 Mask Crack that same turn.
 
-**Mask phase:** cycles block+Weak, multi-attack, heal+Estrangement -2+Strength. A shared random task is placed on Soyo at room entry and after each player-turn task settlement while Soyo is still in mask phase.
+**Mask phase:** cycles block+Weak, multi-attack, heal+Strength. When Soyo starts a player turn already in mask phase, Mask Cracks increase by 1; if that raises the counter above 6, she immediately enters true phase. At enemy-turn start, if Soyo is masked, she gains 1 stack of `SoyoMaskedDamageReductionPower`.
 
-**True phase:** cycles heavy attack + Wounds and multi-attack based on Estrangement. Each true-phase move reduces Estrangement by 2; when Estrangement is 5 or lower at the next player-turn start, Soyo returns to mask phase.
+**False Mask:** `SoyoMaskedDamageReductionPower` reduces Soyo's HP loss by 75% while it has stacks. It loses 1 stack at player-turn end and is removed when Soyo enters true phase. Returning to mask phase at player-turn start does not immediately restore the damage reduction; it returns at enemy-turn start if Soyo is still masked.
 
-**Tasks:** all players share one task. Requirements scale by player count: 3 attacks, 3 skills, 4 played cards, or 4 total hand cards at turn end per player. Failure increases Estrangement by the missing count. Rewards use built-in `TemporaryStrengthPower`, `TemporaryDexterityPower`, `EnergyNextTurnPower`, and `DrawCardsNextTurnPower`.
+**True phase:** cycles heavy attack + Wounds and multi-attack based on Mask Cracks. Each true-phase move reduces Mask Cracks by 2; when Mask Cracks are 6 or lower at the next player-turn start, Soyo returns to mask phase.
 
-**Easter eggs:** first `PrideManSaki` per player stuns Soyo with `CreatureCmd.Stun` and adds 5 Estrangement; first `DoEverything` per player gives Soyo 2 Weak and 2 Vulnerable; first `UtakotobaToken` per player reduces Estrangement by 5.
+**Tasks:** all players share one task. Requirements scale by player count: 3 attacks, 3 skills, 4 played cards, or 4 total hand cards at turn end per player. Success applies the original reward and adds 2 Mask Cracks. Failure applies only the original penalty and does not increase Mask Cracks. `SoyoTaskPower.CompleteCurrentTask` settles the current task as success once.
+
+**Easter eggs:** each easter egg is once per Soyo combat, not once per player. `PrideManSaki` plays the original voice line, stuns Soyo with `CreatureCmd.Stun`, sets Mask Cracks to 7, and immediately enters true phase. `DoEverything` plays the original voice line, gives Soyo 2 Weak and 2 Vulnerable, and completes the current task if one exists. `UtakotobaToken` plays the original voice line, preserves its original buff effect, clears Mask Cracks, and removes `SoyoMaskedDamageReductionPower` without forcing true phase.
 
 ### CrychicPhatom (Crychic亡灵)
 

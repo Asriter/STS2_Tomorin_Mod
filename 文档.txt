@@ -105,55 +105,59 @@ Manual reproduction:
 Current phase-transition note:
 - The current implementation does not auto-transition immediately when all 4 sub-bosses are killed. Phase 2 is entered when Oblivionis later dies; living sub-bosses escape during that transition, and after all 4 max-HP reductions the revive HP is based on current max HP + 500.
 
-# Soyo Boss logic document
+# Soyo Boss 假面裂痕与虚伪假面重构
 
-Scope:
-- Implements only boss-related logic.
-- Does not implement Encounter registration.
-- Does not modify Act boss patch logic.
+Requirement:
+- Refactor Soyo into a mask-task pressure phase plus true-output phase.
+- The phase counter is displayed through the existing `SoyoEstrangementPower` key, but its gameplay meaning is now Mask Cracks / 假面裂痕.
+- Threshold is 6. Soyo enters true phase when counter is greater than 6.
+- True phase can fall back to mask only at player-turn start and only when counter is 6 or lower.
+- If Soyo starts the player turn in true phase and falls back to mask, she does not auto-gain 1 counter on that same turn.
+- If Soyo starts the player turn already in mask phase, counter increases by 1. If this raises counter above 6, she immediately enters true phase.
+- Task success adds 2 counter and can immediately enter true phase. Task failure does not add counter.
+- True phase moves keep the existing counter -2 behavior. Mask heal no longer reduces counter.
 
 Main files:
 - `Scripts/Enemy/Soyo.cs`
 - `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoEstrangementPower.cs`
+- `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoMaskedDamageReductionPower.cs`
 - `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoPhaseControllerPower.cs`
 - `Scripts/Powers/EnemyPowers/SoyoPowers/SoyoTaskPower.cs`
 - `STS2_Tomorin_Mod/localization/eng/powers.json`
 - `STS2_Tomorin_Mod/localization/zhs/powers.json`
+- `STS2_Tomorin_Mod/localization/eng/cards.json`
+- `STS2_Tomorin_Mod/localization/zhs/cards.json`
 
 Core APIs:
-- `Soyo.RefreshPhaseByEstrangement()`: called at player turn start to switch between mask and true state.
-- `Soyo.StunOneTurn()`: uses built-in `CreatureCmd.Stun`.
-- `SoyoEstrangementPower.GetAmount(Creature owner)`: reads Estrangement.
-- `SoyoEstrangementPower.Modify(PlayerChoiceContext choiceContext, Creature owner, int delta, AbstractModel? source)`: modifies Estrangement and clamps it to minimum 0.
-- `SoyoTaskPower.ApplyRandomTask(PlayerChoiceContext choiceContext, Creature owner)`: applies one random shared task.
-- `SoyoTaskPower.RemoveCurrentTask(Creature owner)`: removes existing Soyo tasks.
+- `Soyo.EnterTruePhase()`: switches Soyo to true phase, queues the next true move, plays the first phase-change voice line once, and removes all `SoyoMaskedDamageReductionPower` stacks.
+- `Soyo.EnterMaskPhase()`: switches Soyo to mask phase and queues the next mask move. It does not apply False Mask.
+- `Soyo.RefreshPhaseAfterCounterChanged()`: mask-only counter refresh. If Soyo is masked and counter is above 6, she enters true phase. It does not force true phase back to mask.
+- `Soyo.RefreshPhaseForPlayerTurnStart()`: player-turn-start phase logic. True phase may fall back to mask without auto-increment. Mask phase auto-increments counter by 1.
+- `SoyoEstrangementPower.Modify(...)`: clamps counter at 0 and refreshes phase after modification.
+- `SoyoEstrangementPower.SetAmount(...)`: sets counter to an exact clamped value and refreshes phase even if the numeric amount did not change.
+- `SoyoEstrangementPower.Clear(...)`: sets counter to 0. Clearing does not force true phase back to mask outside player-turn start.
+- `SoyoTaskPower.CompleteCurrentTask(...)`: if a current task exists, settles it once as success. If no task exists, it does nothing.
 
-Mask state moves:
-- Gain 20 -> 25 Block, apply 2 Weak to all players.
-- Attack 9 -> 10 x2.
-- Heal 18 -> 23 HP, Estrangement -2, gain 1 Strength.
+False Mask:
+- `SoyoMaskedDamageReductionPower` is a visible buff/counter power.
+- While present with positive stacks, Soyo's HP loss is multiplied by 0.25.
+- At player-turn end, it loses 1 stack and is removed at 0.
+- At enemy-turn start, `SoyoPhaseControllerPower` gives Soyo 1 stack if she is in mask phase.
+- Entering true phase removes all False Mask stacks.
+- Returning to mask at player-turn start does not immediately restore False Mask, so the next player turn after a true action can remain fully vulnerable.
+- False Mask explicitly reuses the existing Soyo counter icon paths: `images/powers/SoyoEstrangementPower.png` and `images/powers/big/SoyoEstrangementPower.png`.
 
-True state moves:
-- Attack 24 -> 27 and add `min(Estrangement - 5, 4)` Wounds to each player's draw pile.
-- Attack 3 -> 4 x current Estrangement.
-- Each true-state move reduces Estrangement by 2.
-
-Task rules:
-- All players share a single task.
-- Requirements scale by current player count.
-- Attack task: play `3 * playerNum` Attack cards.
-- Skill task: play `3 * playerNum` Skill cards.
-- Play Cards task: play at least `4 * playerNum` cards.
-- Keep Hand task: all players need at least `4 * playerNum` cards in hand in total at player turn end.
-- On failure, Soyo gains Estrangement equal to the missing count.
-
-Task rewards and penalties:
-- Attack success: all players gain 3 built-in temporary Strength. Failure: all players gain 1 Weak.
-- Skill success: all players gain 3 built-in temporary Dexterity. Failure: all players gain 1 Frail.
-- Play Cards success: all players gain 1 built-in Energy next turn. Failure: all players lose 3 HP.
-- Keep Hand success: all players draw 1 extra card next turn. Failure: all players gain 1 Vulnerable.
+Task settlement:
+- Success keeps the original reward and adds 2 Mask Cracks.
+- Failure keeps the original penalty and does not add Mask Cracks.
+- `_settled` prevents normal turn-end settlement and `CompleteCurrentTask` from resolving the same task twice.
 
 Easter eggs:
-- First `PrideManSaki` per player: Soyo is stunned one turn and Estrangement +5.
-- First `DoEverything` per player: Soyo gains 2 Weak and 2 Vulnerable.
-- First `UtakotobaToken` per player: Estrangement -5.
+- All Soyo easter eggs are once per combat globally.
+- `PrideManSaki`: keeps voice and stun. It sets counter to 7 first, immediately refreshes phase into true, removes False Mask through true entry, then applies stun so the stun follow-up targets the true phase.
+- `DoEverything`: keeps voice, 2 Weak, and 2 Vulnerable. If a task exists, completes it as success. If no task exists, it does not touch task/counter.
+- `UtakotobaToken`: keeps voice and original card/buff behavior. Clears counter and removes False Mask. It does not force true phase and does not mark the next player turn as a no-mask true-action turn.
+
+Verification expectation:
+- `powershell -NoProfile -ExecutionPolicy Bypass -File tests\SoyoTaskPowerBehavior.Tests.ps1`
+- `dotnet build`

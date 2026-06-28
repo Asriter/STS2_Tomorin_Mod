@@ -52,9 +52,17 @@ public abstract class SoyoTaskPower : BasePowerModel
 
     public static async Task ApplyRandomTask(PlayerChoiceContext choiceContext, Creature owner)
     {
+        var currentTaskType = owner.Powers.OfType<SoyoTaskPower>().Select(task => task.GetType()).FirstOrDefault();
         await RemoveCurrentTask(owner);
 
-        int taskId = owner.Monster?.Rng.NextInt(0, 3) ?? 0;
+        var availableTaskIds = new List<int> { 0, 1, 2, 3 };
+        if (currentTaskType == typeof(SoyoAttackTaskPower)) availableTaskIds.Remove(0);
+        if (currentTaskType == typeof(SoyoSkillTaskPower)) availableTaskIds.Remove(1);
+        if (currentTaskType == typeof(SoyoPlayCardsTaskPower)) availableTaskIds.Remove(2);
+        if (currentTaskType == typeof(SoyoKeepHandTaskPower)) availableTaskIds.Remove(3);
+
+        int taskIndex = owner.Monster?.Rng.NextInt(0, availableTaskIds.Count - 1) ?? 0;
+        int taskId = availableTaskIds[taskIndex];
         switch (taskId)
         {
             case 0:
@@ -80,11 +88,32 @@ public abstract class SoyoTaskPower : BasePowerModel
         }
     }
 
-    protected void AddProgress(int amount)
+    public static async Task CompleteCurrentTask(PlayerChoiceContext choiceContext, Creature owner)
     {
-        if (_settled || amount <= 0) return;
+        var currentTask = owner.Powers.OfType<SoyoTaskPower>().FirstOrDefault();
+        if (currentTask == null) return;
+
+        await currentTask.SettleAsSuccess(choiceContext);
+    }
+
+    protected async Task AddProgress(PlayerChoiceContext choiceContext, int amount)
+    {
+        if (!AddProgressOnly(amount)) return;
+
+        if (Missing == 0)
+        {
+            await SettleAsSuccess(choiceContext);
+        }
+    }
+
+    protected bool AddProgressOnly(int amount)
+    {
+        if (_settled || amount <= 0) return false;
+
         Progress += amount;
         SyncVars();
+        InvokeDisplayAmountChanged();
+        return true;
     }
 
     public override async Task BeforeSideTurnEnd(PlayerChoiceContext choiceContext, CombatSide side,
@@ -92,28 +121,39 @@ public abstract class SoyoTaskPower : BasePowerModel
     {
         if (_settled || side != CombatSide.Player) return;
 
-        _settled = true;
         RefreshProgressBeforeSettle();
+        InvokeDisplayAmountChanged();
         SyncVars();
 
         if (Missing == 0)
         {
-            Flash();
-            await ApplyReward(choiceContext);
+            await SettleAsSuccess(choiceContext);
         }
         else
         {
-            Flash();
-            await ApplyPenalty(choiceContext);
-            await SoyoEstrangementPower.Modify(choiceContext, Owner, Missing, this);
+            await SettleAsFailure(choiceContext);
         }
+    }
 
+    private async Task SettleAsSuccess(PlayerChoiceContext choiceContext)
+    {
+        if (_settled) return;
+
+        _settled = true;
+        Flash();
+        await ApplyReward(choiceContext);
+        await SoyoEstrangementPower.Modify(choiceContext, Owner, 2, this);
         await PowerCmd.Remove(this);
+    }
 
-        if (Owner.Monster is Soyo { Phase: Soyo.SoyoPhase.Mask })
-        {
-            await ApplyRandomTask(choiceContext, Owner);
-        }
+    private async Task SettleAsFailure(PlayerChoiceContext choiceContext)
+    {
+        if (_settled) return;
+
+        _settled = true;
+        Flash();
+        await ApplyPenalty(choiceContext);
+        await PowerCmd.Remove(this);
     }
 
     protected virtual void RefreshProgressBeforeSettle()
@@ -139,14 +179,12 @@ public class SoyoAttackTaskPower : SoyoTaskPower
 {
     protected override int BaseRequired => 3;
 
-    public override Task AfterCardPlayed(PlayerChoiceContext choiceContext, CardPlay cardPlay)
+    public override async Task AfterCardPlayed(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         if (cardPlay.Card.Owner?.Creature.Side == CombatSide.Player && cardPlay.Card.Type == CardType.Attack)
         {
-            AddProgress(1);
+            await AddProgress(choiceContext, 1);
         }
-
-        return Task.CompletedTask;
     }
 
     protected override async Task ApplyReward(PlayerChoiceContext choiceContext)
@@ -165,14 +203,12 @@ public class SoyoSkillTaskPower : SoyoTaskPower
 {
     protected override int BaseRequired => 3;
 
-    public override Task AfterCardPlayed(PlayerChoiceContext choiceContext, CardPlay cardPlay)
+    public override async Task AfterCardPlayed(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         if (cardPlay.Card.Owner?.Creature.Side == CombatSide.Player && cardPlay.Card.Type == CardType.Skill)
         {
-            AddProgress(1);
+            await AddProgress(choiceContext, 1);
         }
-
-        return Task.CompletedTask;
     }
 
     protected override async Task ApplyReward(PlayerChoiceContext choiceContext)
@@ -191,14 +227,12 @@ public class SoyoPlayCardsTaskPower : SoyoTaskPower
 {
     protected override int BaseRequired => 4;
 
-    public override Task AfterCardPlayed(PlayerChoiceContext choiceContext, CardPlay cardPlay)
+    public override async Task AfterCardPlayed(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
         if (cardPlay.Card.Owner?.Creature.Side == CombatSide.Player)
         {
-            AddProgress(1);
+            await AddProgress(choiceContext, 1);
         }
-
-        return Task.CompletedTask;
     }
 
     protected override Task ApplyReward(PlayerChoiceContext choiceContext) =>
@@ -219,7 +253,7 @@ public class SoyoKeepHandTaskPower : SoyoTaskPower
 
     protected override void RefreshProgressBeforeSettle()
     {
-        AddProgress(CombatState.Players.Sum(player => player.PlayerCombatState.Hand.Cards.Count));
+        AddProgressOnly(CombatState.Players.Sum(player => player.PlayerCombatState.Hand.Cards.Count));
     }
 
     protected override Task ApplyReward(PlayerChoiceContext choiceContext) =>

@@ -40,6 +40,11 @@ public class ActModelBossOrderPatch
                 __result = [ModelDb.Encounter<AnonBoss>()];
             if (__instance is Overgrowth)
                 __result = [ModelDb.Encounter<TakiBoss>()];
+            if (__instance is Hive)
+                __result =
+                [
+                    ModelDb.Encounter<SoyoBoss>(),
+                ];
             if (__instance is Glory)
                 __result =
                 [

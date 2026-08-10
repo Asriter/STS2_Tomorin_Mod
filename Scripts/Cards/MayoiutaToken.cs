@@ -40,7 +40,7 @@ public class MayoiutaToken : BaseCardModel
 
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
-        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(5).FromCard(this)
+        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(5).FromCard(this, cardPlay)
             .TargetingAllOpponents(CombatState)
             .Execute(choiceContext);
     }

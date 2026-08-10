@@ -25,6 +25,7 @@ public class ActModelBossPatch
                 __result =
                 [
                     ModelDb.Encounter<SoyoBoss>(),
+                    ModelDb.Encounter<RaanaBoss>(),
                 ];
             if (__instance is Glory)
                 __result =

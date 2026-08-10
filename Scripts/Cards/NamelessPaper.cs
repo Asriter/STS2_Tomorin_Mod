@@ -52,7 +52,7 @@ public class NamelessPaper : BaseCardModel
         await ComposeCmd.Compose<SongOfBeHuman>(choiceContext, Owner, ComposeCost, this);
 
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
-            .FromCard(this)
+            .FromCard(this, cardPlay)
             .Targeting(cardPlay.Target)
             .Execute(choiceContext);
 

@@ -5,7 +5,8 @@ $phaseControllerPath = Join-Path $PSScriptRoot "..\Scripts\Powers\EnemyPowers\So
 $soyoPath = Join-Path $PSScriptRoot "..\Scripts\Enemy\Soyo.cs"
 $estrangementPowerPath = Join-Path $PSScriptRoot "..\Scripts\Powers\EnemyPowers\SoyoPowers\SoyoEstrangementPower.cs"
 $maskedDamageReductionPowerPath = Join-Path $PSScriptRoot "..\Scripts\Powers\EnemyPowers\SoyoPowers\SoyoMaskedDamageReductionPower.cs"
-$phaseVisualPowerPath = Join-Path $PSScriptRoot "..\Scripts\Powers\EnemyPowers\SoyoPowers\SoyoPhaseVisualPower.cs"
+$maskVisualPowerPath = Join-Path $PSScriptRoot "..\Scripts\Powers\EnemyPowers\SoyoPowers\SoyoMaskVisualPower.cs"
+$truthVisualPowerPath = Join-Path $PSScriptRoot "..\Scripts\Powers\EnemyPowers\SoyoPowers\SoyoTruthVisualPower.cs"
 
 $taskPower = Get-Content -Raw $taskPowerPath
 $phaseController = Get-Content -Raw $phaseControllerPath
@@ -54,13 +55,17 @@ if (-not (Test-Path $maskedDamageReductionPowerPath)) {
 
 $maskedDamageReductionPower = Get-Content -Raw $maskedDamageReductionPowerPath
 
-if (-not (Test-Path $phaseVisualPowerPath)) {
-    throw "SoyoPhaseVisualPower.cs must exist."
+if (-not (Test-Path $maskVisualPowerPath)) {
+    throw "SoyoMaskVisualPower.cs must exist."
 }
 
-$phaseVisualPower = Get-Content -Raw $phaseVisualPowerPath
+if (-not (Test-Path $truthVisualPowerPath)) {
+    throw "SoyoTruthVisualPower.cs must exist."
+}
 
-foreach ($visualPowerClass in @("SoyoMaskVisualPower", "SoyoTruthViauslPower")) {
+$phaseVisualPower = (Get-Content -Raw $maskVisualPowerPath) + "`n" + (Get-Content -Raw $truthVisualPowerPath)
+
+foreach ($visualPowerClass in @("SoyoMaskVisualPower", "SoyoTruthVisualPower")) {
     if ($phaseVisualPower -notmatch "class\s+$visualPowerClass\s*:\s*BasePowerModel") {
         throw "$visualPowerClass must extend BasePowerModel."
     }
@@ -83,11 +88,11 @@ if ($soyo -notmatch "AfterAddedToRoom[\s\S]*PowerCmd\.Apply<SoyoMaskVisualPower>
     throw "Soyo must show SoyoMaskVisualPower when entering the room."
 }
 
-if ($soyo -notmatch "EnterTruePhase[\s\S]*PowerCmd\.Remove<SoyoMaskVisualPower>[\s\S]*PowerCmd\.Apply<SoyoTruthViauslPower>") {
+if ($soyo -notmatch "EnterTruePhase[\s\S]*PowerCmd\.Remove<SoyoMaskVisualPower>[\s\S]*PowerCmd\.Apply<SoyoTruthVisualPower>") {
     throw "Soyo must replace the mask visual power with the truth visual power when entering true phase."
 }
 
-if ($soyo -notmatch "EnterMaskPhase[\s\S]*PowerCmd\.Remove<SoyoTruthViauslPower>[\s\S]*PowerCmd\.Apply<SoyoMaskVisualPower>") {
+if ($soyo -notmatch "EnterMaskPhase[\s\S]*PowerCmd\.Remove<SoyoTruthVisualPower>[\s\S]*PowerCmd\.Apply<SoyoMaskVisualPower>") {
     throw "Soyo must replace the truth visual power with the mask visual power when returning to mask phase."
 }
 

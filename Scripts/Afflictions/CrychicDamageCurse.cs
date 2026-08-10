@@ -23,6 +23,6 @@ public class CrychicDamageCurse : BaseAfflictionModel
         if (cardPlay.Card != Card || Card?.Owner == null) return;
 
         await CreatureCmd.Damage(choiceContext, Card.Owner.Creature, SelfDamage,
-            ValueProp.Unpowered, Card.Owner.Creature, Card);
+            ValueProp.Unpowered, Card.Owner.Creature, Card, cardPlay);
     }
 }

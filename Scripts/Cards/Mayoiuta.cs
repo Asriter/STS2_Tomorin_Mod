@@ -47,7 +47,7 @@ public class Mayoiuta : BaseCardModel
     {
         await ComposeCmd.Compose<MayoiutaToken>(choiceContext, Owner, ComposeCost, this);
 
-        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).FromCard(this)
+        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).FromCard(this, cardPlay)
             .TargetingAllOpponents(CombatState)
             .WithHitFx("vfx/vfx_attack_slash")
             // .WithHitFx("vfx/vfx_attack_blunt", null, "blunt_attack.mp3")

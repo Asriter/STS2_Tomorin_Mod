@@ -115,7 +115,7 @@ public class TakamasuCalculus : BaseCardModel
 
         // 造成伤害
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
-            .FromCard(this)
+            .FromCard(this, cardPlay)
             .Targeting(cardPlay.Target)
             .Execute(choiceContext);
 

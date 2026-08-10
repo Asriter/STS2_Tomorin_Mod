@@ -41,7 +41,7 @@ public class ThisNoNeed : BaseCardModel
         await ExhaustCard(choiceContext, 1);
 
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
-            .FromCard(this)
+            .FromCard(this, cardPlay)
             .Targeting(cardPlay.Target)
             .Execute(choiceContext);
 

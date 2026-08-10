@@ -169,5 +169,14 @@
   "STS2_TOMORIN_MOD-SOYO_PLAY_CARDS_TASK_POWER.smartDescription": "Play cards: [blue]{Progress}[/blue]/[blue]{Required}[/blue]. Missing: [blue]{Missing}[/blue]. Success: all players gain [blue]1[/blue] extra Energy next turn and Soyo gains [blue]2[/blue] Mask Cracks. Failure: all players lose [blue]3[/blue] HP.",
   "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.title": "Task: Keep Cards",
   "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.description": "At the end of the player turn, all players must have at least [blue]4[/blue] cards per player in hand in total. Success: all players draw [blue]1[/blue] extra card next turn and Soyo gains [blue]2[/blue] Mask Cracks. Failure: all players gain [blue]1[/blue] Vulnerable.",
-  "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.smartDescription": "Cards kept in hand: [blue]{Progress}[/blue]/[blue]{Required}[/blue]. Missing: [blue]{Missing}[/blue]. Success: all players draw [blue]1[/blue] extra card next turn and Soyo gains [blue]2[/blue] Mask Cracks. Failure: all players gain [blue]1[/blue] Vulnerable."
+  "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.smartDescription": "Cards kept in hand: [blue]{Progress}[/blue]/[blue]{Required}[/blue]. Missing: [blue]{Missing}[/blue]. Success: all players draw [blue]1[/blue] extra card next turn and Soyo gains [blue]2[/blue] Mask Cracks. Failure: all players gain [blue]1[/blue] Vulnerable.",
+  "STS2_TOMORIN_MOD-RAANA_INTEREST_POWER.title": "Interest",
+  "STS2_TOMORIN_MOD-RAANA_INTEREST_POWER.description": "Tracks Raana's interest. Playing cards increases it; Exhausting [gold]Leftover Parfait[/gold] lowers it.",
+  "STS2_TOMORIN_MOD-RAANA_INTEREST_POWER.smartDescription": "Current interest: [blue]{Amount}[/blue]. Playing cards increases it; Exhausting [gold]Leftover Parfait[/gold] lowers it.",
+  "STS2_TOMORIN_MOD-RAANA_UNWELL_POWER.title": "Unwell",
+  "STS2_TOMORIN_MOD-RAANA_UNWELL_POWER.description": "Raana deals [blue]25%[/blue] less damage. Loses [blue]1[/blue] stack at the end of her turn.",
+  "STS2_TOMORIN_MOD-RAANA_UNWELL_POWER.smartDescription": "Raana deals [blue]25%[/blue] less damage for [blue]{Amount}[/blue] more turns.",
+  "STS2_TOMORIN_MOD-RAANA_RISING_MOOD_POWER.title": "Rising Mood",
+  "STS2_TOMORIN_MOD-RAANA_RISING_MOOD_POWER.description": "At the end of the enemy turn, Raana gains [blue]1[/blue] Strength.",
+  "STS2_TOMORIN_MOD-RAANA_RISING_MOOD_POWER.smartDescription": "At the end of the enemy turn, Raana gains [blue]1[/blue] Strength."
 }

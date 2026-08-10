@@ -16,5 +16,11 @@
   "STS2_TOMORIN_MOD-ANON_GUITAR.flavor": "A guitar that always brings a fresh surprise.",
   "STS2_TOMORIN_MOD-RAANA_GUITAR.title": "Raana's Guitar",
   "STS2_TOMORIN_MOD-RAANA_GUITAR.description": "Whenever [gold]Leftover Parfait[/gold] is Exhausted, heal [blue]{HealAmount}[/blue] HP.",
-  "STS2_TOMORIN_MOD-RAANA_GUITAR.flavor": "Tomorin, matcha parfait."
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.flavor": "Tomorin, matcha parfait.",
+  "STS2_TOMORIN_MOD-MATCHA_PARFAIT.title": "Matcha Parfait",
+  "STS2_TOMORIN_MOD-MATCHA_PARFAIT.description": "A marker relic from Feed the Cat's reward route.",
+  "STS2_TOMORIN_MOD-MATCHA_PARFAIT.flavor": "A small sweetness shared before it melts.",
+  "STS2_TOMORIN_MOD-EMPTY_PARFAIT.title": "Empty Parfait",
+  "STS2_TOMORIN_MOD-EMPTY_PARFAIT.description": "A marker relic from Feed the Cat's penalty route.",
+  "STS2_TOMORIN_MOD-EMPTY_PARFAIT.flavor": "Only the shape of sweetness remains."
 }

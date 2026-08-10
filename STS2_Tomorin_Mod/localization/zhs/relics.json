@@ -16,5 +16,11 @@
   "STS2_TOMORIN_MOD-ANON_GUITAR.flavor": "总能带来新惊喜的吉他。",
   "STS2_TOMORIN_MOD-RAANA_GUITAR.title": "乐奈的吉他",
   "STS2_TOMORIN_MOD-RAANA_GUITAR.description": "[gold]吃剩的巴菲[/gold]被消耗时，回复[blue]{HealAmount}[/blue]点生命值。",
-  "STS2_TOMORIN_MOD-RAANA_GUITAR.flavor": "tomorin，抹茶巴菲。"
+  "STS2_TOMORIN_MOD-RAANA_GUITAR.flavor": "tomorin，抹茶巴菲。",
+  "STS2_TOMORIN_MOD-MATCHA_PARFAIT.title": "抹茶巴菲",
+  "STS2_TOMORIN_MOD-MATCHA_PARFAIT.description": "一份美味的抹茶芭菲，在面对要乐奈时有特殊效果。",
+  "STS2_TOMORIN_MOD-MATCHA_PARFAIT.flavor": "猫想要，猫得不到。",
+  "STS2_TOMORIN_MOD-EMPTY_PARFAIT.title": "吃完的芭菲",
+  "STS2_TOMORIN_MOD-EMPTY_PARFAIT.description": "一个空的芭菲杯子，在面对要乐奈时有特殊效果。",
+  "STS2_TOMORIN_MOD-EMPTY_PARFAIT.flavor": "猫想要，猫得到。"
 }

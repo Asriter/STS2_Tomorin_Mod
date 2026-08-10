@@ -89,6 +89,29 @@ Patches live in `STS2_Tomorin_Mod/Scripts/Patch/` and integrate the mod with gam
 - `ModelDbAllCharactersPatch` — registers Tomorin in the character list
 - `CharacterModelCreateVisualsPatch` — injects `CustomNCreatureVisuals` for Tomorin
 - `NEnergyCounterCreatePatch` — injects `CustomNEnergyCounter` for Tomorin
+- `FixedFirstEventPatch` — replaces the first Act 2 event with `FeedTheCat`
+
+### Events
+
+#### FeedTheCat
+
+Fixed Act 2 first event. It is implemented as a non-shared `CustomEventModel` so the second layer can use normal per-player `EventOption` choices.
+
+**Files:**
+- `Scripts/Events/FeedTheCat.cs` — event pages and reward/penalty options
+- `Scripts/Events/FeedTheCatVoteCoordinator.cs` — first-layer vote aggregation and final branch synchronization
+- `Scripts/Patch/FixedFirstEventPatch.cs` — forces `ModelDb.Event<FeedTheCat>()` as the first event in Act 2
+- `Scripts/Relics/MatchaParfait.cs` — reward-route marker relic
+- `Scripts/Relics/EmptyParfait.cs` — penalty-route marker relic
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/events.json` — event text
+
+**Flow:** each player independently chooses a first-layer vote. The host waits until all `FeedTheCat` event instances have voted, applies majority rule, breaks ties once with the event RNG, and broadcasts the final branch through `PlayerChoiceSynchronizer` using `PlayerChoiceResult.FromIndex`. Route marker relics are only granted after the final synchronized branch is received.
+
+**Reward branch:** obtain `MatchaParfait`, then independently choose one of: heal 20% max HP, remove a card, or upgrade a card. Remove/upgrade options are locked when no valid deck card exists.
+
+**Penalty branch:** obtain `EmptyParfait`, then independently choose one of: lose 200 gold or gain native `MegaCrit.Sts2.Core.Models.Cards.Debt`. The gold option is locked below 200 gold.
+
+`FeedTheCat.IsAllowed` intentionally returns true only during the fixed-event authorization window in `FixedFirstEventPatch`, preventing the BaseLib custom event registration from putting the event into the random shared event pool.
 
 ### Godot Custom Nodes
 
@@ -108,6 +131,32 @@ These are referenced from Godot scene files (`.tscn`) in `STS2_Tomorin_Mod/scene
 - Game assemblies referenced from the StS2 installation directory (`Sts2DataDir`)
 
 ## Enemies
+
+### Raana (要乐奈)
+
+Boss enemy body only; Encounter and Act Boss registration are intentionally not handled here.
+
+**Files:**
+- `Scripts/Enemy/Raana.cs` - enemy body, route detection, move state machine, S3 cleanse, S4 interest branch switching
+- `Scripts/Powers/EnemyPowers/RaanaPowers/RaanaInterestPower.cs` - visible shared interest counter
+- `Scripts/Powers/EnemyPowers/RaanaPowers/RaanaUnwellPower.cs` - visible debuff, Raana outgoing damage multiplier 0.75
+- `Scripts/Powers/EnemyPowers/RaanaPowers/RaanaRisingMoodPower.cs` - visible buff, enemy-turn-end +1 Strength
+- `Scripts/Cards/Collections/LeftoverBuffet.cs` - reused S3 status card
+- `Scripts/Relics/EmptyParfait.cs` / `Scripts/Relics/MatchaParfait.cs` - FeedTheCat route marker relics
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/monsters.json`
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/powers.json`
+
+`Raana.CustomVisualPath` currently reuses `soyo_boss.tscn` as a placeholder because this body-only task does not add Godot visual resources. Replace it with a Raana-specific enemy scene when the encounter/visual resource work is implemented.
+
+**Entry route priority:** if any player has `EmptyParfait`, Raana enters empowered state and gains `RaanaRisingMoodPower`. Otherwise if any player has `MatchaParfait`, Raana enters weakened state, gains 18 Block, and starts with one-time Sleep. With neither relic, Raana defaults to empowered state. `EmptyParfait` has priority over `MatchaParfait`.
+
+**Move loop:** empowered route starts `S1 -> S2 -> S3 -> dynamic S4 -> S1`. Weakened route starts `Sleep -> S1 -> S2 -> S3 -> dynamic S4 -> S1`. Sleep sets a pending flag; before the next S1 attack Raana receives 4 stacks of `RaanaUnwellPower`.
+
+**Interest counter:** `RaanaInterestPower` stores interest in `Amount`, displays `DisplayAmount => Amount`, clamps at 0, and refreshes S4 preview when interest changes. Playing player-side cards adds interest: default +1, `CardRarity.Uncommon` +2, `CardRarity.Rare` +5. Exhausting player-side cards adds +1, except `LeftoverBuffet` changes interest by -2. Thresholds scale by player count: low `< 18 * players`, mid `18 * players <= interest < 30 * players`, high `>= 30 * players`.
+
+**S3 cleanse/parfait:** S3 removes Raana debuffs by runtime type, skips `RaanaUnwellPower`, heals 8 HP per removed debuff type, and adds 2 `LeftoverBuffet` cards to each living player's hand. It then sets S4 follow-up from the current interest counter.
+
+**S4 branches:** S4 is split into three independent `MoveState`s. Low interest deals 28/32 and gives all living players 2 Weak. Mid interest deals 28/32 and gives all living players 2 Vulnerable. High interest deals 10/11 x3 and gives Raana 1 Strength. Each S4 clears interest after resolving and returns to S1; clearing interest during S4 must not force the preview back to low S4.
 
 ### Soyo (Nagasaki Soyo)
 

@@ -71,3 +71,31 @@
 - 更新中英 powers/cards 本地化，补充新 counter、False Mask、任务结算和彩蛋每场一次说明。
 - 更新 `CLAUDE.md`、`文档.txt`、`日志.txt`。
 - Verification: `powershell -NoProfile -ExecutionPolicy Bypass -File tests\SoyoTaskPowerBehavior.Tests.ps1` passed; localization JSON parsing passed; `dotnet build` passed with 0 errors and 172 warnings. `dotnet publish` top-level command exited 0, but Godot `--export-pack` emitted MSB3073 warning with exit code -1, so pck export success is not confirmed.
+
+## 2026-07-03: FeedTheCat 固定事件实现
+
+- 新增 `Scripts/Events/FeedTheCat.cs`，实现第 2 幕第一个固定事件的两层选择流程。
+- 新增 `Scripts/Events/FeedTheCatVoteCoordinator.cs`，第一层采用全员投票，多数决，平票由 host 使用事件 RNG 决定，并通过 `PlayerChoiceSynchronizer` / `PlayerChoiceResult.FromIndex` 同步最终分支。
+- 投票结算显式等待 `RunState.Players` 全员投票，并按 `Player.NetId` 将最终分支回填到对应 `FeedTheCat` 事件实例，避免只按当前事件实例子集提前结算。
+- 新增路线标记遗物 `MatchaParfait` 与 `EmptyParfait`，注册到 `TomorinRelicPool`，二者无战斗效果。
+- 更新 `FixedFirstEventPatch`，固定目标改为 `ModelDb.Event<FeedTheCat>()`，保留 `fixedEvent.IsAllowed(...)` 检查，并通过固定事件授权窗口避免事件进入随机事件池。
+- 补充 `eng/zhs` 的 events 与 relics localization。
+- 新增 `tests/FeedTheCat.Tests.ps1`，更新 `tests/FixedFirstEvent.Tests.ps1`。
+- 更新 `CLAUDE.md`、`文档.txt`、`日志.txt`。
+- Verification: FeedTheCat 静态检查通过，FixedFirstEvent 静态检查通过，localization JSON 解析通过，`dotnet build` 通过，0 个错误，172 个警告。
+
+## 2026-07-04: Raana Boss 本体实现
+
+- 新增 `Scripts/Enemy/Raana.cs`，实现 Raana Boss 本体、FeedTheCat 路线遗物判定、Sleep、S1/S2/S3/S4 状态机与 S4 三分支实时刷新入口。
+- 新增 `RaanaInterestPower`、`RaanaUnwellPower`、`RaanaRisingMoodPower` 三个 Power。
+- `RaanaInterestPower` 统一管理兴趣值：出牌增加兴趣值，消耗 `LeftoverBuffet` 净减少 2，阈值按玩家数缩放，最低钳制为 0。
+- `RaanaUnwellPower` 使 Raana 造成伤害乘以 0.75，并在 Raana 方回合结束递减。
+- `RaanaRisingMoodPower` 在敌方回合结束时给 Raana 1 层力量。
+- S3 清除 Raana 身上的普通 debuff，跳过 `RaanaUnwellPower`，按 debuff 类型数每种回复 8 HP，并给每名存活玩家 2 张 `LeftoverBuffet` 到手牌。
+- `Raana.CustomVisualPath` 暂时复用 `soyo_boss.tscn`，因为本任务不新增 Godot 视觉资源；后续视觉/Encounter 接入时需要替换为 Raana 专属场景。
+- 补充 `eng/zhs` 的 monster 与 power localization。
+- 新增 `tests/RaanaBossBehavior.Tests.ps1`。
+- 修正既有 `tests/SoyoTaskPowerBehavior.Tests.ps1` 中对 Soyo 视觉 Power 文件名和类名的过期断言，以匹配当前拆分后的 `SoyoMaskVisualPower.cs` / `SoyoTruthVisualPower.cs`。
+- 未新增 Godot 图片/场景资源，因此本次只需要 `dotnet build`，不需要 `dotnet publish`。
+- Verification: `tests/RaanaBossBehavior.Tests.ps1`、`tests/FeedTheCat.Tests.ps1`、`tests/SoyoTaskPowerBehavior.Tests.ps1`、`tests/FixedFirstEvent.Tests.ps1` 均通过；`dotnet build` 通过，0 个错误，171 个警告。
+- Review 修正：S4 高兴趣边界改为 `>= 30 * playerCount`，中兴趣改为 `< 30 * playerCount`，并补充静态测试断言与文档说明。

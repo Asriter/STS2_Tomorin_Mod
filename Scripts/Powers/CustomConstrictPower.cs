@@ -22,7 +22,7 @@ public class CustomConstrictPower : BasePowerModel
     {
         if (side == base.Owner.Side)
         {
-            await CreatureCmd.Damage(choiceContext, base.Owner, base.Amount, ValueProp.Unpowered, base.Owner, null);
+            var result = await CreatureCmd.Damage(choiceContext, base.Owner, base.Amount, ValueProp.Unpowered, base.Owner, null,  null);
         }
     }
     

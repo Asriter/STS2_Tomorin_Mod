@@ -30,8 +30,8 @@ public class TimorisKillBuffPower : BasePowerModel
         return Task.CompletedTask;
     }
 
-    public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props,
-        Creature? dealer, CardModel? cardSource)
+    public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props, Creature? dealer,
+        CardModel? cardSource, CardPlay? cardPlay)
     {
         if (target != null && target.IsEnemy && dealer != null && dealer == Owner)
             return _isPlayCard ? 1 : 1.5m;

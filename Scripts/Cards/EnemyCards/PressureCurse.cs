@@ -31,6 +31,6 @@ public class PressureCurse() : BaseCardModel(
     protected override async Task OnPlay(PlayerChoiceContext ctx, CardPlay play)
     {
         // 体力流失2点：对自己造成2点不可阻挡伤害
-        await CreatureCmd.Damage(ctx, Owner.Creature, 2m, ValueProp.Unblockable, null, this);
+        await CreatureCmd.Damage(ctx, Owner.Creature, 2m, ValueProp.Unblockable, null, play);
     }
 }

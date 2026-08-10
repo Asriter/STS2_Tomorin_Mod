@@ -242,7 +242,7 @@ public class SoyoPlayCardsTaskPower : SoyoTaskPower
     {
         foreach (var player in LivingPlayers())
         {
-            await CreatureCmd.Damage(choiceContext, player, 3m, ValueProp.Unblockable, Owner, null);
+            await CreatureCmd.Damage(choiceContext, player, 3m, ValueProp.Unblockable, Owner, null, null);
         }
     }
 }

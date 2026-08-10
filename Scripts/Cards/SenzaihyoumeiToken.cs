@@ -57,7 +57,7 @@ public class SenzaihyoumeiToken() : BaseCardModel(0, CardType.Attack, CardRarity
             num *= 2;
         }
         
-        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(num).FromCard(this)
+        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(num).FromCard(this, cardPlay)
             .Targeting(cardPlay.Target)
             .WithHitFx("vfx/vfx_giant_horizontal_slash", null, "slash_attack.mp3")
             .Execute(choiceContext);

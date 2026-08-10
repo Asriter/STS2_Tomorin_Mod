@@ -154,6 +154,7 @@ internal class HookAfterCardExhaustedPatch
             CardPlay cardPlay = new CardPlay
             {
                 Card = card,
+                Player = card.Owner,
                 Target = target,
                 ResultPile = PileType.Exhaust,
                 Resources = resources,

@@ -194,7 +194,7 @@ public class CrychicRememberPower : BasePowerModel
             // 阶段1: 受到10点伤害
             Flash();
             await CreatureCmd.Damage(choiceContext, base.Owner, Stage1Damage,
-                ValueProp.Unpowered, base.Owner, null);
+                ValueProp.Unpowered, base.Owner, null, null);
         }
         else if (stage == 5)
         {
@@ -241,8 +241,8 @@ public class CrychicRememberPower : BasePowerModel
     /// 阶段6: 造成的伤害提高50%
     /// 阶段3: 受到伤害减半
     /// </summary>
-    public override decimal ModifyDamageAdditive(Creature? target, decimal amount, ValueProp props, Creature? dealer,
-        CardModel? cardSource)
+    public override decimal ModifyDamageAdditive(Creature? target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource,
+        CardPlay? cardPlay)
     {
         //6阶段
         if (dealer == base.Owner && (int)base.Amount % 7 == 6)

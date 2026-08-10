@@ -49,7 +49,7 @@ public class UtakotobaToken : BaseCardModel
         if (count == 0)
             return;
 
-        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(count).FromCard(this)
+        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(count).FromCard(this, cardPlay)
             .TargetingAllOpponents(CombatState)
             .WithHitFx("vfx/vfx_giant_horizontal_slash", null, "slash_attack.mp3")
             .Execute(choiceContext);

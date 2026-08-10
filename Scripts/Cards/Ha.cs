@@ -29,7 +29,7 @@ public class Ha : BaseCardModel
         int hitCount = extraHit ? 2 : 1;
 
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
-            .FromCard(this)
+            .FromCard(this, cardPlay)
             .Targeting(cardPlay.Target)
             .WithHitCount(hitCount)
             .Execute(choiceContext);

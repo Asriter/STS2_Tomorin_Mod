@@ -1,0 +1,30 @@
+[gd_scene load_steps=3 format=3 uid="uid://bqlgf4ev86jlv"]
+
+[ext_resource type="Script" uid="uid://c2yrfx7bd5gc2" path="res://src/Core/Nodes/Combat/NCreatureVisuals.cs" id="1_oyqm3"]
+[ext_resource type="Texture2D" uid="uid://dukherjhm1rr1" path="res://STS2_Tomorin_Mod/Enemies/Raana/Raana.png" id="2_oyqm3"]
+
+[node name="RaanaBoss" type="Node2D"]
+script = ExtResource("1_oyqm3")
+
+[node name="Visuals" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(-4.62, -230.365)
+scale = Vector2(-0.5, 0.5)
+texture = ExtResource("2_oyqm3")
+
+[node name="Bounds" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 0
+offset_left = -171.0
+offset_top = -429.0
+offset_right = 153.0
+offset_bottom = -1.0
+
+[node name="CenterPos" type="Marker2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(-14, -226)
+
+[node name="IntentPos" type="Marker2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(-11, -484)

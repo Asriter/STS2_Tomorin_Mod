@@ -30,7 +30,7 @@ public class HaHa : BaseCardModel
     {
         // 对所有敌人造成伤害
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
-            .FromCard(this)
+            .FromCard(this, cardPlay)
             .TargetingAllOpponents(CombatState)
             .Execute(choiceContext);
 

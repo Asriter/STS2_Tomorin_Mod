@@ -169,5 +169,17 @@
   "STS2_TOMORIN_MOD-SOYO_PLAY_CARDS_TASK_POWER.smartDescription": "打出任意牌：[blue]{Progress}[/blue]/[blue]{Required}[/blue]。\n成功：所有玩家下回合额外获得[blue]1[/blue]点能量，素世获得[blue]2[/blue]层假面裂痕。\n失败：所有玩家流失[blue]3[/blue]点生命。",
   "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.title": "合奏要求：保留",
   "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.description": "玩家回合结束时，所有玩家手牌总数需要达到每名玩家至少[blue]4[/blue]张。\n成功：所有玩家下回合额外抽[blue]1[/blue]张牌，素世获得[blue]2[/blue]层假面裂痕。\n失败：所有玩家获得[blue]1[/blue]层易伤。",
-  "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.smartDescription": "手牌总数：[blue]{Progress}[/blue]/[blue]{Required}[/blue]。\n成功：所有玩家下回合额外抽[blue]1[/blue]张牌，素世获得[blue]2[/blue]层假面裂痕。\n失败：所有玩家获得[blue]1[/blue]层易伤。"
+  "STS2_TOMORIN_MOD-SOYO_KEEP_HAND_TASK_POWER.smartDescription": "手牌总数：[blue]{Progress}[/blue]/[blue]{Required}[/blue]。\n成功：所有玩家下回合额外抽[blue]1[/blue]张牌，素世获得[blue]2[/blue]层假面裂痕。\n失败：所有玩家获得[blue]1[/blue]层易伤。",
+  "STS2_TOMORIN_MOD-RAANA_INTEREST_POWER.title": "兴趣值",
+  "STS2_TOMORIN_MOD-RAANA_INTEREST_POWER.description": "打出牌或消耗牌会增加兴趣值。\n根据兴趣值的不同，乐奈有时会有不同的行为。",
+  "STS2_TOMORIN_MOD-RAANA_INTEREST_POWER.smartDescription": "打出牌或消耗牌会增加兴趣值。\n根据兴趣值的不同，乐奈有时会有不同的行为。",
+  "STS2_TOMORIN_MOD-RAANA_UNWELL_POWER.title": "不调",
+  "STS2_TOMORIN_MOD-RAANA_UNWELL_POWER.description": "乐奈造成的伤害降低[blue]25%[/blue]。\n回合结束时减少[blue]1[/blue]层。",
+  "STS2_TOMORIN_MOD-RAANA_UNWELL_POWER.smartDescription": "乐奈造成的伤害降低[blue]25%[/blue]，\n回合结束时减少[blue]1[/blue]层。",
+  "STS2_TOMORIN_MOD-RAANA_RISING_MOOD_POWER.title": "兴致渐起",
+  "STS2_TOMORIN_MOD-RAANA_RISING_MOOD_POWER.description": "行动结束时，乐奈获得[blue]1[/blue]点力量。",
+  "STS2_TOMORIN_MOD-RAANA_RISING_MOOD_POWER.smartDescription": "行动结束时，乐奈获得[blue]1[/blue]点力量。",
+  "STS2_TOMORIN_MOD-RAANA_SLEEP_BLOCK_POWER.description": "游戏开始时获得格挡",
+  "STS2_TOMORIN_MOD-RAANA_SLEEP_BLOCK_POWER.smartDescription": "游戏开始时获得格挡",
+  "STS2_TOMORIN_MOD-RAANA_SLEEP_BLOCK_POWER.title": "RaanaSleepBlockPower"
 }

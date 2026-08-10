@@ -36,7 +36,7 @@ public class DonotRoastSheep : BaseCardModel
     protected override async Task OnPlay(PlayerChoiceContext choiceContext, CardPlay cardPlay)
     {
             await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
-                .FromCard(this)
+                .FromCard(this, cardPlay)
                 .TargetingAllOpponents(CombatState)
                 .Execute(choiceContext);
             await PowerCmd.Apply<WeakPower>(choiceContext, CombatState.HittableEnemies, base.DynamicVars["WeakPower"].BaseValue, base.Owner.Creature, this);

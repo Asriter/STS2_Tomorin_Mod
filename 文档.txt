@@ -161,3 +161,125 @@ Easter eggs:
 Verification expectation:
 - `powershell -NoProfile -ExecutionPolicy Bypass -File tests\SoyoTaskPowerBehavior.Tests.ps1`
 - `dotnet build`
+
+# FeedTheCat 固定事件
+
+## 需求描述
+
+实现第 2 幕第一个固定事件 `FeedTheCat`。事件第一层由所有玩家投票决定全局路线，第二层仍由每名玩家独立选择具体奖励或惩罚。
+
+## 核心规则
+
+- 事件类名：`FeedTheCat`
+- 命名空间：`STS2_Tomorin_Mod.Events`
+- 固定触发：`FixedFirstEventPatch` 在 `Hook.ModifyNextEvent` 中将第 2 幕首个事件替换为 `ModelDb.Event<FeedTheCat>()`
+- 随机池：不允许随机出现；`FeedTheCat.IsAllowed` 只在固定事件补丁的授权窗口内返回 true
+- Shared：`IsShared => false`，保证第二层使用普通独立 `EventOption`
+- 奖励路线遗物：`MatchaParfait`
+- 削弱路线遗物：`EmptyParfait`
+- 两个路线遗物只作标记，无战斗效果
+
+## 第一层投票接口
+
+文件：`Scripts/Events/FeedTheCatVoteCoordinator.cs`
+
+- `VoteAndWaitForBranch(FeedTheCat source, FeedTheCatBranch vote)`：记录当前玩家投票并等待最终路线
+- 投票 key 使用 `Player.NetId`
+- host / 单人端在 `source.Owner.RunState.Players` 全员完成投票后结算，避免只根据当前已同步的事件实例子集提前决议
+- 多数决决定最终路线
+- 平票时使用发起事件实例的 `source.Rng.NextBool()` 随机一次
+- host 使用 `PlayerChoiceSynchronizer.SyncLocalChoice(..., PlayerChoiceResult.FromIndex(...))` 广播最终路线
+- client 使用 `WaitForRemoteChoice` 等待 host 结果
+- 最终分支按 `Player.NetId` 找回对应 `FeedTheCat` 事件实例并应用
+- 收到最终路线前不得发放 `MatchaParfait` 或 `EmptyParfait`
+
+## 第二层选项
+
+奖励路线：
+- 先获得 `MatchaParfait`
+- 回复 20% 最大生命值，始终可选
+- 删除一张牌，无可删除牌时锁定
+- 强化一张牌，无可强化牌时锁定
+
+削弱路线：
+- 先获得 `EmptyParfait`
+- 失去 200 金币，金币不足 200 时锁定
+- 获得原生 `MegaCrit.Sts2.Core.Models.Cards.Debt`
+
+## 本地化
+
+- `STS2_Tomorin_Mod/localization/eng/events.json`
+- `STS2_Tomorin_Mod/localization/zhs/events.json`
+- `STS2_Tomorin_Mod/localization/eng/relics.json`
+- `STS2_Tomorin_Mod/localization/zhs/relics.json`
+
+事件 localization 同时保留 `FEED_THE_CAT.*` 与 `STS2_TOMORIN_MOD-FEED_THE_CAT.*` key，便于测试和 BaseLib 运行时 lookup。
+
+## 验证命令
+
+- `powershell -ExecutionPolicy Bypass -File tests\FeedTheCat.Tests.ps1`
+- `powershell -ExecutionPolicy Bypass -File tests\FixedFirstEvent.Tests.ps1`
+- localization JSON `ConvertFrom-Json`
+- `dotnet build`
+
+# Raana Boss 本体
+
+## 需求描述
+
+实现 Raana Boss 本体与相关 Power。范围只包含 Boss 本体、兴趣值 Counter、不调、兴致渐起、S3 塞 `LeftoverBuffet`、本地化与测试；不新增 `RaanaBoss` encounter，不改 Act Boss 注册，不做 bossEvent。
+
+## 文件清单
+
+- `Scripts/Enemy/Raana.cs`
+- `Scripts/Powers/EnemyPowers/RaanaPowers/RaanaInterestPower.cs`
+- `Scripts/Powers/EnemyPowers/RaanaPowers/RaanaUnwellPower.cs`
+- `Scripts/Powers/EnemyPowers/RaanaPowers/RaanaRisingMoodPower.cs`
+- `STS2_Tomorin_Mod/localization/eng/monsters.json`
+- `STS2_Tomorin_Mod/localization/zhs/monsters.json`
+- `STS2_Tomorin_Mod/localization/eng/powers.json`
+- `STS2_Tomorin_Mod/localization/zhs/powers.json`
+- `tests/RaanaBossBehavior.Tests.ps1`
+
+当前 `Raana.CustomVisualPath` 暂时复用 `soyo_boss.tscn`。本任务范围不新增 Godot 视觉资源；后续接入 Encounter 或 Raana 专属视觉资源时，应替换为 Raana 专属 enemy scene。
+
+## 入场路线
+
+- 任意玩家拥有 `EmptyParfait`：进入强化状态，获得 `RaanaRisingMoodPower`，首行动为 S1。
+- 否则任意玩家拥有 `MatchaParfait`：进入削弱状态，获得 18 格挡，首行动为 Sleep。
+- 否则默认强化状态。
+- 优先级固定为 `EmptyParfait > MatchaParfait > 无遗物`。
+
+## 状态机
+
+- 强化路线：`S1 -> S2 -> S3 -> S4_LOW/S4_MID/S4_HIGH -> S1`
+- 削弱路线：`Sleep -> S1 -> S2 -> S3 -> S4_LOW/S4_MID/S4_HIGH -> S1`
+- S4 三分支是三个独立 `MoveState`，用于 intent 预览和兴趣值变化后的实时刷新。
+
+## 接口说明
+
+- `Raana.ResolveInterestMoveState()`：根据当前 `RaanaInterestPower.Amount` 和多人阈值返回 S4 低/中/高兴趣状态。没有兴趣 Power 时按 0 兴趣处理。
+- `Raana.RefreshInterestMoveStateIfNeeded()`：当当前预告处于 S4 三分支之一时，立即按最新兴趣值 `SetMoveImmediate` 到对应 S4 状态。S4 结算清零期间由 `_isResolvingS4` 防止回退到低兴趣。
+- `Raana.IsCurrentInterestPreviewState()`：判断当前预告是否为 S4 三分支。
+- `RaanaInterestPower.ModifyInterest(PlayerChoiceContext choiceContext, int delta, CardModel? source)`：兴趣值唯一修改入口，钳制最低 0，刷新显示并通知 Raana 更新 S4 预告。
+- `RaanaInterestPower.ClearInterest(PlayerChoiceContext choiceContext)`：S4 行动结算后清零兴趣值。
+- `RaanaUnwellPower`：`PowerType.Debuff` / `PowerStackType.Counter`。当 `dealer == Owner` 时 `ModifyDamageMultiplicative` 返回 `0.75m`；持有者 side 回合结束时减少 1 层，0 层移除。
+- `RaanaRisingMoodPower`：`PowerType.Buff` / `PowerStackType.Single`。敌方回合结束时，如果 Raana 存活，获得 1 层 `StrengthPower`。
+
+## 行动数值
+
+- Sleep：不攻击；使下一次 S1 行动开始前应用 4 层 `RaanaUnwellPower`。
+- S1：全体玩家 18/21 伤害。
+- S2：全体玩家 5/6 x4 伤害，Raana 获得 25 格挡。
+- S3：清除普通 debuff，跳过 `RaanaUnwellPower`；每移除 1 种 debuff 回复 8 HP；每名存活玩家获得 2 张 `LeftoverBuffet` 到手牌；根据当前兴趣设置 S4。
+- S4_LOW：兴趣 `< 18 * playerCount`，全体玩家 28/32 伤害，所有存活玩家 2 虚弱。
+- S4_MID：兴趣 `18 * playerCount <= interest < 30 * playerCount`，全体玩家 28/32 伤害，所有存活玩家 2 易伤。
+- S4_HIGH：兴趣 `>= 30 * playerCount`，全体玩家 10/11 x3 伤害，Raana 获得 1 力量。
+- 所有 S4 行动结算后清零兴趣并回到 S1。
+
+## 验证命令
+
+- `powershell -ExecutionPolicy Bypass -File tests\RaanaBossBehavior.Tests.ps1`
+- `powershell -ExecutionPolicy Bypass -File tests\FeedTheCat.Tests.ps1`
+- `powershell -ExecutionPolicy Bypass -File tests\SoyoTaskPowerBehavior.Tests.ps1`
+- `powershell -ExecutionPolicy Bypass -File tests\FixedFirstEvent.Tests.ps1`
+- `dotnet build`

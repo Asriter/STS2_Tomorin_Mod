@@ -9,14 +9,14 @@ script = ExtResource("1_lo36t")
 metadata/_edit_group_ = true
 
 [node name="Visuals" type="SpineSprite" parent="."]
-skeleton_data_res = ExtResource("3_pcvia")
-preview_skin = "Default"
-preview_animation = "-- Empty --"
-preview_frame = false
-preview_time = 0.0
 unique_name_in_owner = true
 position = Vector2(4, -151)
 scale = Vector2(0.135, 0.135)
+skeleton_data_res = ExtResource("3_pcvia")
+preview_skin = "Default"
+preview_animation = "attack"
+preview_frame = false
+preview_time = 0.0
 
 [node name="Bounds" type="Control" parent="."]
 unique_name_in_owner = true

@@ -26,7 +26,9 @@ public class TakiAddDamagePower : BasePowerModel
         }
     }
 
-    public override decimal ModifyDamageMultiplicative(Creature target, decimal damage, ValueProp props, Creature dealer, CardModel cardSource)
+
+    public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props, Creature? dealer,
+        CardModel? cardSource, CardPlay? cardPlay)
     {
         if (_nextCardDoubleHits > 0 && dealer == base.Owner)
         {

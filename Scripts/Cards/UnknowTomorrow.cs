@@ -47,7 +47,7 @@ public class UnknowTomorrow : BaseCardModel
     {
         await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue)
             .WithHitCount((int)((CalculatedVar)base.DynamicVars["CalculatedHits"]).Calculate(cardPlay.Target))
-            .FromCard(this)
+            .FromCard(this, cardPlay)
             .TargetingRandomOpponents(base.CombatState!)
             .Execute(choiceContext);
     }

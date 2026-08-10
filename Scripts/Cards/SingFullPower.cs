@@ -52,7 +52,7 @@ public class SingFullPower() : BaseCardModel(1, CardType.Attack, CardRarity.Rare
         
         //先打一下
         await DamageCmd.Attack(DynamicVars.CalculatedDamage)
-            .FromCard(this)
+            .FromCard(this, cardPlay)
             .Targeting(cardPlay.Target)
             .Execute(choiceContext);
     }

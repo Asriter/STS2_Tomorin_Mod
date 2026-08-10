@@ -2,6 +2,7 @@
 using BaseLib.Extensions;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -9,6 +10,8 @@ using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Cards.Base;
@@ -85,8 +88,10 @@ public class AtFieldPower : BasePowerModel
         {
             if (block > Amount)
             {
-                await CreatureCmd.LoseBlock(creature, block - Amount);
+                await CreatureCmd.LoseBlock(new BlockingPlayerChoiceContext(), creature, block - Amount, null);
             }
+            
+            // SturdyClamp
 
             Flash();
         }
@@ -125,8 +130,8 @@ public class AtFieldPower : BasePowerModel
             //是否伤害翻倍
             var damage = Amount * (Owner.HasPower<NameOfTearPower>() ? 1.5m : 1);
             Flash();
-            await CreatureCmd.Damage(choiceContext, dealer, damage, ValueProp.Unpowered | ValueProp.SkipHurtAnim,
-                base.Owner, null);
+            var result = await CreatureCmd.Damage(choiceContext, dealer, damage, ValueProp.Unpowered | ValueProp.SkipHurtAnim, this.Owner, 
+                (CardModel) null, (CardPlay)null);
         }
     }
 

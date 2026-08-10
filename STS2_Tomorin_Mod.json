@@ -3,7 +3,7 @@
   "name": "高松灯Mod",
   "author": "Asriter",
   "description": "基于baselib的塔2mod，目前包含一个角色，四个boss；可以在模组设置界面设置是否启用模组boss。",
-  "version": "v0.1.1",
+  "version": "v0.1.6",
   "has_pck": true,
   "has_dll": true,
   "dependencies": [
@@ -12,6 +12,6 @@
       "min_version": "3.3.0"
     }
   ],
-  "min_game_version": "0.106.0",
+  "min_game_version": "0.109.0",
   "affects_gameplay": true
 }

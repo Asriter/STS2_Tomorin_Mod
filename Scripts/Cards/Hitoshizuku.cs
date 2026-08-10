@@ -55,7 +55,7 @@ public sealed class Hitoshizuku : BaseCardModel
         
         await ComposeCmd.Compose<HitoshizukuToken>(choiceContext, Owner, ComposeCost, this);
         
-        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(1).FromCard(this)
+        await DamageCmd.Attack(base.DynamicVars.Damage.BaseValue).WithHitCount(1).FromCard(this, cardPlay)
             .Targeting(cardPlay.Target)
             .WithHitFx("vfx/vfx_attack_slash")
             .Execute(choiceContext);

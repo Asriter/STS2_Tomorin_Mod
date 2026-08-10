@@ -75,8 +75,8 @@ public class DolorisPassivePower : BasePowerModel
         return Task.CompletedTask;
     }
 
-    public override decimal ModifyDamageAdditive(Creature? target, decimal amount, ValueProp props,
-        Creature? dealer, CardModel? cardSource)
+    public override decimal ModifyDamageAdditive(Creature? target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource,
+        CardPlay? cardPlay)
     {
         if (target != base.Owner) return 0m;
         if (dealer?.Player == null) return 0m;

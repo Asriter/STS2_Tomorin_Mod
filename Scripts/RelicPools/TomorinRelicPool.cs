@@ -21,6 +21,8 @@ public class TomorinRelicPool : CustomRelicPoolModel
             ModelDb.Relic<TakiDrum>(),
             ModelDb.Relic<AnonGuitar>(),
             ModelDb.Relic<RaanaGuitar>(),
+            // ModelDb.Relic<MatchaParfait>(),
+            // ModelDb.Relic<EmptyParfait>(),
         ];
     }
 

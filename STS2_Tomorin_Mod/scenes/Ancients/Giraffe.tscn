@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3 uid="uid://h8nwaaeis23x"]
+
+[ext_resource type="Texture2D" uid="uid://c4e5ixwhoegrl" path="res://STS2_Tomorin_Mod/images/events/Giraffe.png" id="1_rcede"]
+
+[node name="Giraffe" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Giraffe" type="Sprite2D" parent="."]
+position = Vector2(999.84375, 562)
+scale = Vector2(2.9817982, 2.2254927)
+texture = ExtResource("1_rcede")

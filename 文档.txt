@@ -283,3 +283,36 @@ Verification expectation:
 - `powershell -ExecutionPolicy Bypass -File tests\SoyoTaskPowerBehavior.Tests.ps1`
 - `powershell -ExecutionPolicy Bypass -File tests\FixedFirstEvent.Tests.ps1`
 - `dotnet build`
+
+# 先古之民·舞台的长颈鹿
+
+## 需求与范围
+
+实现只向全 Tomorin 队伍开放的先古事件 `GiraffeAncient`。事件位于既有 `Glory` 章节，按照高、中、低风险档位提供舞台装置遗物，玩家选择后通过遗物取得效果直接结算。
+
+本范围不实现新的第四层／章节内容；事件背景、地图节点、运行历史图标、舞台装置图标与舞台番茄卡图使用本次加入的 Godot 资源。
+
+## 核心接口与文件
+
+- `Scripts/Events/GiraffeAncient.cs`：继承 `CustomAncientModel`，提供 `IsValidForAct`、`IsAllowed`、三档 `AncientOption` 池、可出现条件过滤和 `RelicOption` 直接结算。
+- `Scripts/Relics/Giraffe/GiraffeStageDeviceRelic.cs`：继承 `BaseRelicModel`，统一声明事件遗物类别及暂用资源路径。
+- `Scripts/Relics/Giraffe/*.cs`：实现各舞台装置；按功能接入 `AfterObtained`、`AfterCompose`、`AfterCardExhausted`、`TryModifyRewards`、`TryModifyEnergyCostInCombat`、`AfterSideTurnEnd` 等既有接口。
+- `Scripts/Cards/StageTomato.cs`：舞台番茄状态牌，使用现有 Inspiration／Epiphany 机制在消耗时执行回复与抽牌。
+- `Scripts/Cards/StolenShine.cs`：被夺走的闪耀诅咒，消耗时依次扣除格挡、心之壁并造成普通可格挡伤害。
+- `Scripts/Cards/Base/ComposeResult.cs`：携带作词执行者、来源、最终歌词牌与“是否复用已有牌”标志；全部 `AfterCompose` 接口统一改用该结果对象。
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/ancients.json`：事件文本键。
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/events.json`：覆盖各遗物选项标题为 `xx 的 Revue`。
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/relics.json`：舞台装置标题、描述与风味键。
+- `tests/GiraffeAncient.Tests.ps1`：静态结构与本地化验证。
+
+## 选项抽取与条件
+
+- 高、中、低三个展示位分别独立抽取一个当前有效候选，不会共享“已抽取后移除”的状态。
+- 高档无候选时依次从中档、低档降档；中档无候选时从低档降档；因此两个展示位可以出现同一个内容。
+- 竞演、离别、骄傲和摘星通过 `AddCustomAncientSpawnCondition` 检查当前牌组或候选资源。
+- 摘星只从角色兼容或共享的普通、稀有、先古遗物中抽取，排除已持有遗物与全部 11 个舞台装置；空稀有度不进入权重表。
+- 再生产的初始变化使用瞬时保护标志，不会消耗 `[SavedProperty]` 保存的“下一张永久牌强化”资格。
+
+## 验证约束
+
+静态测试只验证档位归类、继承、事件遗物池注册、关键 hook、所需本地化键以及 JSON 可解析；不固化任何伤害、费用、次数、概率或其他配置数值。

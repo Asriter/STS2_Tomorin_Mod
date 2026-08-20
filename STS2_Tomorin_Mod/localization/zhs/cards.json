@@ -224,5 +224,9 @@
   "STS2_TOMORIN_MOD-POSITION_ZERO.title": "Position Zero",
   "STS2_TOMORIN_MOD-POSITION_ZERO.description": "选择一名敌人，立于Position Zero。\n不在Position Zero的敌人获得[gold]无实体[/gold]，会给予Position Zero的敌人增益。",
   "STS2_TOMORIN_MOD-PRESSURE_CURSE.title": "压迫感",
-  "STS2_TOMORIN_MOD-PRESSURE_CURSE.description": "失去2点生命。"
+  "STS2_TOMORIN_MOD-PRESSURE_CURSE.description": "失去2点生命。",
+  "STS2_TOMORIN_MOD-STAGE_TOMATO.title": "'燃料'",
+  "STS2_TOMORIN_MOD-STAGE_TOMATO.description": "被[gold]消耗[/gold]时，回复[blue]{HealAmount}[/blue]点生命并抽[blue]{Cards}[/blue]张牌。",
+  "STS2_TOMORIN_MOD-STOLEN_SHINE.title": "被夺走的闪耀",
+  "STS2_TOMORIN_MOD-STOLEN_SHINE.description": "被[gold]消耗[/gold]时，依次失去至多[blue]{BlockLoss}[/blue]点[gold]格挡[/gold]、至多[blue]{AtFieldPower}[/blue]层[gold]心之壁[/gold]，然后受到[blue]{Damage}[/blue]点普通伤害。"
 }

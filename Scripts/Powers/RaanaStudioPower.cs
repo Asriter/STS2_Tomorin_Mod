@@ -19,12 +19,15 @@ public class RaanaStudioPower : BasePowerModel
     protected override IEnumerable<DynamicVar> CanonicalVars => [
         new EnergyVar(1)];
 
-    public override async Task AfterCompose(PlayerChoiceContext choiceContext, Player player, CardModel source)
+    /// <summary>
+    /// 在所属玩家作词后获得能量。
+    /// </summary>
+    public override async Task AfterCompose(PlayerChoiceContext choiceContext, ComposeResult result)
     {
-        if (player == base.Owner.Player)
+        if (result.Player == base.Owner.Player)
         { 
             Flash();
-            await PlayerCmd.GainEnergy(Amount, player);
+            await PlayerCmd.GainEnergy(Amount, result.Player);
         }
     }
 }

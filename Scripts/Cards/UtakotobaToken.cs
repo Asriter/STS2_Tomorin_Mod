@@ -63,9 +63,12 @@ public class UtakotobaToken : BaseCardModel
         // base.DynamicVars.Damage.UpgradeValueBy(3m);
     }
 
-    public override async Task AfterCompose(PlayerChoiceContext choiceContext, Player player, CardModel source)
+    /// <summary>
+    /// 在作词后刷新累计作词消耗数量的显示。
+    /// </summary>
+    public override async Task AfterCompose(PlayerChoiceContext choiceContext, ComposeResult result)
     {
-        await base.AfterCompose(choiceContext, player, source);
+        await base.AfterCompose(choiceContext, result);
         //更新融合次数，用于表现
         UpdateComposeNum();
     }

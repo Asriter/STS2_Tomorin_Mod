@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
+using STS2_Tomorin_Mod.Cards.Base;
 using STS2_Tomorin_Mod.RelicPools;
 
 namespace STS2_Tomorin_Mod.Relics;
@@ -43,14 +44,17 @@ public class ShoutOfSoul : BaseRelicModel
         return Task.CompletedTask;
     }
 
-    public override async Task AfterCompose(PlayerChoiceContext choiceContext, Player player, CardModel source)
+    /// <summary>
+    /// 在本场战斗第一次作词后抽牌并获得能量。
+    /// </summary>
+    public override async Task AfterCompose(PlayerChoiceContext choiceContext, ComposeResult result)
     {
-        if (player == Owner && _canActice)
+        if (result.Player == Owner && _canActice)
         {
             _canActice = false;
             Flash(); // 触发遗物图标闪烁
             await CardPileCmd.Draw(choiceContext, base.DynamicVars.Cards.BaseValue, base.Owner);
-            await PlayerCmd.GainEnergy(DynamicVars.Energy.BaseValue, player);
+            await PlayerCmd.GainEnergy(DynamicVars.Energy.BaseValue, result.Player);
         }
     }
 }

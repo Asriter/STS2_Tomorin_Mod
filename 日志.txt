@@ -99,3 +99,13 @@
 - 未新增 Godot 图片/场景资源，因此本次只需要 `dotnet build`，不需要 `dotnet publish`。
 - Verification: `tests/RaanaBossBehavior.Tests.ps1`、`tests/FeedTheCat.Tests.ps1`、`tests/SoyoTaskPowerBehavior.Tests.ps1`、`tests/FixedFirstEvent.Tests.ps1` 均通过；`dotnet build` 通过，0 个错误，171 个警告。
 - Review 修正：S4 高兴趣边界改为 `>= 30 * playerCount`，中兴趣改为 `< 30 * playerCount`，并补充静态测试断言与文档说明。
+
+## 2026-08-15：先古之民·舞台的长颈鹿
+
+- 需求：新增仅面向全 Tomorin 队伍的长颈鹿先古事件，按高、中、低风险档位展示舞台装置遗物，并以遗物取得直接结算。
+- 接口：`GiraffeAncient` 继承 `CustomAncientModel`，负责章节与队伍限制、候选池过滤和选项生成；`GiraffeStageDeviceRelic` 是全部舞台装置的事件遗物基类；具体遗物通过既有作词、消耗、奖励与回合 hook 实现行为。
+- 验证：新增 `tests/GiraffeAncient.Tests.ps1`，仅校验事件结构、三档归类、继承／注册、关键 hook、本地化键存在和 JSON 可解析；不对伤害、费用、概率或其他配置数值作断言。
+- 范围：未实现新的第四层／章节内容；已补充事件场景、地图节点、舞台装置图标与舞台番茄卡图资源。
+- 完成事件主体、三档独立抽取与逐级降档、11 个舞台装置、2 张事件牌、`ComposeResult` 作词结果接口，以及中英事件／选项／遗物／卡牌本地化。
+- 为满足既有全量测试，修正 `Raana.AfterAddedToRoom` 的路线优先级与路线映射：`EmptyParfait` 优先进入强化路线，`MatchaParfait` 进入削弱路线。
+- 验证：全部 `tests/*.Tests.ps1` 通过；8 份相关 localization JSON 解析通过；`dotnet build --no-restore` 通过（0 错误，保留项目既有警告）；`dotnet publish --no-restore` 顶层退出码为 0，并于 mods 目录生成新的 `.pck`。Godot 退出清理仍报告资源泄漏与内部退出码 -1 警告，但打包文件已成功更新。

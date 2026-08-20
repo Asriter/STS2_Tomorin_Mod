@@ -305,3 +305,23 @@ CardCmd.ClearAffliction(card); // if card.Affliction is MyAffliction
 ## Path Configuration
 
 The `.csproj` auto-detects platform and sets `SteamLibraryPath`, `Sts2Path`, and `ModsPath`. If the build fails with path errors, check that StS2 is installed at the expected Steam library location or adjust the path variables in the `.csproj`.
+
+## GiraffeAncient（舞台的长颈鹿）
+
+`GiraffeAncient` 是仅面向全 Tomorin 队伍的先古之民事件，落在现有的 `Glory` 章节中。它从高、中、低三个风险档位各提供一个有效的舞台装置遗物选项；事件选项通过遗物取得直接结算，不使用二次确认。
+
+**文件：**
+
+- `Scripts/Events/GiraffeAncient.cs`：事件可用性、三档选项池、有效候选过滤与直接遗物结算。
+- `Scripts/Relics/Giraffe/GiraffeStageDeviceRelic.cs`：所有舞台装置共用的事件遗物基类。
+- `Scripts/Relics/Giraffe/*.cs`：各档舞台装置的取得效果及作词、消耗、奖励、回合等 combat hook。
+- `Scripts/Cards/StageTomato.cs`、`Scripts/Cards/StolenShine.cs`：事件产生的状态牌与诅咒牌，均禁止进入战斗随机生成池。
+- `Scripts/Cards/Base/ComposeResult.cs`：作词回调结果，额外区分歌词牌是新生成还是复用已有实例，供燃烧装置正确追加重放。
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/ancients.json`：事件标题、称谓和对话键。
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/events.json`：各选项的 `xx 的 Revue` 覆盖标题。
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/relics.json`：舞台装置的标题、描述和风味键。
+- `tests/GiraffeAncient.Tests.ps1`：不锁定数值的静态结构、分类、接口和本地化 JSON 检查。
+
+三个展示位分别独立随机；高档候选为空时依次降至中档、低档，中档为空时降至低档，因此跨展示位允许出现相同选项。低档始终保留可增加药水栏位的幕间装置，药水本身没有合法候选时只跳过药水发放。
+
+本事件不新建第四层／章节内容。事件场景、地图图标、遗物图标与舞台番茄卡图位于 `STS2_Tomorin_Mod/images/` 和 `STS2_Tomorin_Mod/scenes/Ancients/`；修改这些 Godot 资源后须运行 `dotnet publish` 更新 `.pck`。

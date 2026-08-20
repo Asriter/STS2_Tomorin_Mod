@@ -134,10 +134,9 @@ public abstract class BaseCardModel(
     /// 作词完成后的回调接口
     /// </summary>
     /// <param name="choiceContext"></param>
-    /// <param name="player"></param>
-    /// <param name="source"></param>
+    /// <param name="result">本次作词的完整结果。</param>
     /// <returns></returns>
-    public virtual Task AfterCompose(PlayerChoiceContext choiceContext, Player player, CardModel source)
+    public virtual Task AfterCompose(PlayerChoiceContext choiceContext, ComposeResult result)
     {
         return Task.CompletedTask;
     }

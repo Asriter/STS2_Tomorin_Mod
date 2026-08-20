@@ -18,17 +18,6 @@ public class UtakotobaPower : BasePowerModel
     public int LastTurnEnergy = 0;
     public Player Player;
 
-    // public override Task AfterTakingExtraTurn(Player player)
-    // {
-    //     if (player == base.Owner.Player)
-    //     {
-    //         PlayerCmd.GainEnergy(LastTurnEnergy, Player);
-    //         PowerCmd.Remove(this);
-    //     }
-    //     
-    //     return Task.CompletedTask;
-    // }
-
     public override bool ShouldTakeExtraTurn(Player player)
     {
         return player == Player;

@@ -59,13 +59,13 @@ public class Raana : CustomMonsterModel
         var context = new ThrowingPlayerChoiceContext();
         await PowerCmd.Apply<RaanaInterestPower>(context, Creature, 1, Creature, null);
 
-        if (CombatState.Players.Any(HasRelic<MatchaParfait>))
+        if (CombatState.Players.Any(HasRelic<EmptyParfait>))
         {
             await ApplyEmpoweredRoute(context);
             return;
         }
 
-        if (CombatState.Players.Any(HasRelic<EmptyParfait>))
+        if (CombatState.Players.Any(HasRelic<MatchaParfait>))
         {
             await ApplyWeakenedRoute(context);
             return;

@@ -50,7 +50,7 @@ public static class ComposeCmd
                 choiceContext,
                 player,
                 requiredCount,
-                model => model.Type == cardType || model.CanonicalKeywords.Contains(CustomKeyWord.Epiphany),
+                model => model.Type == cardType || model.Keywords.Contains(CustomKeyWord.Epiphany),
                 source));
         }
 
@@ -82,11 +82,14 @@ public static class ComposeCmd
         }
 
         // 4. 如果存在，为其加上一层重放；否则将这张卡加入手牌
+        bool reusedExistingCard = targetCard != null;
+        CardModel resultCard;
         if (targetCard != null)
         {
             // 增加重放次数
             targetCard.BaseReplayCount += 1;
             CardCmd.Preview(targetCard);
+            resultCard = targetCard;
         }
         else
         {
@@ -99,6 +102,7 @@ public static class ComposeCmd
                 newCard,
                 PileType.Hand,
                 player);
+            resultCard = newCard;
         }
 
         // 5. 消耗source卡牌（自身消失）
@@ -115,11 +119,20 @@ public static class ComposeCmd
             if (model is CustomHookInterface customHook)
             {
                 // Log.Warn("测试代码，类型判断成功！：" + model.GetType());
-                await customHook.AfterCompose(choiceContext, player, source);
+                await customHook.AfterCompose(
+                    choiceContext,
+                    new ComposeResult(player, source, resultCard, reusedExistingCard));
             }
         }
     }
 
+    /// <summary>
+    /// 判断玩家当前手牌是否能够支付指定作词消耗，灵光乍现牌可替代任意所需类别。
+    /// </summary>
+    /// <param name="player">准备执行作词的玩家。</param>
+    /// <param name="costCards">各卡牌类别所需的消耗数量。</param>
+    /// <param name="source">本次作词的来源牌，不能被计入自身消耗。</param>
+    /// <returns>手牌是否足以支付全部作词消耗。</returns>
     public static bool CanUseCompose(Player player,
         Dictionary<CardType, int> costCards, CardModel source)
     {
@@ -129,7 +142,7 @@ public static class ComposeCmd
         var hand = player.PlayerCombatState.Hand;
 
         //查找灵光乍现tag的数量
-        var epiphanyCount = hand.Cards.Count(card => card.CanonicalKeywords.Contains(CustomKeyWord.Epiphany));
+        var epiphanyCount = hand.Cards.Count(card => card.Keywords.Contains(CustomKeyWord.Epiphany));
 
         // 1. 检查手牌中是否有足够数量的对应牌用作cost
         foreach (var kv in costCards)
@@ -137,7 +150,7 @@ public static class ComposeCmd
             var cardType = kv.Key;
             var requiredCount = kv.Value;
             var actualCount = hand.Cards.Count(card =>
-                card != source && card.Type == cardType && !card.CanonicalKeywords.Contains(CustomKeyWord.Epiphany));
+                card != source && card.Type == cardType && !card.Keywords.Contains(CustomKeyWord.Epiphany));
             if (actualCount + epiphanyCount < requiredCount)
                 return false;
 

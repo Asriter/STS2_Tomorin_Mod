@@ -225,5 +225,9 @@
   "STS2_TOMORIN_MOD-POSITION_ZERO.title": "Position Zero",
   "STS2_TOMORIN_MOD-POSITION_ZERO.description": "Choose an enemy and place it at Position Zero.\nEnemies not at Position Zero gain [gold]Intangible[/gold] and grant buffs to the enemy at Position Zero.",
   "STS2_TOMORIN_MOD-PRESSURE_CURSE.title": "Pressure",
-  "STS2_TOMORIN_MOD-PRESSURE_CURSE.description": "Lose 2 HP."
+  "STS2_TOMORIN_MOD-PRESSURE_CURSE.description": "Lose 2 HP.",
+  "STS2_TOMORIN_MOD-STAGE_TOMATO.title": "Stage Tomato",
+  "STS2_TOMORIN_MOD-STAGE_TOMATO.description": "When [gold]Exhausted[/gold], heal [blue]{HealAmount}[/blue] HP and draw [blue]{Cards}[/blue] card.",
+  "STS2_TOMORIN_MOD-STOLEN_SHINE.title": "Stolen Shine",
+  "STS2_TOMORIN_MOD-STOLEN_SHINE.description": "When [gold]Exhausted[/gold], lose up to [blue]{BlockLoss}[/blue] [gold]Block[/gold], then up to [blue]{AtFieldPower}[/blue] [gold]Heartwall[/gold], then take [blue]{Damage}[/blue] normal damage."
 }

@@ -8,6 +8,11 @@
 script = ExtResource("1_lo36t")
 metadata/_edit_group_ = true
 
+[node name="FormVfx" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 0
+
 [node name="Visuals" type="SpineSprite" parent="."]
 unique_name_in_owner = true
 position = Vector2(4, -151)

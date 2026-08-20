@@ -45,9 +45,9 @@ public class PenguinKick() : BaseCardModel(5, CardType.Attack, CardRarity.Uncomm
     /// <summary>
     /// 每次作词后，费用减少1点，最低为0
     /// </summary>
-    public override Task AfterCompose(PlayerChoiceContext choiceContext, Player player, CardModel source)
+    public override Task AfterCompose(PlayerChoiceContext choiceContext, ComposeResult result)
     {
-        if (player != base.Owner)
+        if (result.Player != base.Owner)
             return Task.CompletedTask;
         base.EnergyCost.AddThisCombat(-1);
         return Task.CompletedTask;

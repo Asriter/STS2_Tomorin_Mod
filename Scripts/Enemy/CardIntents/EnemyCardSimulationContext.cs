@@ -253,6 +253,33 @@ public sealed class EnemyCardSimulationContext
         ApplyCollectionDelta(projection);
     }
 
+    /// <summary>从候选库存中的冻结实例解析收藏品定义，避免投影重新依赖或选择其他目录项。</summary>
+    public EnemyCollectionDefinition GetProjectedCollectionDefinition(
+        string collectionInstanceId,
+        string collectionId)
+    {
+        if (string.IsNullOrWhiteSpace(collectionInstanceId) || string.IsNullOrWhiteSpace(collectionId))
+        {
+            throw new ArgumentException("收藏品实例与定义标识不能为空。");
+        }
+
+        EnemyCollectionInstance? instance = _endAvailableCollections
+            .Concat(_endConsumedCollections)
+            .SingleOrDefault(item => item.CollectionInstanceId == collectionInstanceId);
+        if (instance is not null)
+        {
+            if (!string.Equals(instance.Definition.CollectionId, collectionId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"收藏品实例 {collectionInstanceId} 的定义 {instance.Definition.CollectionId} 与冻结步骤 {collectionId} 不一致。");
+            }
+
+            return instance.Definition;
+        }
+
+        return ResolveCollection(collectionId);
+    }
+
     /// <summary>
     /// 记录当前执行单元产生或增层的作词结果牌。
     /// </summary>
@@ -460,9 +487,17 @@ public sealed class EnemyCardSimulationContext
         _contentDirectory?.CreateDefinition(cardId).Definition ??
         Test.CardIntentTestCardCatalog.CreateCard(cardId).Definition;
 
-    private EnemyCollectionDefinition ResolveCollection(string collectionId) =>
-        (_contentDirectory?.CollectionCatalog ?? Test.CardIntentTestCollectionCatalog.Catalog)
-        .GetRequired(collectionId);
+    private EnemyCollectionDefinition ResolveCollection(string collectionId)
+    {
+        if (_contentDirectory?.CollectionCatalog.TryGet(
+                collectionId,
+                out EnemyCollectionDefinition? registered) == true)
+        {
+            return registered!;
+        }
+
+        return Test.CardIntentTestCollectionCatalog.Catalog.GetRequired(collectionId);
+    }
 
     /// <summary>
     /// 获取当前模拟单元，防止效果节点脱离来源牌写入。

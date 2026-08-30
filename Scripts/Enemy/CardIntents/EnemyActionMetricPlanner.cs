@@ -2,11 +2,19 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
+public delegate EnemyActionProjectionInput EnemyPlanningProjectionInputFactory(
+    EnemyCardCombatState authoritativeState,
+    PreparedEnemyCardAction candidate,
+    EnemyProjectionInitialState candidateInitialState,
+    int stepLimit);
+
 /// <summary>
 /// 保存一次行动准备所需的唯一战斗随机源与当前战斗评分投影。
 /// </summary>
 public sealed class EnemyPlanningContext
 {
+    private readonly EnemyPlanningProjectionInputFactory _createProjectionInput;
+
     /// <summary>
     /// 创建行动准备上下文。
     /// </summary>
@@ -15,7 +23,8 @@ public sealed class EnemyPlanningContext
     public EnemyPlanningContext(
         IEnemyCardRandomSource randomSource,
         EnemyCardScoreContext? scoreContext = null,
-        Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle>? createPreparationCycle = null)
+        Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle>? createPreparationCycle = null,
+        EnemyPlanningProjectionInputFactory? createProjectionInput = null)
     {
         RandomSource = randomSource ?? throw new ArgumentNullException(nameof(randomSource));
         ScoreContext = scoreContext ?? EnemyCardScoreContext.Identity;
@@ -23,6 +32,7 @@ public sealed class EnemyPlanningContext
             (static (_, _) => new EnemyPreparationCycle(
                 frozenPreparationCollection: null,
                 delta: EnemyPreparedPreActionInventoryDelta.Empty));
+        _createProjectionInput = createProjectionInput ?? CreateDefaultProjectionInput;
     }
 
     /// <summary>获取唯一战斗随机源。</summary>
@@ -33,6 +43,37 @@ public sealed class EnemyPlanningContext
 
     /// <summary>获取一次准备调用只能执行一次的收藏品周期工厂。</summary>
     public Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle> CreatePreparationCycle { get; }
+
+    /// <summary>获取本次成功提交候选在提交前生成的完整纯内存投影。</summary>
+    public LiveActionProjection? AcceptedProjection { get; private set; }
+
+    internal EnemyActionProjectionInput CreateProjectionInput(
+        EnemyCardCombatState state,
+        PreparedEnemyCardAction action,
+        EnemyProjectionInitialState initialState,
+        int stepLimit) => _createProjectionInput(state, action, initialState, stepLimit) ??
+                          throw new InvalidOperationException("完整投影输入工厂返回了空对象。");
+
+    internal void ResetAcceptedProjection() => AcceptedProjection = null;
+
+    internal void StoreAcceptedProjection(LiveActionProjection projection) =>
+        AcceptedProjection = projection ?? throw new ArgumentNullException(nameof(projection));
+
+    private static EnemyActionProjectionInput CreateDefaultProjectionInput(
+        EnemyCardCombatState state,
+        PreparedEnemyCardAction action,
+        EnemyProjectionInitialState initialState,
+        int stepLimit)
+    {
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(state.DeckId);
+        int initialTemplateCount = directory.GetPhase(action.Phase).InitialSourceInstanceCount;
+        return new EnemyActionProjectionInput(
+            [new EnemySimulationTarget("PLANNING_TARGET", decimal.One, decimal.One)],
+            stepLimit,
+            initialState: initialState,
+            contentDirectory: directory,
+            riskContext: new EnemyActionRiskContext(action.Phase, initialTemplateCount, directory));
+    }
 }
 
 /// <summary>
@@ -43,6 +84,7 @@ public sealed class EnemyActionMetricPlanner
     private readonly EnemyCardPlanningRules _rules;
     private readonly EnemyCardScoreCalculator _scoreCalculator;
     private readonly EnemyPreparedResolutionPlanner _resolutionPlanner = new();
+    private readonly EnemyActionProjectionService _projectionService = new();
 
     /// <summary>
     /// 创建行动指标规划器。
@@ -84,78 +126,189 @@ public sealed class EnemyActionMetricPlanner
             throw new InvalidOperationException("准备新行动前当前指标牌区必须为空。");
         }
 
+        context.ResetAcceptedProjection();
+
         EnemyPreparationCycle preparationCycle = context.CreatePreparationCycle(state, context.RandomSource) ??
                                                   throw new InvalidOperationException("准备周期工厂返回了空对象。");
         state.StorePreparationCycle(preparationCycle);
-        List<string> attemptDiagnostics = [];
-        bool encounteredIncomplete = false;
+        List<EnemyCandidateRejection> rejections = [];
+        Exception? planningFailure = null;
 
         for (int attempt = 1; attempt <= _rules.MaxCandidateAttempts; attempt++)
         {
+            bool isFinalAttempt = attempt == _rules.MaxCandidateAttempts;
             EnemyCardPlanningStateSnapshot candidate = state.CreatePlanningSnapshot();
-            EnemyActionRecipe recipe = SelectRecipe(state.LastMetric, context.RandomSource);
-            RecipeFillResult fill = FillRecipe(candidate, recipe, context.RandomSource);
+            EnemyActionRecipe recipe;
+            RecipeFillResult fill;
+            try
+            {
+                recipe = SelectRecipe(state.LastMetric, context.RandomSource);
+                fill = FillRecipe(candidate, recipe, context.RandomSource);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+            {
+                planningFailure ??= exception;
+                rejections.Add(new EnemyCandidateRejection(
+                    attempt,
+                    EnemyCandidateRejectionReason.PlanningFault,
+                    $"候选选择或配方抽取失败：{exception.Message}"));
+                continue;
+            }
+
             if (!fill.IsComplete)
             {
-                encounteredIncomplete = true;
-                attemptDiagnostics.Add(
-                    $"第 {attempt} 次候选 {recipe.Metric} 结构不完整：{fill.Diagnostic}");
+                rejections.Add(new EnemyCandidateRejection(
+                    attempt,
+                    EnemyCandidateRejectionReason.PlanningFault,
+                    $"候选 {recipe.Metric} 结构不完整：{fill.Diagnostic}"));
                 continue;
             }
 
             IReadOnlyList<BaseEnemyCard> selected = fill.Selected;
-            EnemyCardScore score = _scoreCalculator.Calculate(selected, context.ScoreContext);
-            bool overLock = score.Attack > _rules.StaticLocks.Attack ||
-                            score.Total > _rules.StaticLocks.Total;
-            bool isFinalAttempt = attempt == _rules.MaxCandidateAttempts;
-            if (overLock && !isFinalAttempt)
+            EnemyCardScore staticScore = _scoreCalculator.Calculate(selected, context.ScoreContext);
+            bool staticOverLock = staticScore.Attack > _rules.StaticLocks.Attack ||
+                                  staticScore.Total > _rules.StaticLocks.Total;
+            if (staticOverLock && !isFinalAttempt)
             {
-                attemptDiagnostics.Add(
-                    $"第 {attempt} 次候选 {recipe.Metric} 超锁：Attack={score.Attack}, Total={score.Total}。");
+                rejections.Add(new EnemyCandidateRejection(
+                    attempt,
+                    EnemyCandidateRejectionReason.StaticOverLock,
+                    $"候选 {recipe.Metric} 静态超锁：Attack={staticScore.Attack}, Total={staticScore.Total}。"));
                 continue;
             }
 
-            EnemyPreparedPlanningState resolutionTransaction = state.CreatePreparedPlanningState(
-                candidate,
-                preparationCycle.Delta);
-            EnemyEffectiveCardLedger effectiveCardLedger = new();
-            PreparedEnemyCardSource[] sources = state.RetainedCards.Concat(selected)
-                .Select(card => _resolutionPlanner.PlanSource(
-                    card,
-                    checked(resolutionTransaction.GetReplayCount(card.InstanceKey) + 1),
-                    resolutionTransaction,
-                    context.RandomSource,
-                    _rules.StepLimit,
-                    effectiveCardLedger))
-                .ToArray();
-            EnemySoftLockDiagnostic diagnostic = new(
-                score,
-                _rules.StaticLocks.Attack,
-                _rules.StaticLocks.Total,
-                attempt,
-                attempt - 1,
-                overLock && isFinalAttempt);
-            PreparedEnemyCardAction action = new(
-                recipe.Metric,
-                state.RetainedCards,
-                selected,
-                sources,
-                diagnostic,
-                preparationCycle.Delta,
-                effectiveCardLedger.States.Values);
-            state.CommitPreparedAction(candidate, action);
-            return action;
+            try
+            {
+                EnemyPreparedPlanningState resolutionTransaction = state.CreatePreparedPlanningState(
+                    candidate,
+                    preparationCycle.Delta);
+                EnemyProjectionInitialState projectionInitialState = CreateProjectionInitialState(
+                    state.ActivePhase,
+                    resolutionTransaction);
+                EnemyEffectiveCardLedger effectiveCardLedger = new();
+                PreparedEnemyCardSource[] sources = state.RetainedCards.Concat(selected)
+                    .Select(card => _resolutionPlanner.PlanSource(
+                        card,
+                        checked(resolutionTransaction.GetReplayCount(card.InstanceKey) + 1),
+                        resolutionTransaction,
+                        context.RandomSource,
+                        _rules.StepLimit,
+                        effectiveCardLedger))
+                    .ToArray();
+                EnemySoftLockDiagnostic provisionalDiagnostic = new(
+                    staticScore,
+                    new EnemyActionRiskScore(decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero),
+                    _rules.StaticLocks,
+                    _rules.FullLocks,
+                    attempt,
+                    rejections,
+                    EnemyCandidateCommitMode.WithinLocks,
+                    projectionIsComplete: false);
+                PreparedEnemyCardAction provisionalAction = new(
+                    recipe.Metric,
+                    state.RetainedCards,
+                    selected,
+                    sources,
+                    provisionalDiagnostic,
+                    preparationCycle.Delta,
+                    effectiveCardLedger.States.Values,
+                    state.ActivePhase);
+                EnemyActionProjectionInput projectionInput = context.CreateProjectionInput(
+                    state,
+                    provisionalAction,
+                    projectionInitialState,
+                    _rules.StepLimit);
+                LiveActionProjection projection = _projectionService.Project(provisionalAction, projectionInput);
+                if (!projection.IsComplete || projection.RiskScore is null)
+                {
+                    string diagnostic = projection.RiskScore is null
+                        ? "完整投影没有生成风险分。"
+                        : string.Join(" ", projection.Diagnostics);
+                    rejections.Add(new EnemyCandidateRejection(
+                        attempt,
+                        EnemyCandidateRejectionReason.IncompleteProjection,
+                        string.IsNullOrWhiteSpace(diagnostic) ? "完整投影未完成。" : diagnostic));
+                    continue;
+                }
+
+                EnemyActionRiskScore fullScore = projection.RiskScore;
+                bool fullOverLock = fullScore.AttackRisk > _rules.FullLocks.Attack ||
+                                    fullScore.TotalRisk > _rules.FullLocks.Total;
+                if (fullOverLock && !isFinalAttempt)
+                {
+                    rejections.Add(new EnemyCandidateRejection(
+                        attempt,
+                        EnemyCandidateRejectionReason.FullOverLock,
+                        $"候选 {recipe.Metric} 完整超锁：Attack={fullScore.AttackRisk}, Total={fullScore.TotalRisk}。"));
+                    continue;
+                }
+
+                EnemyCandidateCommitMode commitMode = staticOverLock || fullOverLock
+                    ? EnemyCandidateCommitMode.ForcedOverLock
+                    : EnemyCandidateCommitMode.WithinLocks;
+                EnemySoftLockDiagnostic finalDiagnostic = new(
+                    staticScore,
+                    fullScore,
+                    _rules.StaticLocks,
+                    _rules.FullLocks,
+                    attempt,
+                    rejections,
+                    commitMode,
+                    projectionIsComplete: true,
+                    projection.Diagnostics);
+                PreparedEnemyCardAction action = new(
+                    recipe.Metric,
+                    state.RetainedCards,
+                    selected,
+                    sources,
+                    finalDiagnostic,
+                    preparationCycle.Delta,
+                    effectiveCardLedger.States.Values,
+                    state.ActivePhase);
+                state.CommitPreparedAction(candidate, action);
+                context.StoreAcceptedProjection(projection);
+                return action;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+            {
+                planningFailure ??= exception;
+                rejections.Add(new EnemyCandidateRejection(
+                    attempt,
+                    EnemyCandidateRejectionReason.PlanningFault,
+                    $"候选 {recipe.Metric} 完整冻结或投影失败：{exception.Message}"));
+            }
         }
 
-        if (encounteredIncomplete)
-        {
-            string faultDiagnostic =
-                $"候选上限内存在结构不完整且没有行动提交。{string.Join(" ", attemptDiagnostics)}";
-            state.MarkFault(faultDiagnostic);
-            throw new EnemyCandidatePlanningException(faultDiagnostic);
-        }
+        string faultDiagnostic =
+            $"候选上限内没有可提交的完整行动。{string.Join(" ", rejections.Select(rejection =>
+                $"#{rejection.Attempt}/{rejection.Reason}:{rejection.Diagnostic}"))}";
+        state.MarkFault(faultDiagnostic);
+        throw new EnemyCandidatePlanningException(faultDiagnostic, rejections, planningFailure);
+    }
 
-        throw new InvalidOperationException("候选循环未能在配置上限内提交行动。");
+    private static EnemyProjectionInitialState CreateProjectionInitialState(
+        EnemyCardPhase phase,
+        EnemyPreparedPlanningState planningState)
+    {
+        static IEnumerable<EnemyProjectedCardZoneState> Map(
+            IEnumerable<BaseEnemyCard> cards,
+            EnemyCardZone zone) => cards.Select(card => new EnemyProjectedCardZoneState(
+                card.InstanceKey,
+                card.CardId,
+                zone,
+                card.SourcePhase,
+                card.CarryAcrossPhase,
+                card.ReplayCount));
+
+        return new EnemyProjectionInitialState(
+            phase,
+            cards: Map(planningState.DrawPile, EnemyCardZone.Draw)
+                .Concat(Map(planningState.CurrentCards, EnemyCardZone.Current))
+                .Concat(Map(planningState.RetainedCards, EnemyCardZone.Retained))
+                .Concat(Map(planningState.DiscardPile, EnemyCardZone.Discard))
+                .Concat(Map(planningState.ExhaustPile, EnemyCardZone.Exhaust)),
+            availableCollections: planningState.CollectionInventory.Available,
+            consumedCollections: planningState.CollectionInventory.Consumed);
     }
 
     /// <summary>

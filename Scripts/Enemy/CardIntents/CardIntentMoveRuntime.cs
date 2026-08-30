@@ -33,6 +33,10 @@ public sealed class CardIntentMoveRuntime
     /// <summary>获取最近一次无副作用实时投影；尚未由适配层计算时为空。</summary>
     internal LiveActionProjection? LiveProjection => State.LiveProjection;
 
+    /// <summary>获取冻结行动的两层门禁诊断；尚未提交行动时为空。</summary>
+    internal EnemySoftLockDiagnostic? SoftLockDiagnostic =>
+        State.CombatState.PreparedAction?.SoftLockDiagnostic;
+
     /// <summary>
     /// 为复合 Intent 视图取得冻结行动的只读结构投影，不触发视图事件。
     /// </summary>

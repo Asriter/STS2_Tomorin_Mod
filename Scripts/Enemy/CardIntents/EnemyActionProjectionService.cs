@@ -350,9 +350,9 @@ public sealed class EnemyActionProjectionService
         EnemyCardSimulationContext simulation,
         EnemyCardContentDirectory? contentDirectory)
     {
-        EnemyCollectionDefinition definition =
-            (contentDirectory?.CollectionCatalog ?? CardIntentTestCollectionCatalog.Catalog)
-            .GetRequired(step.CollectionId);
+        EnemyCollectionDefinition definition = simulation.GetProjectedCollectionDefinition(
+            step.CollectionInstanceId,
+            step.CollectionId);
         EnemyCollectionEffectProgram program = EnemyCollectionEffectResolver.GetRequired(definition);
         simulation.AddCollectionDelta(new EnemyCollectionProjection(
             step.CollectionInstanceId,

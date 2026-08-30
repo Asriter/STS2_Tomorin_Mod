@@ -512,6 +512,28 @@ public sealed class EnemyCardCombatState
             throw new InvalidOperationException("冻结行动必须提交当前准备周期的同一库存增量对象。");
         }
 
+        if (action.Phase != ActivePhase)
+        {
+            throw new InvalidOperationException(
+                $"冻结行动阶段 {action.Phase} 与当前权威阶段 {ActivePhase} 不一致。");
+        }
+
+        EnemySoftLockDiagnostic diagnostic = action.SoftLockDiagnostic;
+        if (!diagnostic.ProjectionIsComplete)
+        {
+            throw new InvalidOperationException("只有完整投影候选才能提交或强制越过软锁。");
+        }
+
+        bool staticOverLock = diagnostic.StaticScore.Attack > diagnostic.StaticLocks.Attack ||
+                              diagnostic.StaticScore.Total > diagnostic.StaticLocks.Total;
+        bool fullOverLock = diagnostic.FullScore.AttackRisk > diagnostic.FullLocks.Attack ||
+                            diagnostic.FullScore.TotalRisk > diagnostic.FullLocks.Total;
+        if (diagnostic.CommitMode == EnemyCandidateCommitMode.WithinLocks &&
+            (staticOverLock || fullOverLock))
+        {
+            throw new InvalidOperationException("WithinLocks 候选不能超过任一层软锁。");
+        }
+
         ValidatePreparedCommit(snapshot, action);
         EnemyCollectionInventorySnapshot inventorySnapshot =
             CreateInventoryWithDelta(action.PreActionInventoryDelta).CaptureSnapshot();

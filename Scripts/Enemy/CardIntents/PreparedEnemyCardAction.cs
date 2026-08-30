@@ -46,9 +46,15 @@ public sealed class EnemyPreparationCycle
 /// </summary>
 public sealed class EnemyCandidatePlanningException : InvalidOperationException
 {
-    public EnemyCandidatePlanningException(string message) : base(message)
+    public EnemyCandidatePlanningException(
+        string message,
+        IEnumerable<EnemyCandidateRejection>? rejections = null,
+        Exception? innerException = null) : base(message, innerException)
     {
+        Rejections = Array.AsReadOnly((rejections ?? []).ToArray());
     }
+
+    public IReadOnlyList<EnemyCandidateRejection> Rejections { get; }
 }
 
 /// <summary>
@@ -129,19 +135,106 @@ public sealed class PreparedEnemyCardSource
 }
 
 /// <summary>
-/// 保存准备时双软锁的输入、尝试次数、拒绝次数与强制提交原因。
+/// 表示最终完整候选的提交方式。
+/// </summary>
+public enum EnemyCandidateCommitMode
+{
+    WithinLocks,
+    ForcedOverLock
+}
+
+/// <summary>描述一个未写入权威状态的候选为何被拒绝。</summary>
+public enum EnemyCandidateRejectionReason
+{
+    StaticOverLock,
+    FullOverLock,
+    IncompleteProjection,
+    PlanningFault
+}
+
+/// <summary>保存一次候选拒绝的顺序、分类和可同步诊断。</summary>
+public sealed record EnemyCandidateRejection
+{
+    public EnemyCandidateRejection(
+        int attempt,
+        EnemyCandidateRejectionReason reason,
+        string diagnostic)
+    {
+        if (attempt < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(attempt));
+        }
+
+        if (!Enum.IsDefined(reason) || string.IsNullOrWhiteSpace(diagnostic))
+        {
+            throw new ArgumentException("候选拒绝必须具有有效分类和非空诊断。", nameof(diagnostic));
+        }
+
+        Attempt = attempt;
+        Reason = reason;
+        Diagnostic = diagnostic;
+    }
+
+    public int Attempt { get; }
+    public EnemyCandidateRejectionReason Reason { get; }
+    public string Diagnostic { get; }
+}
+
+/// <summary>
+/// 保存最终候选的静态分、完整风险、两层锁、拒绝历史与投影完整性。
 /// </summary>
 public sealed record EnemySoftLockDiagnostic
 {
-    /// <summary>
-    /// 创建不可变软锁诊断。
-    /// </summary>
-    /// <param name="score">最终提交候选的一次本体评分。</param>
-    /// <param name="attackLock">准备时攻击软锁。</param>
-    /// <param name="totalScoreLock">准备时总评分软锁。</param>
-    /// <param name="candidateAttemptCount">实际评估候选次数。</param>
-    /// <param name="rejectedCandidateCount">未提交候选数量。</param>
-    /// <param name="wasForcedByAttemptLimit">最终候选是否因次数上限强制提交。</param>
+    public EnemySoftLockDiagnostic(
+        EnemyCardScore staticScore,
+        EnemyActionRiskScore fullScore,
+        EnemySoftLockLimits staticLocks,
+        EnemySoftLockLimits fullLocks,
+        int candidateAttemptCount,
+        IEnumerable<EnemyCandidateRejection>? rejections,
+        EnemyCandidateCommitMode commitMode,
+        bool projectionIsComplete,
+        IEnumerable<string>? projectionDiagnostics = null)
+    {
+        StaticScore = staticScore ?? throw new ArgumentNullException(nameof(staticScore));
+        FullScore = fullScore ?? throw new ArgumentNullException(nameof(fullScore));
+        StaticLocks = staticLocks ?? throw new ArgumentNullException(nameof(staticLocks));
+        FullLocks = fullLocks ?? throw new ArgumentNullException(nameof(fullLocks));
+        if (candidateAttemptCount < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(candidateAttemptCount));
+        }
+
+        if (!Enum.IsDefined(commitMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(commitMode));
+        }
+
+        EnemyCandidateRejection[] copiedRejections = (rejections ?? []).ToArray();
+        if (copiedRejections.Any(rejection => rejection is null || rejection.Attempt >= candidateAttemptCount))
+        {
+            throw new ArgumentException("拒绝历史只能包含最终提交尝试之前的有效候选。", nameof(rejections));
+        }
+
+        string[] copiedProjectionDiagnostics = (projectionDiagnostics ?? []).ToArray();
+        if (copiedProjectionDiagnostics.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("投影诊断不能包含空文本。", nameof(projectionDiagnostics));
+        }
+
+        if (commitMode == EnemyCandidateCommitMode.ForcedOverLock && !projectionIsComplete)
+        {
+            throw new ArgumentException("投影不完整的候选不能使用 ForcedOverLock。", nameof(projectionIsComplete));
+        }
+
+        CandidateAttemptCount = candidateAttemptCount;
+        Rejections = Array.AsReadOnly(copiedRejections);
+        CommitMode = commitMode;
+        ProjectionIsComplete = projectionIsComplete;
+        ProjectionDiagnostics = Array.AsReadOnly(copiedProjectionDiagnostics);
+    }
+
+    /// <summary>兼容旧测试与 schema v2 恢复；Task 8 会迁移为完整 DTO。</summary>
     public EnemySoftLockDiagnostic(
         EnemyCardScore score,
         decimal attackLock,
@@ -149,32 +242,43 @@ public sealed record EnemySoftLockDiagnostic
         int candidateAttemptCount,
         int rejectedCandidateCount,
         bool wasForcedByAttemptLimit)
+        : this(
+            score,
+            new EnemyActionRiskScore(
+                score.Attack,
+                decimal.Zero,
+                decimal.Zero,
+                Math.Max(decimal.Zero, score.Total - score.Attack)),
+            new EnemySoftLockLimits(attackLock, totalScoreLock),
+            new EnemySoftLockLimits(attackLock, totalScoreLock),
+            candidateAttemptCount,
+            Enumerable.Range(1, Math.Max(0, rejectedCandidateCount))
+                .Select(attempt => new EnemyCandidateRejection(
+                    attempt,
+                    EnemyCandidateRejectionReason.PlanningFault,
+                    "由旧版软锁诊断恢复的候选拒绝。")),
+            wasForcedByAttemptLimit
+                ? EnemyCandidateCommitMode.ForcedOverLock
+                : EnemyCandidateCommitMode.WithinLocks,
+            projectionIsComplete: true)
     {
-        Score = score ?? throw new ArgumentNullException(nameof(score));
-        AttackLock = attackLock;
-        TotalScoreLock = totalScoreLock;
-        CandidateAttemptCount = candidateAttemptCount;
-        RejectedCandidateCount = rejectedCandidateCount;
-        WasForcedByAttemptLimit = wasForcedByAttemptLimit;
     }
 
-    /// <summary>获取最终候选准备时评分。</summary>
-    public EnemyCardScore Score { get; }
-
-    /// <summary>获取准备时攻击软锁。</summary>
-    public decimal AttackLock { get; }
-
-    /// <summary>获取准备时总评分软锁。</summary>
-    public decimal TotalScoreLock { get; }
-
-    /// <summary>获取实际评估候选次数。</summary>
+    public EnemyCardScore StaticScore { get; }
+    public EnemyActionRiskScore FullScore { get; }
+    public EnemySoftLockLimits StaticLocks { get; }
+    public EnemySoftLockLimits FullLocks { get; }
     public int CandidateAttemptCount { get; }
+    public IReadOnlyList<EnemyCandidateRejection> Rejections { get; }
+    public EnemyCandidateCommitMode CommitMode { get; }
+    public bool ProjectionIsComplete { get; }
+    public IReadOnlyList<string> ProjectionDiagnostics { get; }
 
-    /// <summary>获取未提交候选数量。</summary>
-    public int RejectedCandidateCount { get; }
-
-    /// <summary>获取是否因达到尝试上限而强制提交。</summary>
-    public bool WasForcedByAttemptLimit { get; }
+    public EnemyCardScore Score => StaticScore;
+    public decimal AttackLock => StaticLocks.Attack;
+    public decimal TotalScoreLock => StaticLocks.Total;
+    public int RejectedCandidateCount => Rejections.Count;
+    public bool WasForcedByAttemptLimit => CommitMode == EnemyCandidateCommitMode.ForcedOverLock;
 }
 
 /// <summary>
@@ -198,12 +302,19 @@ public sealed class PreparedEnemyCardAction
         IEnumerable<PreparedEnemyCardSource> sources,
         EnemySoftLockDiagnostic softLockDiagnostic,
         EnemyPreparedPreActionInventoryDelta? preActionInventoryDelta = null,
-        IEnumerable<EnemyFrozenEffectiveCardState>? effectiveCardStates = null)
+        IEnumerable<EnemyFrozenEffectiveCardState>? effectiveCardStates = null,
+        EnemyCardPhase phase = EnemyCardPhase.None)
     {
         ArgumentNullException.ThrowIfNull(retainedPrefix);
         ArgumentNullException.ThrowIfNull(metricCards);
         ArgumentNullException.ThrowIfNull(sources);
         Metric = metric;
+        if (!Enum.IsDefined(phase))
+        {
+            throw new ArgumentOutOfRangeException(nameof(phase));
+        }
+
+        Phase = phase;
         RetainedPrefix = Array.AsReadOnly(retainedPrefix.ToArray());
         MetricCards = Array.AsReadOnly(metricCards.ToArray());
         Sources = Array.AsReadOnly(sources.ToArray());
@@ -249,6 +360,9 @@ public sealed class PreparedEnemyCardAction
 
     /// <summary>获取本次提交的行动指标。</summary>
     public EnemyActionMetric Metric { get; }
+
+    /// <summary>获取冻结时的权威阶段；评分与提交都不得读取 PendingPhase。</summary>
+    public EnemyCardPhase Phase { get; }
 
     /// <summary>获取不参与软锁的冻结保留前缀。</summary>
     public IReadOnlyList<BaseEnemyCard> RetainedPrefix { get; }

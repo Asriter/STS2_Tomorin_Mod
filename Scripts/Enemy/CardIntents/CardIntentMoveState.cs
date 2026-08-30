@@ -21,6 +21,7 @@ public sealed class CardIntentMoveState : MoveState
     private readonly Func<Type, decimal, Task>? _enemyPowerExecutor;
     private readonly Func<Type, decimal, Task>? _targetPowerExecutor;
     private readonly Func<IReadOnlyList<string>, Task>? _collectionPowerExecutor;
+    private readonly EnemyPlanningProjectionInputFactory? _createPlanningProjectionInput;
     private readonly ICombatState? _combatStateOverride;
     private readonly EnemyCardPlanningRules _rules;
     private readonly EnemyActionMetricPlanner _planner;
@@ -45,6 +46,7 @@ public sealed class CardIntentMoveState : MoveState
         Func<Type, decimal, Task>? enemyPowerExecutor,
         Func<Type, decimal, Task>? targetPowerExecutor,
         Func<IReadOnlyList<string>, Task>? collectionPowerExecutor,
+        EnemyPlanningProjectionInputFactory? createPlanningProjectionInput,
         ICombatState? combatStateOverride,
         EnemyCardPlanningRules rules,
         EnemyCardExecutionEngine? executionEngine)
@@ -77,6 +79,7 @@ public sealed class CardIntentMoveState : MoveState
         _enemyPowerExecutor = enemyPowerExecutor;
         _targetPowerExecutor = targetPowerExecutor;
         _collectionPowerExecutor = collectionPowerExecutor;
+        _createPlanningProjectionInput = createPlanningProjectionInput;
         _combatStateOverride = combatStateOverride;
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
         _planner = new EnemyActionMetricPlanner(_rules, new EnemyCardScoreCalculator());
@@ -117,6 +120,7 @@ public sealed class CardIntentMoveState : MoveState
         Func<Type, decimal, Task>? enemyPowerExecutor = null,
         Func<Type, decimal, Task>? targetPowerExecutor = null,
         Func<IReadOnlyList<string>, Task>? collectionPowerExecutor = null,
+        EnemyPlanningProjectionInputFactory? createPlanningProjectionInput = null,
         ICombatState? combatStateOverride = null,
         EnemyCardPlanningRules? rules = null,
         EnemyCardExecutionEngine? executionEngine = null)
@@ -136,6 +140,7 @@ public sealed class CardIntentMoveState : MoveState
             enemyPowerExecutor,
             targetPowerExecutor,
             collectionPowerExecutor,
+            createPlanningProjectionInput,
             combatStateOverride,
             rules ?? CardIntentTestRules.Default,
             executionEngine);
@@ -208,10 +213,16 @@ public sealed class CardIntentMoveState : MoveState
             return false;
         }
 
+        EnemyCardRuntimePhase phaseBeforePreparation = CombatState.RuntimePhase;
         try
         {
+            EnemyPlanningContext planningContext = new(
+                CreateRandomSource(),
+                createProjectionInput: _createPlanningProjectionInput);
             PreparedEnemyCardAction action =
-                _planner.Prepare(CombatState, new EnemyPlanningContext(CreateRandomSource()));
+                _planner.Prepare(CombatState, planningContext);
+            _liveProjection = planningContext.AcceptedProjection ?? throw new InvalidOperationException(
+                "规划器已提交行动但没有保留提交前的完整投影。");
             string cardOrder = string.Join(
                 " -> ",
                 action.Sources.Select((source, index) =>
@@ -224,13 +235,13 @@ public sealed class CardIntentMoveState : MoveState
         }
         catch (Exception exception)
         {
-            EnemyCardRuntimePhase phaseBeforeFault = CombatState.RuntimePhase;
+            _liveProjection = null;
             string diagnostic = $"准备敌人卡牌行动失败：{exception.Message}";
             CombatState.MarkFault(diagnostic);
             ReportFaultDiagnostic(
                 CombatState,
                 "Preparation",
-                phaseBeforeFault.ToString(),
+                phaseBeforePreparation.ToString(),
                 exception);
             NotifyStateChanged();
             return false;
@@ -267,14 +278,13 @@ public sealed class CardIntentMoveState : MoveState
                 decimal.One,
                 decimal.One))
             .ToArray();
-        _liveProjection = _projectionService.Project(
+        return _projectionService.Project(
             action,
             new EnemyActionProjectionInput(
                 projectionTargets,
                 _rules.StepLimit,
                 initialState: EnemyProjectionInitialState.FromCombatState(CombatState),
                 contentDirectory: EnemyCardDeckRegistry.GetContentDirectory(DeckId)));
-        return _liveProjection;
     }
 
     /// <summary>

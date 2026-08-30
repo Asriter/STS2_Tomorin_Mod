@@ -222,6 +222,111 @@ public sealed class ActionPlannerTests
         Assert.True(action.SoftLockDiagnostic.WasForcedByAttemptLimit);
     }
 
+    [Fact]
+    public void StaticPassAndFullFailureRejectsWithoutCommittingCandidateState()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [EnemyCardTag.Attack]);
+        EnemyCardPlanningRules rules = CreateGateRules(recipe);
+        BaseEnemyCard rejected = CreateEffectAttackCard("FULL_GATE_REJECTED", 40m);
+        BaseEnemyCard accepted = CreateEffectAttackCard("FULL_GATE_ACCEPTED", 10m);
+        EnemyCardCombatState state = CreateState("FULL_GATE_TRANSACTION", [rejected, accepted]);
+        EnemyCardInstanceKey[] authorityBefore = state.DrawPile.Select(card => card.InstanceKey).ToArray();
+        bool observedRejectedProjection = false;
+        EnemyPlanningContext context = new(
+            new RecordingRandomSource([0, 0, 0, 1]),
+            createProjectionInput: (authority, candidate, initial, stepLimit) =>
+            {
+                if (candidate.MetricCards.Single().CardId == rejected.CardId)
+                {
+                    observedRejectedProjection = true;
+                    Assert.Equal(authorityBefore, authority.DrawPile.Select(card => card.InstanceKey));
+                    Assert.Empty(authority.CurrentCards);
+                    Assert.All(authority.DrawPile, card => Assert.Equal(0, card.ReplayCount));
+                }
+
+                return CreateProjectionInput(authority, candidate, initial, stepLimit);
+            });
+
+        PreparedEnemyCardAction action = new EnemyActionMetricPlanner(rules, new()).Prepare(state, context);
+
+        Assert.True(observedRejectedProjection);
+        Assert.Equal(2, action.SoftLockDiagnostic.CandidateAttemptCount);
+        Assert.Equal(EnemyCandidateCommitMode.WithinLocks, action.SoftLockDiagnostic.CommitMode);
+        EnemyCandidateRejection rejection = Assert.Single(action.SoftLockDiagnostic.Rejections);
+        Assert.Equal(EnemyCandidateRejectionReason.FullOverLock, rejection.Reason);
+        Assert.Equal(accepted.CardId, Assert.Single(action.MetricCards).CardId);
+        Assert.Contains(state.DrawPile, card => card.CardId == rejected.CardId);
+        Assert.Same(action, state.PreparedAction);
+        Assert.True(context.AcceptedProjection!.IsComplete);
+    }
+
+    [Fact]
+    public void CompleteThirdCandidateMayForceOverBothLocks()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [EnemyCardTag.Attack]);
+        EnemyCardPlanningRules rules = CreateGateRules(recipe);
+        BaseEnemyCard overBothLocks = CreateEffectAttackCard(
+            "FULL_GATE_FORCED",
+            40m,
+            new EnemyCardScoreProfile(attack: 6m));
+        EnemyCardCombatState state = CreateState("FULL_GATE_FORCED", [overBothLocks]);
+
+        PreparedEnemyCardAction action = new EnemyActionMetricPlanner(rules, new()).Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, 12))));
+
+        Assert.Equal(rules.MaxCandidateAttempts, action.SoftLockDiagnostic.CandidateAttemptCount);
+        Assert.Equal(EnemyCandidateCommitMode.ForcedOverLock, action.SoftLockDiagnostic.CommitMode);
+        Assert.True(action.SoftLockDiagnostic.ProjectionIsComplete);
+        Assert.Equal(2, action.SoftLockDiagnostic.Rejections.Count);
+        Assert.All(action.SoftLockDiagnostic.Rejections,
+            rejection => Assert.Equal(EnemyCandidateRejectionReason.StaticOverLock, rejection.Reason));
+        Assert.True(action.SoftLockDiagnostic.FullScore.AttackRisk > rules.FullLocks.Attack);
+        Assert.Equal(state.ActivePhase, action.Phase);
+    }
+
+    [Fact]
+    public void IncompleteThirdCandidateFaultsWithoutFallbackOrAuthorityMutation()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [EnemyCardTag.Attack]);
+        EnemyCardPlanningRules rules = CreateGateRules(recipe);
+        BaseEnemyCard card = CreateEffectAttackCard(
+            "FULL_GATE_INCOMPLETE",
+            40m,
+            new EnemyCardScoreProfile(attack: 6m));
+        EnemyCardCombatState state = CreateState("FULL_GATE_INCOMPLETE", [card]);
+        EnemyCardInstanceKey[] authorityBefore = state.DrawPile.Select(item => item.InstanceKey).ToArray();
+        EnemyPlanningContext context = new(
+            new RecordingRandomSource(Enumerable.Repeat(0, 12)),
+            createProjectionInput: (authority, candidate, initial, stepLimit) =>
+            {
+                EnemyActionProjectionInput complete = CreateProjectionInput(
+                    authority,
+                    candidate,
+                    initial,
+                    stepLimit);
+                return new EnemyActionProjectionInput(
+                    complete.Targets,
+                    complete.StepLimit,
+                    ["THIRD_CANDIDATE_UNKNOWN_MODIFIER"],
+                    complete.InitialState,
+                    complete.ContentDirectory,
+                    complete.RiskContext);
+            });
+
+        EnemyCandidatePlanningException exception = Assert.Throws<EnemyCandidatePlanningException>(() =>
+            new EnemyActionMetricPlanner(rules, new()).Prepare(state, context));
+
+        Assert.Null(state.PreparedAction);
+        Assert.Equal(EnemyCardRuntimePhase.Faulted, state.RuntimePhase);
+        Assert.Equal(authorityBefore, state.DrawPile.Select(item => item.InstanceKey));
+        Assert.Empty(state.CurrentCards);
+        Assert.All(state.DrawPile, item => Assert.Equal(0, item.ReplayCount));
+        Assert.Equal(rules.MaxCandidateAttempts, exception.Rejections.Count);
+        Assert.Equal(EnemyCandidateRejectionReason.IncompleteProjection, exception.Rejections[^1].Reason);
+        Assert.Null(context.AcceptedProjection);
+    }
+
     /// <summary>
     /// 验证真实规划器先按 Metric 排序，再以半开权重桶选择，并在排除上次指标后重算随机上界。
     /// </summary>
@@ -547,6 +652,32 @@ public sealed class ActionPlannerTests
             stepLimit: 256,
             [new EnemyWeightedActionRecipe(recipe, 1)]);
 
+    private static EnemyCardPlanningRules CreateGateRules(EnemyActionRecipe recipe) =>
+        new(
+            new EnemySoftLockLimits(5m, 5m),
+            new EnemySoftLockLimits(30m, 30m),
+            maxCandidateAttempts: 3,
+            stepLimit: 256,
+            [new EnemyWeightedActionRecipe(recipe, 1)]);
+
+    private static EnemyActionProjectionInput CreateProjectionInput(
+        EnemyCardCombatState authority,
+        PreparedEnemyCardAction candidate,
+        EnemyProjectionInitialState initial,
+        int stepLimit)
+    {
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(authority.DeckId);
+        return new EnemyActionProjectionInput(
+            [new EnemySimulationTarget("GATE_TARGET", decimal.One, decimal.One)],
+            stepLimit,
+            initialState: initial,
+            contentDirectory: directory,
+            riskContext: new EnemyActionRiskContext(
+                candidate.Phase,
+                directory.GetPhase(candidate.Phase).InitialSourceInstanceCount,
+                directory));
+    }
+
     /// <summary>
     /// 创建并注册新的战斗级状态，并由注册表分配模板槽位身份。
     /// </summary>
@@ -582,6 +713,17 @@ public sealed class ActionPlannerTests
             new StrikeTomorin(),
             tags,
             scoreProfile ?? EnemyCardScoreProfile.Zero));
+
+    private static BaseEnemyCard CreateEffectAttackCard(
+        string suffix,
+        decimal attack,
+        EnemyCardScoreProfile? scoreProfile = null) =>
+        new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PLANNER_{suffix}"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack,
+            scoreProfile ?? EnemyCardScoreProfile.Zero,
+            effects: [new EnemyAttackAllEffect($"PLANNER:{suffix}:ATTACK", attack)]));
 
     /// <summary>
     /// 创建具有一项真实 Compose 素材请求的来源牌。

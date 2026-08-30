@@ -4,7 +4,6 @@ using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
-using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Localization;
@@ -16,7 +15,6 @@ using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Nodes.Audio;
 using MegaCrit.Sts2.Core.Nodes.Vfx;
-using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Cards;
@@ -39,8 +37,8 @@ public class Anon : CustomMonsterModel
 
     //攻击部分
     //一阶段
-    private int NormalSingleAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 21, 18);
-    private int NormalMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);
+    protected virtual int NormalSingleAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 21, 18);
+    protected virtual int NormalMultiAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);
     private int NormalMultiCount = 3;
     private int NormalBlockNum => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 23, 20);
 
@@ -48,6 +46,11 @@ public class Anon : CustomMonsterModel
     private bool _isSpeak = false;
     private bool _isSecondPhase = false;
     private bool _isAddReward = false;
+
+    /// <summary>
+    /// 是否发放爱音首领战专属遗物奖励。
+    /// </summary>
+    protected virtual bool ShouldGrantBossReward => true;
 
     //逃跑buff层数
     private int _escapeBuffCount = 3;
@@ -107,7 +110,7 @@ public class Anon : CustomMonsterModel
     {
         if (_isSecondPhase)
         {
-            _isAddReward = true;
+            _isAddReward = ShouldGrantBossReward;
             AddReward((CombatRoom)creature.CombatState.RunState.CurrentRoom);
 
             TalkCmd.Play(_die, Creature, _anonColor);
@@ -128,14 +131,9 @@ public class Anon : CustomMonsterModel
 
     public void AddReward(CombatRoom room)
     {
-        if (_isAddReward)
+        if (_isAddReward && ShouldGrantBossReward)
         {
-            var players = room.CombatState.Players;
-            foreach (var player in players)
-            {
-                var relic = ModelDb.Relic<AnonGuitar>().ToMutable();
-                room.AddExtraReward(player, new RelicReward(RelicRarity.Rare, player));
-            }
+            BandBossRelicReward.Add<AnonGuitar>(room);
         }
     }
 
@@ -312,7 +310,18 @@ public class Anon : CustomMonsterModel
         TalkCmd.Play(_run, base.Creature, _anonColor);
         //TODO 动画，特效
         await Cmd.Wait(0.5f);
+        var room = (CombatRoom)CombatState.RunState.CurrentRoom;
         await CreatureCmd.Escape(base.Creature);
+        await AfterEscapeCompleted(room);
+    }
+
+    /// <summary>
+    /// 在爱音完成逃跑后执行派生敌人需要的收尾逻辑。
+    /// </summary>
+    /// <param name="room">当前战斗房间。</param>
+    protected virtual Task AfterEscapeCompleted(CombatRoom room)
+    {
+        return Task.CompletedTask;
     }
 
     #endregion

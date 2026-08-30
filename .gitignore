@@ -13,3 +13,6 @@ build/
 *.user
 global.json
 build/STS2_Tomorin_Mod.pck
+/local-tests/Stage.Tests/
+/tests/CardIntentHarness/bin/
+/tests/CardIntentHarness/obj/

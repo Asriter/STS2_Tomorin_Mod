@@ -11,7 +11,7 @@ using STS2_Tomorin_Mod.Relics;
 namespace STS2_Tomorin_Mod.Events;
 
 /// <summary>
-/// 表示只为 Tomorin 队伍开放的“舞台的长颈鹿”先古之民事件。
+/// 表示只为包含 Tomorin 的队伍开放、且仅属于 Stage 的“舞台的长颈鹿”先古之民事件。
 /// </summary>
 public sealed class GiraffeAncient : CustomAncientModel
 {
@@ -68,23 +68,23 @@ public sealed class GiraffeAncient : CustomAncientModel
     }
 
     /// <summary>
-    /// 判断事件是否可在指定章节出现；舞台的长颈鹿仅属于现有荣耀章节。
+    /// 判断事件是否可在指定章节出现；舞台的长颈鹿仅属于隐藏 Stage 章节。
     /// </summary>
     /// <param name="act">正在生成地图的章节模型。</param>
-    /// <returns>当章节为荣耀时返回 <see langword="true"/>。</returns>
+    /// <returns>当章节为 Stage 时返回 <see langword="true"/>。</returns>
     public override bool IsValidForAct(ActModel act)
     {
-        return act is Glory;
+        return act is STS2_Tomorin_Mod.Acts.Stage;
     }
 
     /// <summary>
     /// 判断当前队伍是否允许进入事件。
     /// </summary>
     /// <param name="runState">当前局的运行状态。</param>
-    /// <returns>当队伍非空且所有玩家均为 Tomorin 时返回 <see langword="true"/>。</returns>
+    /// <returns>当队伍非空且至少有一名玩家为 Tomorin 时返回 <see langword="true"/>。</returns>
     public override bool IsAllowed(IRunState runState)
     {
-        return runState.Players.Count > 0 && runState.Players.All(player => player.Character is Tomorin);
+        return runState.Players.Count > 0 && runState.Players.Any(player => player.Character is Tomorin);
     }
 
     /// <summary>

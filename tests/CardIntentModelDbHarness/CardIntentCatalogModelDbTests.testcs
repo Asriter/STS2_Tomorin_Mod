@@ -1,0 +1,87 @@
+using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Cards.Collections;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using STS2_Tomorin_Mod.Powers;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.CardIntents;
+
+public sealed class CardIntentCatalogModelDbTests
+{
+    [Fact]
+    public void CatalogAndCollectionResolverReuseRegisteredCardModelsAfterModelDbInitialization()
+    {
+        Type[] cardTypes =
+        [
+            typeof(PrideManSaki),
+            typeof(Haruhikage),
+            typeof(SongOfBeHuman),
+            typeof(NamelessPaper),
+            typeof(HitoshizukuToken),
+            typeof(Hitoshizuku),
+            typeof(SorrowfulRain),
+            typeof(Adayume),
+            typeof(NameOfTear),
+            typeof(StrikeTomorin),
+            typeof(WhyPlayHaruhikage),
+            typeof(ThisNoNeed),
+            typeof(DefendTomorin),
+            typeof(AtField),
+            typeof(HopeOnTheVoice),
+            typeof(CannotBeingHuman),
+            typeof(Woodlouse),
+            typeof(BrokenNote),
+            typeof(ColdRedTea)
+        ];
+
+        ModelDb.ResetForTest();
+        ModelDb.Init(cardTypes);
+        IReadOnlyDictionary<Type, CardModel> registeredCards =
+            new Dictionary<Type, CardModel>
+            {
+                [typeof(PrideManSaki)] = ModelDb.Card<PrideManSaki>(),
+                [typeof(Haruhikage)] = ModelDb.Card<Haruhikage>(),
+                [typeof(SongOfBeHuman)] = ModelDb.Card<SongOfBeHuman>(),
+                [typeof(NamelessPaper)] = ModelDb.Card<NamelessPaper>(),
+                [typeof(HitoshizukuToken)] = ModelDb.Card<HitoshizukuToken>(),
+                [typeof(Hitoshizuku)] = ModelDb.Card<Hitoshizuku>(),
+                [typeof(SorrowfulRain)] = ModelDb.Card<SorrowfulRain>(),
+                [typeof(Adayume)] = ModelDb.Card<Adayume>(),
+                [typeof(NameOfTear)] = ModelDb.Card<NameOfTear>(),
+                [typeof(StrikeTomorin)] = ModelDb.Card<StrikeTomorin>(),
+                [typeof(WhyPlayHaruhikage)] = ModelDb.Card<WhyPlayHaruhikage>(),
+                [typeof(ThisNoNeed)] = ModelDb.Card<ThisNoNeed>(),
+                [typeof(DefendTomorin)] = ModelDb.Card<DefendTomorin>(),
+                [typeof(AtField)] = ModelDb.Card<AtField>(),
+                [typeof(HopeOnTheVoice)] = ModelDb.Card<HopeOnTheVoice>(),
+                [typeof(CannotBeingHuman)] = ModelDb.Card<CannotBeingHuman>(),
+                [typeof(Woodlouse)] = ModelDb.Card<Woodlouse>()
+            };
+
+        IReadOnlyCollection<EnemyCardDefinition> definitions =
+            CardIntentTestCardCatalog.AllDefinitions.Values.ToArray();
+
+        Assert.Equal(17, definitions.Count);
+        Assert.All(definitions, definition =>
+            Assert.Same(registeredCards[definition.CardModel.GetType()], definition.CardModel));
+
+        EnemyCollectionEffectProgram brokenNoteProgram = EnemyCollectionEffectResolver.GetRequired(
+            CardIntentTestCollectionCatalog.Catalog.GetRequired(CardIntentTestCollectionCatalog.BrokenNoteId));
+        EnemyCollectionEffectProgram coldRedTeaProgram = EnemyCollectionEffectResolver.GetRequired(
+            CardIntentTestCollectionCatalog.Catalog.GetRequired(CardIntentTestCollectionCatalog.ColdRedTeaId));
+
+        Assert.Equal(5m, Assert.IsType<EnemyBlockEffect>(brokenNoteProgram.DirectEffects[0]).Block);
+        Assert.Equal(
+            1m,
+            Assert.IsType<EnemySelfPowerEffect<BrokenNotePower>>(brokenNoteProgram.DirectEffects[1]).Amount);
+        Assert.Equal(
+            2m,
+            Assert.IsType<EnemyAllPlayersPowerEffect<WeakPower>>(coldRedTeaProgram.DirectEffects[0]).Amount);
+        Assert.Equal(
+            2m,
+            Assert.IsType<EnemyAllPlayersPowerEffect<CustomConstrictPower>>(coldRedTeaProgram.DirectEffects[1]).Amount);
+    }
+}

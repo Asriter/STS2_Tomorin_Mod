@@ -6,5 +6,7 @@
   "STS2_TOMORIN_MOD-CRYCHIC_PHATOM_BOSS.title": "Phantom of Crychic",
   "STS2_TOMORIN_MOD-CRYCHIC_PHATOM_BOSS.loss": "Once again, you were dragged into a reenactment of the past.",
   "STS2_TOMORIN_MOD-OBLIVIONIS_BOSS.title": "Oblivionis",
-  "STS2_TOMORIN_MOD-OBLIVIONIS_BOSS.loss": "Your song failed to reach Oblivionis..."
+  "STS2_TOMORIN_MOD-OBLIVIONIS_BOSS.loss": "Your song failed to reach Oblivionis...",
+  "STS2_TOMORIN_MOD-BAND_MEMBER_ENCOUNTER.title": "Band",
+  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_ENCOUNTER.title": "Card Intent Test"
 }

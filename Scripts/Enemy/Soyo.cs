@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BaseLib.Abstracts;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -15,14 +16,15 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Nodes.Vfx;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Powers;
+using STS2_Tomorin_Mod.Relics;
 
 namespace STS2_Tomorin_Mod.Enemy;
 
 /// <summary>
-/// Boss: Nagasaki Soyo.
-/// Mask phase gives shared tasks; true phase attacks based on Estrangement.
+/// Boss 长崎素世；假面阶段提供共享任务，真实阶段根据疏远值发动攻击。
 /// </summary>
 public class Soyo : CustomMonsterModel
 {
@@ -37,14 +39,19 @@ public class Soyo : CustomMonsterModel
     private const int TruePhaseEstrangementLoss = 2;
 
     private int MaskBlock => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 25, 20);
-    private int MaskMultiAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 10, 9);
+    protected virtual int MaskMultiAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 10, 9);
     private int MaskMultiAttackCount => 2;
     private int MaskHeal => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 23, 18);
-    private int TrueAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 27, 24);
-    private int TrueMultiAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3);
+    protected virtual int TrueAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 27, 24);
+    protected virtual int TrueMultiAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3);
 
     public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 430, 400);
     public override int MaxInitialHp => MinInitialHp;
+
+    /// <summary>
+    /// 是否发放素世首领战专属遗物奖励。
+    /// </summary>
+    protected virtual bool ShouldGrantBossReward => true;
 
     //记录是否第一次切换状态，用于显示文字
     private bool _isFirstChangeState = true;
@@ -105,6 +112,9 @@ public class Soyo : CustomMonsterModel
     {
         await base.AfterAddedToRoom();
 
+        Creature.Died += OnDeath;
+        CombatManager.Instance.CombatEnded += OnAfterCombatEnd;
+
         var context = new ThrowingPlayerChoiceContext();
         await PowerCmd.Apply<SoyoMaskedDamageReductionPower>(context, Creature, 1, Creature, null);
         await PowerCmd.Apply<SoyoMaskVisualPower>(context, Creature, 1, Creature, null);
@@ -114,6 +124,20 @@ public class Soyo : CustomMonsterModel
 
         TalkCmd.Play(_initSpeak, base.Creature, _soyoColor);
         _isFirstChangeState = true;
+    }
+
+    private void OnDeath(Creature creature)
+    {
+        if (creature == Creature && ShouldGrantBossReward)
+        {
+            BandBossRelicReward.Add<SoyoBase>((CombatRoom)creature.CombatState.RunState.CurrentRoom);
+        }
+    }
+
+    private void OnAfterCombatEnd(CombatRoom room)
+    {
+        CombatManager.Instance.CombatEnded -= OnAfterCombatEnd;
+        Creature.Died -= OnDeath;
     }
 
     protected override MonsterMoveStateMachine GenerateMoveStateMachine()

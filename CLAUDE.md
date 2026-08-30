@@ -308,7 +308,7 @@ The `.csproj` auto-detects platform and sets `SteamLibraryPath`, `Sts2Path`, and
 
 ## GiraffeAncient（舞台的长颈鹿）
 
-`GiraffeAncient` 是仅面向全 Tomorin 队伍的先古之民事件，落在现有的 `Glory` 章节中。它从高、中、低三个风险档位各提供一个有效的舞台装置遗物选项；事件选项通过遗物取得直接结算，不使用二次确认。
+`GiraffeAncient` 是仅属于 `Stage`、面向至少包含一名 Tomorin 的队伍的先古之民事件。它从高、中、低三个风险档位各提供一个有效的舞台装置遗物选项；事件选项通过遗物取得直接结算，不使用二次确认。
 
 **文件：**
 
@@ -324,4 +324,42 @@ The `.csproj` auto-detects platform and sets `SteamLibraryPath`, `Sts2Path`, and
 
 三个展示位分别独立随机；高档候选为空时依次降至中档、低档，中档为空时降至低档，因此跨展示位允许出现相同选项。低档始终保留可增加药水栏位的幕间装置，药水本身没有合法候选时只跳过药水发放。
 
-本事件不新建第四层／章节内容。事件场景、地图图标、遗物图标与舞台番茄卡图位于 `STS2_Tomorin_Mod/images/` 和 `STS2_Tomorin_Mod/scenes/Ancients/`；修改这些 Godot 资源后须运行 `dotnet publish` 更新 `.pck`。
+事件场景、地图图标、遗物图标与舞台番茄卡图位于 `STS2_Tomorin_Mod/images/` 和 `STS2_Tomorin_Mod/scenes/Ancients/`；修改这些 Godot 资源后须运行 `dotnet publish` 更新 `.pck`。
+
+## Stage（舞台）条件式第四层
+
+`Stage` 是注册在 Glory 后方的隐藏候选最终层。新 Run 仅在非 Daily 且玩家列表至少包含一名 Tomorin 时注册候选；旧存档不会补注册或重排章节。Glory 奖励完成后的最终资格还要求：候选 Stage 唯一且紧邻 Glory、本 Run 已真实击败 FPO，并由同一名玩家完整持有 `AnonGuitar`、`RaanaGuitar`、`SoyoBase` 与 `TakiDrum`。
+
+固定路线由 `StageRouteDefinition` 作为唯一语义来源：`GiraffeAncient → FeedTheCat → MechaKnightElite → Shop → FeedTheCat → RestSite → CrychicPhatomBoss`。`StageActMap` 只创建这条可见单路线，`StageRoomResolver` 绕过随机事件池并将内容模型转为 mutable 实例；Shop 与 RestSite 保持原版房间行为。
+
+核心文件：
+
+- `Scripts/Acts/Stage.cs`：章节模型与集中式 Glory 临时资源代理；每项复用均保留可搜索的 Stage 资源 TODO。
+- `Scripts/Stage/StageRouteDefinition.cs`、`StageActMap.cs`、`StageRoomResolver.cs`：确定性地图与固定房间解析。
+- `Scripts/Stage/StageRegistrationPolicy.cs`、`StageEligibility.cs`：新 Run 注册和 Glory 后最终资格。
+- `Scripts/Stage/StageRunProgressModifier.cs`：通过 `[SavedProperty]` 保存 FPO 历史进度及当前 Boss 奖励状态；战斗身份由 Encounter ID、章节索引和地图坐标组成。
+- `Scripts/Patch/StageRunRegistrationPatch.cs`、`StageFpoProgressPatch.cs`、`StageBossRewardLifecyclePatch.cs`、`StageActTransitionPatch.cs`：注册、真实死亡、原版奖励资格、防重与 Architect 终局接入。
+- `STS2_Tomorin_Mod/localization/{eng,zhs}/acts.json`：`Stage`／“舞台”章节标题。
+
+FPO 进度只接受 `wasRemovalPrevented == false` 的真实死亡。当前 Boss 战合格时仍完整使用原版 `RewardsSet` 管线，不手工创建奖励；不合格时使用原版空终端奖励集。多人全部准备后由 `RunManager.EnterNextAct` 接入点统一决定进入 Stage，或执行与原版末章相同的淡出、清屏、Architect 事件与淡入流程。
+
+验证包括 `local-tests/Stage.Tests/` 中不纳入 Git 的纯策略 xUnit 测试，以及 `tests/Stage.Tests.ps1`、更新后的 `tests/GiraffeAncient.Tests.ps1` 静态检查。游戏内多人、奖励界面重入和存档窗口仍需随当前部署版本进行集成验收。
+
+## Card List Intent（敌人卡牌列表意图）
+
+需要以卡牌列表预告并执行行动的敌人继承 `BaseCardIntentMonsterModel`，通过 `RegisterCardIntentState(CardIntentMoveState.Create(...))` 注册状态。牌组、当前牌、保留牌、弃牌和消耗牌统一由战斗级 `EnemyCardCombatState` 持有；`CardIntentMoveState` 只负责原版 MoveState 生命周期和策略服务编排。行动准备以 `PreparedEnemyCardUnitPlan` 和七种显式步骤冻结每次成功重放的完整 DFS 结构；素材、灵感、收藏品、即时抽牌、回收、作词、生成序号及即时子牌附加重放都在准备事务中确定。执行、实时投影和重连共同消费该结构，玩家 Power 变化只刷新本地派生显示。
+
+核心文件：
+
+- `Scripts/Enemy/CardIntents/`：稳定定义／实例身份、五牌区权威状态、候选事务规划、递归冻结计划、共享收藏品效果解析、深度优先执行引擎、纯实时投影及 schema v2 重连 DTO。
+- `Scripts/Enemy/CardIntents/Presentation/`：按公开实例键归属 Attack／Defend／Buff／Debuff／Unknown 的不可变逐牌展示模型与纯构建器。
+- `Scripts/Enemy/CardIntents/Intents/`：固定复合 `CardListIntent`，向原版视图暴露公开卡列和只读实时投影；不再使用聚合攻击 Intent。
+- `Scripts/Enemy/CardIntents/View/`：固定右锚、动态左扩的逐牌槽位，唯一共享输入穿透 Hover `NCard`，以及空值保持原版描述的 `EnemyCardDescriptionPresenter`。
+- `Scripts/Patch/CardIntent*.cs`、`NIntentCardListPatch.cs`：整体玩家回合准备、即时换招与原版 Intent 视图接入。
+- `Scripts/Enemy/CardIntents/Test/`、`Scripts/Encounters/CardIntentTestEncounter.cs`：不进入正常遭遇池的显式测试内容；入口为 `CardIntentTestEncounter.ExplicitEncounterId`。
+- `Scripts/Powers/EnemyPowers/CardIntent*.cs`、`EnemyCollectionInventoryPower.cs`：敌人能力钩子与收藏品队列只读展示。
+- `tests/CardIntent.Tests.ps1` 与 `tests/CardIntentHarness/`：静态契约和领域行为测试，断言只使用定义、规则、关系、集合、顺序和状态不变量。
+
+`CaptureReconnectState(...)`／`TryApplyReconnectState(...)` 使用 schema v2 `EnemyCardRuntimeSyncState` 捕获牌区、收藏品、`ReplayCount`、递归 Unit／Step DTO 和安全 `StepPath` 游标。恢复先在临时状态中完成版本、定义、身份、区域、引用、连续生成序号、递归预算和游标边界校验，全部通过后再原子替换；旧格式没有迁移分支。UI 以 `EnemyCardIntentPresentationBuilder` 保留公开卡列顺序，攻击节点交给原版 Intent 针对本地玩家实时计算，owner／本地玩家 Power 事件只合并刷新显示，不修改冻结行动。该层提供主机权威同步 API 和断线恢复逻辑，但当前没有接入实际网络传输补丁，单机视觉、多人伤害差异和交互式重连仍需实机验收。修改 Power 本地化或 Godot 资源后必须运行 `dotnet publish` 更新 `.pck`。
+
+本轮逐牌 Intent 修订的自动化基线为 `tests/CardIntent.Tests.ps1` 通过、`CardIntentHarness` 54/54 通过及 `dotnet build` 0 错误；测试不固定平衡配置数值。本次没有修改 Godot 资源，因此未重新导出 `.pck`。

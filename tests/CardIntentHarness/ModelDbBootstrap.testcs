@@ -1,0 +1,44 @@
+using System.Runtime.CompilerServices;
+using MegaCrit.Sts2.Core.Models;
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Cards.Collections;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+
+namespace CardIntentHarness;
+
+internal static class ModelDbBootstrap
+{
+    [ModuleInitializer]
+    internal static void InitializeCardModels()
+    {
+        ModelDb.ResetForTest();
+        ModelDb.Init(
+        [
+            typeof(PrideManSaki),
+            typeof(Haruhikage),
+            typeof(SongOfBeHuman),
+            typeof(NamelessPaper),
+            typeof(HitoshizukuToken),
+            typeof(Hitoshizuku),
+            typeof(SorrowfulRain),
+            typeof(Adayume),
+            typeof(NameOfTear),
+            typeof(StrikeTomorin),
+            typeof(WhyPlayHaruhikage),
+            typeof(ThisNoNeed),
+            typeof(DefendTomorin),
+            typeof(AtField),
+            typeof(HopeOnTheVoice),
+            typeof(CannotBeingHuman),
+            typeof(Woodlouse),
+            typeof(BrokenNote),
+            typeof(ColdRedTea)
+        ]);
+        // 仅用真实游戏顺序预热静态目录；其余领域测试仍依赖空 ModelDb 来直接构造测试模型。
+        // 任何需要持续访问 ModelDb.Card<T>() 的测试必须放入独立 CardIntentModelDbHarness。
+        RuntimeHelpers.RunClassConstructor(typeof(CardIntentTestCardCatalog).TypeHandle);
+        RuntimeHelpers.RunClassConstructor(typeof(EnemyCollectionEffectResolver).TypeHandle);
+        ModelDb.ResetForTest();
+    }
+}

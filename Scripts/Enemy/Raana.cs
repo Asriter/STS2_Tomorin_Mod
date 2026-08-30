@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using BaseLib.Abstracts;
 using BaseLib.Audio;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -14,6 +15,7 @@ using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Audio;
 using STS2_Tomorin_Mod.Cards.Collections;
@@ -22,6 +24,9 @@ using STS2_Tomorin_Mod.Relics;
 
 namespace STS2_Tomorin_Mod.Enemy;
 
+/// <summary>
+/// Boss 要乐奈，根据兴趣值与路线遗物切换行动分支。
+/// </summary>
 public class Raana : CustomMonsterModel
 {
     private const int WeakenedEntryBlock = 18;
@@ -32,14 +37,19 @@ public class Raana : CustomMonsterModel
     private const int BuffetsPerPlayer = 2;
     private const int S4HighHitCount = 3;
 
-    private int S1Attack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 21, 18);
-    private int S2Attack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);
-    private int S4Attack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 32, 28);
-    private int S4HighAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 11, 10);
+    protected virtual int S1Attack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 21, 18);
+    protected virtual int S2Attack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);
+    protected virtual int S4Attack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 32, 28);
+    protected virtual int S4HighAttack => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 11, 10);
 
     public override int MinInitialHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 425, 395);
     public override int MaxInitialHp => MinInitialHp;
     public override string? CustomVisualPath => "res://STS2_Tomorin_Mod/scenes/creature_visuals/enemies/raana_boss.tscn";
+
+    /// <summary>
+    /// 是否发放乐奈首领战专属遗物奖励。
+    /// </summary>
+    protected virtual bool ShouldGrantBossReward => true;
 
     private MoveState _sleepState = null!;
     private MoveState _s1State = null!;
@@ -55,6 +65,9 @@ public class Raana : CustomMonsterModel
     public override async Task AfterAddedToRoom()
     {
         await base.AfterAddedToRoom();
+
+        Creature.Died += OnDeath;
+        CombatManager.Instance.CombatEnded += OnAfterCombatEnd;
 
         var context = new ThrowingPlayerChoiceContext();
         await PowerCmd.Apply<RaanaInterestPower>(context, Creature, 1, Creature, null);
@@ -72,6 +85,20 @@ public class Raana : CustomMonsterModel
         }
 
         await ApplyDefaultEmpoweredRoute(context);
+    }
+
+    private void OnDeath(Creature creature)
+    {
+        if (creature == Creature && ShouldGrantBossReward)
+        {
+            BandBossRelicReward.Add<RaanaGuitar>((CombatRoom)creature.CombatState.RunState.CurrentRoom);
+        }
+    }
+
+    private void OnAfterCombatEnd(CombatRoom room)
+    {
+        CombatManager.Instance.CombatEnded -= OnAfterCombatEnd;
+        Creature.Died -= OnDeath;
     }
 
     private async Task ApplyEmpoweredRoute(PlayerChoiceContext context)

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 
@@ -25,9 +25,9 @@ function Get-GiraffeSource {
 }
 
 function Assert-LocalizationKeys([string]$path, [string[]]$keys) {
-    $json = Get-Content -LiteralPath (Get-RepositoryPath $path) -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
+    $json = Get-Content -LiteralPath (Get-RepositoryPath $path) -Raw -Encoding utf8 | ConvertFrom-Json
     foreach ($key in $keys) {
-        if (-not $json.ContainsKey($key)) {
+        if ($json.PSObject.Properties.Name -notcontains $key) {
             throw "$path 缺少本地化键：$key"
         }
     }
@@ -60,9 +60,10 @@ Assert-Contains $eventSource "GenerateInitialOptions" "长颈鹿事件必须生�
 Assert-Contains $eventSource "RelicCanSpawnAtCustomAncient" "长颈鹿事件必须过滤当前不可出现的遗物选项。"
 Assert-Contains $eventSource "RelicOption" "长颈鹿事件选项必须通过遗物选项直接结算。"
 Assert-Contains $eventSource "IsValidForAct" "长颈鹿事件必须声明章节可用性接口。"
-Assert-Contains $eventSource "act\s+is\s+Glory" "长颈鹿事件必须限制在现有荣耀章节。"
+Assert-Contains $eventSource "act\s+is\s+STS2_Tomorin_Mod\.Acts\.Stage" "长颈鹿事件必须仅属于 Stage 章节。"
 Assert-Contains $eventSource "IsAllowed" "长颈鹿事件必须声明队伍可用性接口。"
-Assert-Contains $eventSource "player\.Character\s+is\s+Tomorin" "长颈鹿事件必须只允许全 Tomorin 队伍进入。"
+Assert-Contains $eventSource "Players\.Any" "长颈鹿事件必须检查队伍中是否存在 Tomorin。"
+Assert-Contains $eventSource "player\.Character\s+is\s+Tomorin" "长颈鹿事件必须允许包含任意 Tomorin 的队伍进入。"
 Assert-Contains $baseRelicSource "class\s+GiraffeStageDeviceRelic\s*:\s*BaseRelicModel" "舞台装置必须继承统一的基础遗物类。"
 Assert-Contains $baseRelicSource "RelicRarity\.Event" "舞台装置必须归类为事件遗物。"
 

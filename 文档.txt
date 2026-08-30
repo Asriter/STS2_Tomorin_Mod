@@ -288,9 +288,9 @@ Verification expectation:
 
 ## 需求与范围
 
-实现只向全 Tomorin 队伍开放的先古事件 `GiraffeAncient`。事件位于既有 `Glory` 章节，按照高、中、低风险档位提供舞台装置遗物，玩家选择后通过遗物取得效果直接结算。
+实现向至少包含一名 Tomorin 的队伍开放的先古事件 `GiraffeAncient`。事件仅属于条件式最终层 `Stage`，按照高、中、低风险档位提供舞台装置遗物，玩家选择后通过遗物取得效果直接结算。
 
-本范围不实现新的第四层／章节内容；事件背景、地图节点、运行历史图标、舞台装置图标与舞台番茄卡图使用本次加入的 Godot 资源。
+事件背景、地图节点、运行历史图标、舞台装置图标与舞台番茄卡图继续使用既有 Godot 资源。
 
 ## 核心接口与文件
 
@@ -316,3 +316,146 @@ Verification expectation:
 ## 验证约束
 
 静态测试只验证档位归类、继承、事件遗物池注册、关键 hook、所需本地化键以及 JSON 可解析；不固化任何伤害、费用、次数、概率或其他配置数值。
+
+# Stage（舞台）条件式第四层
+
+## 需求描述
+
+新增 Glory 后方的隐藏候选最终层 `Stage`。新 Run 只有在非每日挑战且玩家列表至少包含一名 Tomorin 时注册候选；真正转入 Stage 还要求本 Run 已真实击败 `FullPowerOblivionis`，并由同一名玩家完整持有四件指定乐器遗物。旧存档不补注册、不重排章节、不重建地图。
+
+## 固定路线与内容接口
+
+- `StageRouteDefinition.Nodes` 是路线顺序、地图点类型和房间类型的唯一语义来源。
+- `StageActMap` 创建无分支路线并登记正式起点。
+- `StageRoomResolver.TryResolveCurrentRoom` 固定解析 `GiraffeAncient`、两次 `FeedTheCat`、原版 `MechaKnightElite` 与 `CrychicPhatomBoss`；Shop 和 RestSite 保留原版实现。
+- `Stage` 集中代理 Glory 临时章节资源，每项复用均带有 Stage 资源 TODO，后续替换时不需改动路线逻辑。
+
+## 注册、进度与资格接口
+
+- `StageRegistrationPolicy.ShouldRegister`：判断非 Daily 与任意 Tomorin 的基础注册资格。
+- `StageRegistrationPolicy.RegisterAfterGlory`：按稳定模型 ID 去重，在 Glory 紧后插入 mutable Stage，保持其他自定义层的相对顺序。
+- `StageRunProgressModifier`：普通 `ModifierModel`；使用 `[SavedProperty]` 保存本 Run FPO 进度、当前 Boss 奖励状态、Encounter ID、章节索引和地图坐标。
+- `StageEligibility.IsEligible`：在 Glory 奖励结束后的统一转层点检查候选顺序、游戏模式、Tomorin、FPO 进度和同一玩家遗物集合覆盖。
+
+## 奖励与转层
+
+- `StageFpoProgressPatch` 接入 `Hook.AfterDeath`，显式拒绝 `wasRemovalPrevented`，首次记录时输出中文成功日志。
+- `StageBossRewardLifecyclePatch` 只维护当前战斗资格与防重；`StageBossRewardEligibilityPatch` 在 `RewardsSet.WithRewardsFromRoom` 放行合格 FPO Boss 的原版奖励，或返回原版空终端奖励集。实现不创建固定奖励内容。
+- `StageActTransitionPatch` 在多人准备同步完成后拦截 `RunManager.EnterNextAct`。资格成立时走原版下一层；不成立或候选异常时执行当前版本原版末章使用的 Architect 终局步骤。没有 Stage 的旧存档保持原流程。
+
+## 验证约束
+
+- 本地 xUnit 项目位于 `local-tests/Stage.Tests/`，由 `.gitignore` 精确排除；测试比较状态、集合和完整语义路线，不断言坐标、奖励或配置数值。
+- 仓库静态检查为 `tests/Stage.Tests.ps1` 与更新后的 `tests/GiraffeAncient.Tests.ps1`。
+- 自动化构建与测试通过后，仍需在当前游戏部署版本中完成单人、多人、存读档、奖励界面重入及跨 Mod 章节顺序的实机验收。
+
+# BandMemberEncounter（乐队精英房）
+
+## 需求与范围
+
+实现一个可由代码显式实例化、但暂不进入任何 Act 遭遇池的 `RoomType.Elite` Encounter。它从当前 Run 已遇到的原始 `Anon`、`Taki`、`Soyo`、`Raana` Boss 历史中，确定性选择两个不同成员，分别放在玩家左侧和右侧，并复用游戏原生夹击语义。房间使用标准精英奖励，不追加 Boss 专属或自定义奖励。
+
+## 核心接口
+
+- `BandMemberKind`：四名成员的稳定代码身份。
+- `BandMemberSelection.Left`／`Right`：不可重复的左右成员选择结果。
+- `BandMemberSelector.FixedOrder`：只读固定候选顺序。
+- `BandMemberSelector.StableNames`：只读稳定存档名映射。
+- `BandMemberSelector.Select(IEnumerable<BandMemberKind>?)`：先取未遇成员，不足时从未入选成员补足；空输入按空历史处理。
+- `BandMemberSelector.GetStableName(...)`／`TryParseStableName(...)`：精确、区分大小写的稳定字符串转换；拒绝未知字符串和枚举数字文本。
+- `EliteStatScaler.ScaleDown(int, decimal)`：使用十进制倍率向下取整并检查非法输入与溢出；异常信息包含调用上下文。
+- `BandMemberEncounter`：创建两个成员模型、读写自定义状态、读取当前 Run 历史，并在战斗开始时初始化夹击 Power。
+- `BandSurroundedCoordinator.Initialize(...)`：幂等应用原生 `SurroundedPower` 与左右背击 Power。
+- `BandSurroundedCoordinator.RefreshAfterEscape(...)`：敌人逃跑且仍有可攻击敌人时，通过原生 `SurroundedPower.AfterDeath(...)` 更新玩家方向。
+
+## 模型与存档约束
+
+- `AnonElite`、`TakiElite`、`SoyoElite`、`RaanaElite` 继承原 Boss，并继续显示原 Boss 标题。
+- Elite 生命和基础攻击从原 Boss 同名虚属性经统一缩放器派生；Taki 的阶段容量一并派生。不得复制原 Boss 状态机或硬编码最终派生值。
+- `AnonElite` 与 `TakiElite` 关闭原 Boss 专属奖励；`TakiElite` 逃跑时不单独结束仍有其他敌人的房间。
+- Encounter 使用自定义状态键 `leftMember`、`rightMember`。只有两键都能解析且成员不同才接受恢复；否则丢弃整组状态并根据历史重算。
+- 历史通过公开的 `RunManager.Instance.DebugOnlyGetState()` 获取，并遍历 `MapPointHistory[*].Rooms` 的 Encounter 与 Monster 模型 ID；Elite ID 不计入已遇成员。
+- 没有合法 RunState 时按空历史确定性选择并记录一次警告，避免调试或直接实例化崩溃。
+
+## 场景、本地化与出现范围
+
+- 场景：`STS2_Tomorin_Mod/scenes/encounters/band_member_encounter.tscn`，包含左右两个相对槽位并居中玩家。
+- 本地化：`STS2_TOMORIN_MOD-BAND_MEMBER_ENCOUNTER.title`，中文“乐队”，英文“Band”。
+- `IsValidForAct` 始终返回 `false`；正式出现条件、概率、同局唯一性、专属背景与专属音乐均为后续范围。
+
+## 验证约束与结果
+
+- `tests/BandMemberEncounter.Tests.ps1` 覆盖全部已遇成员子集、存档名严格解析、属性派生关系、奖励边界、夹击协调、相对站位和本地化。
+- 自动测试不对生命、伤害、倍率具体值、场景坐标或其他固定配置数值作断言，只验证关系、集合和行为结构。
+- 仓库全部 PowerShell 回归测试已通过；`dotnet build --no-restore` 与 `dotnet publish --no-restore` 均为零错误，包含新场景的 `.pck` 已生成。
+- 仍需游戏内验证单人／多人布局、死亡和逃跑换向、保存恢复、重连、标准精英奖励以及原 Boss 行为回归。
+
+# Card List Intent（敌人卡牌列表意图）
+
+## 需求与范围
+
+以设计文档 `docs/2026-08-29-card-intent-tomorin-test-enemy-logic-design.md` 完全替换测试敌人的旧基础攻防牌和旧 Snapshot 语义。新逻辑包含固定 Tomorin 测试牌组、三个行动指标、双软锁、作词与重放、素材完整预留、收藏品队列、能力钩子、深度优先执行、纯数值投影及当前格式的主机权威重连状态。显式测试 Encounter 继续不进入正常 Act；正式 Boss、正式平衡、UI 扩展和实际网络传输不在本任务范围。
+
+## 核心接口
+
+- `EnemyCardId`／`EnemyCardDeckId`：格式为 `STS2_TOMORIN_MOD:NAME` 的稳定身份，支持严格解析。
+- `EnemyCardDefinition`／`EnemyCardInstanceKey`：不可变定义与稳定战斗实例身份；定义指纹覆盖牌面、Tag、评分、素材、生命周期、作词结果和有序效果程序。
+- `EnemyCardCombatState`：牌组、当前、保留、弃牌和消耗五牌区以及收藏品库存的唯一写入口；通过 `BeginExecution()`、`CompleteExecution()`、`MarkFault()` 管理运行阶段。
+- `EnemyActionMetricPlanner.Prepare(...)`：选择不连续行动指标，按左到右槽位抽取、按需回洗并执行候选事务；提交时冻结保留前缀、逐来源重放上限、素材绑定、随机结果和软锁诊断。
+- `EnemyCardMaterialResolver.TryReserve(...)`：按三套显式优先级生成完整、有序、无副作用的素材预留；不足时不产生部分支付。
+- `EnemyCollectionInventory`：维护可用／已消耗队列，提供追加、消耗、回收、事务克隆、快照和原子应用。
+- `EnemyCardExecutionEngine.ExecutePreparedActionAsync(...)`：只消费冻结行动，按深度优先步骤执行；正常素材不足截断不记 Fault，结构异常停止且不回滚已经提交的效果。
+- `EnemyActionProjectionService.Project(...)`：在不推进 RNG、不执行 Hook、不改牌区的前提下计算逐牌、逐重放、逐目标预期值；未知第三方修正以不完整诊断表示。
+- `CardIntentMoveState.Create(...)`：注入统一状态、规划器、执行器和游戏命令 seam；保留旧 UI 所需只读投影，不再分散持有牌区。
+- `BaseCardIntentMonsterModel.CaptureReconnectState(...)`／`TryApplyReconnectState(...)`：捕获或原子应用 `EnemyCardRuntimeSyncState`。
+- `EnemyCollectionInventoryPower.SynchronizeAsync(...)`：同步收藏品数量与队列描述；零库存保留 Power，仅压缩连续同类项。
+- `CardIntentTestEncounter.ExplicitEncounterId`：测试房间或开发启动器可使用的稳定显式入口；`IsValidForAct` 始终为 `false`。
+
+## 生命周期、冻结与重连语义
+
+准备阶段把行动结构、素材候选和随机结果冻结。较早来源可消费后续 Current 牌；后续普通来源因此跳过，Inspiration 则作为受控直接执行立即结算且不再次作为计划来源。重放每次执行前消费一份已经冻结的素材绑定，首次不足或中途耗尽均正常截断，`ReplayCount` 只影响未来准备，不改写已经公开的尝试上限。保留前缀返回 Retained；普通成功牌进入弃牌，Exhaust 进入消耗区，生命周期失败按定义去向处理。
+
+`EnemyCardRuntimeSyncState` 保存五牌区身份与顺序、ReplayCount、收藏品可用／已消耗区、冻结行动、素材绑定、随机结果、软锁诊断、运行阶段和安全步骤游标。恢复拒绝旧版本、重复身份、未知定义、非法区域或悬空引用，并只在临时状态全量验证成功后替换当前状态。捕获要求即时步骤栈为空；该 API 支持主机权威传输层接入，但当前没有网络消息补丁或普通存档迁移分支。
+
+## 测试约束与验证结果
+
+- `tests/CardIntentHarness/` 覆盖定义身份、规划、素材、收藏品、目录、执行、纯投影和重连原子性；36 项测试全部通过。
+- `tests/CardIntent.Tests.ps1` 检查核心契约、旧类型移除、冻结计划、Power 本地化、隔离 Encounter 和 Harness；通过。
+- 测试从定义、规则和输入推导预期，只比较关系、集合、身份、顺序、幂等性和状态转换，不断言固定平衡数值。
+- `dotnet build` 与 `dotnet publish` 均为 0 错误，Power 本地化已经打入资源包。
+- 仍需游戏内验证复合 UI、不同分辨率、死亡／离场、多人逐目标表现和真实断线重连。当前自动化验证 DTO 与原子恢复语义，不宣称已经验证网络传输。
+
+# Card List Intent UI 修订（逐牌 Intent 与 Hover）
+
+## 需求与范围
+
+按 `docs/2026-08-29-card-list-intent-ui-revision-design.md` 和对应实施计划，把固定五槽、卡牌无 Hover、聚合攻击预告改为右锚固定的动态逐牌视图。每张公开牌显示自己的原版 Intent 节点，攻击数值由客户端针对本地玩家实时计算；冻结行动结构、牌区、RNG 和重连状态保持主机权威。投影异常必须保留已知结果并给出诊断和 Unknown，不得把 UI 或本地数值写回战斗状态。
+
+## 冻结、执行与同步接口
+
+- `PreparedEnemyCardUnitPlan`：一次成功重放的不可变执行单元，携带 `RootSourceKey`、`ExecutingCardKey`、`ExecutingCardId`、`ReplayIndex`、执行模式、素材预留和有序步骤。
+- `PreparedEnemyResolutionStep`：直接效果、消费卡牌、消费收藏品、生成收藏品、作词结果、即时卡牌和回收结果七种显式步骤；即时／回收／作词子牌通过首单元和 `AdditionalReplayUnits` 表达全部连续重放。
+- `EnemyPreparedResolutionPlanner.PlanSource(...)`：在候选事务副本上冻结完整 DFS 计划；即时抽牌与回收选择只在此处推进 RNG，并把虚拟作词增层计入后续 `ReplayCount`。
+- `EnemyCardExecutionEngine.ExecutePreparedActionAsync(...)`：只消费冻结身份、定义、区域和预计序号，不接受随机源推进即时路径；每个安全原子边界提交 `StepPath`。
+- `EnemyCardRuntimeSyncState`：schema v2 递归传输 Unit／Step DTO；恢复先在临时状态验证旧版本、步骤类型、引用、生成序号、递归预算和游标路径，全部成功后才原子替换。
+- `EnemyCollectionEffectResolver.GetRequired(...)`：规划、执行与投影共享收藏品直接效果及特殊结算语义，避免三套分支漂移。
+
+## 投影、展示与 UI 接口
+
+- `EnemyActionProjectionService.Project(...)`：纯遍历冻结 DFS 单元，输出 `LiveActionProjection`；记录根来源、实际执行牌、重放、逐目标基础／投影命中、格挡、Power、收藏品和生成牌结果。未知修改器或结构问题返回 `IsComplete == false` 与诊断。
+- `EnemyCardIntentPresentationBuilder.Build(...)`：保持公开 `CardList` 顺序和实例键，按 `RootSourceKey` 把所有子牌效果归入根牌；固定生成 Attack、Defend、Buff、Debuff、Unknown 类别。攻击只用首目标计数并验证其他目标基础命中结构。
+- `EnemyCardDescriptionPresenter.BuildOverrideText(...)`：空字符串返回 `null`，表示保留原版描述；非空可信 BBCode 包裹 `[center]` 后由视图在 `NCard.UpdateVisuals` 之后写入。
+- `NCardListIntentView`：用 `Dictionary<EnemyCardInstanceKey, NEnemyIntentCardSlot>` 做 keyed reconciliation；`RightAnchor` 固定，`CardRow` 随公开卡列向左增长；投影不完整时保留已知槽位并显示全局 Unknown。
+- `NEnemyIntentCardSlot`：每牌维护缩略 `NCard`、效果行和原版 Single／Multi／Defend／Buff／Debuff／Unknown 节点；防御沿用原版无数值表现。
+- `NEnemyCardHoverPreview`：全视图唯一共享池化预览；`_Process` 使用全局鼠标位置和完整 Canvas 变换命中缩略／预览区域，`MouseFilter.Ignore` 保证输入穿透。
+- Power 刷新：视图订阅 owner 与本地玩家的 `PowerApplied`、`PowerIncreased`、`PowerDecreased`、`PowerRemoved`，通过绑定世代号合并到下一帧，只重建攻击显示。
+- `NIntentCardListPatch`：普通 Intent、空列、Faulted 或视图根失败均回退原版 Unknown；投影不完整不隐藏已知逐牌内容。
+
+## 验证与边界
+
+- `CardIntentHarness` 54/54 通过；冻结计划／规划／执行／重连聚焦测试 20/20 通过。
+- Windows PowerShell 执行 `tests/CardIntent.Tests.ps1` 通过，静态检查确认旧聚合类型、固定槽位、旧随机结果和平面游标无残留。
+- `dotnet build` 0 错误；输出的可空性、Godot 源生成器和同名类型警告属于当前仓库既有警告。
+- 新增测试不固定攻击、格挡、阈值、牌组份数、UI 尺寸等具体配置数值，只验证身份、关系、顺序、集合与状态不变量。
+- 本次未修改 Godot 资源，无需执行 `dotnet publish`。
+- 尚待实机：单机动态布局与 Hover、输入穿透、Power 刷新、多人本地伤害差异、真实断线重连、池化生命周期和三类故障降级。同步 API 已实现，但没有新增实际网络传输补丁。

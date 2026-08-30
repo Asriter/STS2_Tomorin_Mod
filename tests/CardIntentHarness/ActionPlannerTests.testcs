@@ -1,0 +1,313 @@
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证行动指标选择、槽位抽取、双软锁与候选事务隔离。
+/// </summary>
+public sealed class ActionPlannerTests
+{
+    /// <summary>
+    /// 验证后续回合指标排除上次结果，而首回合保留完整指标候选集。
+    /// </summary>
+    [Fact]
+    public void MetricSelectionUsesFullFirstTurnSetThenExcludesLastMetric()
+    {
+        CardIntentTestRules rules = CardIntentTestRules.Default;
+        HashSet<EnemyActionMetric> firstTurnMetrics = [];
+        for (int metricIndex = 0; metricIndex < rules.Recipes.Count; metricIndex++)
+        {
+            EnemyCardCombatState independentFirstTurn = CreateState(
+                $"METRIC_FIRST_{metricIndex}",
+                CreateCardsForRecipes(rules));
+            RecordingRandomSource indexedRandom = new(
+                new[] { metricIndex }.Concat(Enumerable.Repeat(0, rules.MaxCandidateAttempts * 8)));
+            EnemyActionMetricPlanner indexedPlanner = new(rules, new EnemyCardScoreCalculator());
+            firstTurnMetrics.Add(indexedPlanner.Prepare(
+                independentFirstTurn,
+                new EnemyPlanningContext(indexedRandom)).Metric);
+        }
+
+        EnemyCardCombatState firstTurn = CreateState("METRIC_FIRST", CreateCardsForRecipes(rules));
+        RecordingRandomSource firstRandom = new(Enumerable.Repeat(0, rules.MaxCandidateAttempts * 8));
+        EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction first = planner.Prepare(firstTurn, new EnemyPlanningContext(firstRandom));
+        EnemyActionMetric previous = first.Metric;
+        ResetSelectedCardsToDraw(firstTurn);
+        RecordingRandomSource nextRandom = new(Enumerable.Repeat(0, rules.MaxCandidateAttempts * 8));
+        PreparedEnemyCardAction next = planner.Prepare(firstTurn, new EnemyPlanningContext(nextRandom));
+
+        Assert.Equal(rules.Recipes.Keys.Order(), firstTurnMetrics.Order());
+        Assert.NotEqual(previous, next.Metric);
+    }
+
+    /// <summary>
+    /// 验证配方按左到右槽位选牌，多 Tag 实例不会重复占用，随机槽位也不额外补牌。
+    /// </summary>
+    [Fact]
+    public void RecipeFillsSlotsLeftToRightWithoutReusingAnInstance()
+    {
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Gain,
+            [EnemyCardTag.Attack, EnemyCardTag.Defense, null]);
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
+        BaseEnemyCard multiTag = CreateCard("LEFT_MULTI", EnemyCardTag.Attack | EnemyCardTag.Defense);
+        BaseEnemyCard defense = CreateCard("LEFT_DEFENSE", EnemyCardTag.Defense);
+        BaseEnemyCard fallback = CreateCard("LEFT_FALLBACK", EnemyCardTag.Ability);
+        EnemyCardCombatState state = CreateState("LEFT_TO_RIGHT", [multiTag, defense, fallback]);
+        EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, recipe.Slots.Count * 4))));
+
+        Assert.Equal(recipe.Slots.Count, action.MetricCards.Count);
+        Assert.Equal(action.MetricCards.Count, action.MetricCards.Select(card => card.InstanceKey).Distinct().Count());
+        Assert.Equal(multiTag.CardId, action.MetricCards[0].CardId);
+        Assert.Equal(defense.CardId, action.MetricCards[1].CardId);
+        Assert.Equal(fallback.CardId, action.MetricCards[2].CardId);
+    }
+
+    /// <summary>
+    /// 验证被软锁拒绝的候选不修改牌区，但已消费的随机序列不会回滚。
+    /// </summary>
+    [Fact]
+    public void RejectedCandidateOnlyAdvancesRandomAndAcceptedCandidateCommits()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [null]);
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
+        BaseEnemyCard rejected = CreateCard(
+            "LOCK_REJECTED",
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: rules.AttackLock + decimal.One));
+        BaseEnemyCard accepted = CreateCard(
+            "LOCK_ACCEPTED",
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: rules.AttackLock));
+        EnemyCardCombatState state = CreateState("LOCK_TRANSACTION", [rejected, accepted]);
+        EnemyCardInstanceKey[] originalDraw = state.DrawPile.Select(card => card.InstanceKey).ToArray();
+        RecordingRandomSource random = new([0, 0, 0, 1]);
+        EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(state, new EnemyPlanningContext(random));
+
+        Assert.Equal(accepted.CardId, Assert.Single(action.MetricCards).CardId);
+        Assert.DoesNotContain(state.CurrentCards, card => card.CardId == rejected.CardId);
+        Assert.Contains(state.DrawPile, card => card.CardId == rejected.CardId);
+        Assert.True(action.SoftLockDiagnostic.RejectedCandidateCount > 0);
+        Assert.True(random.CallCount > recipe.Slots.Count);
+        Assert.Equal(originalDraw.Length - action.MetricCards.Count, state.DrawPile.Count);
+    }
+
+    /// <summary>
+    /// 验证非空抽牌堆没有匹配 Tag 时随机兜底，且不会提前回洗弃牌堆中的匹配牌。
+    /// </summary>
+    [Fact]
+    public void NonEmptyDrawUsesFallbackWithoutPrematurelyReshufflingMatchingDiscard()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [EnemyCardTag.Attack]);
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
+        BaseEnemyCard fallback = CreateCard("FALLBACK_DRAW", EnemyCardTag.Ability);
+        BaseEnemyCard matching = CreateCard("FALLBACK_DISCARD", EnemyCardTag.Attack);
+        EnemyCardCombatState state = CreateState("FALLBACK_NO_RESHUFFLE", [fallback, matching]);
+        BaseEnemyCard authoritativeMatching = state.DrawPile.Single(card => card.CardId == matching.CardId);
+        state.MoveCard(authoritativeMatching.InstanceKey, EnemyCardZone.Discard);
+        EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, recipe.Slots.Count * 4))));
+
+        Assert.Equal(fallback.CardId, Assert.Single(action.MetricCards).CardId);
+        Assert.Contains(state.DiscardPile, card => card.CardId == matching.CardId);
+    }
+
+    /// <summary>
+    /// 验证抽牌堆为空时才按需回洗，牌堆耗尽后的后续槽位保持为空。
+    /// </summary>
+    [Fact]
+    public void EmptyDrawReshufflesOnDemandAndLeavesUnfillableSlotsEmpty()
+    {
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Attack,
+            [EnemyCardTag.Attack, EnemyCardTag.Defense]);
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
+        BaseEnemyCard onlyCard = CreateCard("RESHUFFLE_ONLY", EnemyCardTag.Attack);
+        EnemyCardCombatState state = CreateState("RESHUFFLE_ON_DEMAND", [onlyCard]);
+        state.MoveCard(state.DrawPile[0].InstanceKey, EnemyCardZone.Discard);
+        EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, recipe.Slots.Count * 4))));
+
+        Assert.True(action.MetricCards.Count < recipe.Slots.Count);
+        Assert.Equal(onlyCard.CardId, Assert.Single(action.MetricCards).CardId);
+        Assert.Empty(state.DiscardPile);
+    }
+
+    /// <summary>
+    /// 验证达到规则配置的最后候选时强制提交，并且评分忽略重放标记。
+    /// </summary>
+    [Fact]
+    public void FinalCandidateIsForcedAndScoringIgnoresReplayCount()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [EnemyCardTag.Attack]);
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
+        BaseEnemyCard overLock = CreateCard(
+            "LOCK_FORCED",
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: rules.AttackLock + decimal.One));
+        for (int index = 0; index < rules.MaxCandidateAttempts; index++)
+        {
+            overLock.IncreaseReplayCount();
+        }
+
+        EnemyCardCombatState state = CreateState("LOCK_FORCED", [overLock]);
+        EnemyCardScoreCalculator calculator = new();
+        EnemyCardScore scoreBefore = calculator.Calculate([overLock], EnemyCardScoreContext.Identity);
+        overLock.IncreaseReplayCount();
+        EnemyCardScore scoreAfter = calculator.Calculate([overLock], EnemyCardScoreContext.Identity);
+        EnemyActionMetricPlanner planner = new(rules, calculator);
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, rules.MaxCandidateAttempts * 4))));
+
+        Assert.Equal(scoreBefore, scoreAfter);
+        Assert.True(action.SoftLockDiagnostic.WasForcedByAttemptLimit);
+        Assert.Equal(rules.MaxCandidateAttempts, action.SoftLockDiagnostic.CandidateAttemptCount);
+        Assert.Equal(overLock.CardId, Assert.Single(action.MetricCards).CardId);
+    }
+
+    /// <summary>
+    /// 验证总评分锁可在攻击锁未触发时独立拒绝候选，并在最终次数强制提交。
+    /// </summary>
+    [Fact]
+    public void TotalScoreLockOperatesIndependentlyFromAttackLock()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Gain, [EnemyCardTag.Defense]);
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
+        BaseEnemyCard scoreOnly = CreateCard(
+            "TOTAL_LOCK_ONLY",
+            EnemyCardTag.Defense,
+            new EnemyCardScoreProfile(block: rules.TotalScoreLock + decimal.One));
+        EnemyCardCombatState state = CreateState("TOTAL_LOCK_ONLY", [scoreOnly]);
+        EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, rules.MaxCandidateAttempts * 4))));
+
+        Assert.True(action.SoftLockDiagnostic.Score.Attack <= rules.AttackLock);
+        Assert.True(action.SoftLockDiagnostic.Score.Total > rules.TotalScoreLock);
+        Assert.True(action.SoftLockDiagnostic.WasForcedByAttemptLimit);
+    }
+
+    /// <summary>
+    /// 根据规则配方创建足以覆盖全部 Tag 槽位的牌组。
+    /// </summary>
+    /// <param name="rules">提供配方全集的规则对象。</param>
+    /// <returns>按配方遍历顺序创建的实例集合。</returns>
+    private static IReadOnlyList<BaseEnemyCard> CreateCardsForRecipes(CardIntentTestRules rules) =>
+        rules.Recipes.Values
+            .SelectMany(recipe => recipe.Slots)
+            .Select((tag, index) => CreateCard($"METRIC_CARD_{index}", tag ?? EnemyCardTag.Ability))
+            .ToArray();
+
+    /// <summary>
+    /// 创建并注册新的战斗级状态，并由注册表分配模板槽位身份。
+    /// </summary>
+    /// <param name="scope">用于隔离全局注册表的稳定名称片段。</param>
+    /// <param name="cards">提供不可变定义的临时实例。</param>
+    /// <returns>仅含初始抽牌堆的权威状态。</returns>
+    private static EnemyCardCombatState CreateState(string scope, IReadOnlyList<BaseEnemyCard> cards)
+    {
+        EnemyCardDeckId deckId = new($"STS2_TOMORIN_MOD:PLANNER_{scope}_DECK");
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                deckId,
+                cards.Select(card => (Func<BaseEnemyCard>)(() => new HarnessEnemyCard(card.Definition))));
+        }
+
+        return EnemyCardDeckRegistry.CreateCombatState(deckId);
+    }
+
+    /// <summary>
+    /// 创建带指定 Tag 和评分档案的领域测试实例。
+    /// </summary>
+    /// <param name="suffix">稳定 CardId 的后缀。</param>
+    /// <param name="tags">定义 Tag。</param>
+    /// <param name="scoreProfile">可选评分档案；默认零贡献。</param>
+    /// <returns>尚未绑定模板身份的新实例。</returns>
+    private static BaseEnemyCard CreateCard(
+        string suffix,
+        EnemyCardTag tags,
+        EnemyCardScoreProfile? scoreProfile = null) =>
+        new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PLANNER_{suffix}"),
+            new StrikeTomorin(),
+            tags,
+            scoreProfile ?? EnemyCardScoreProfile.Zero));
+
+    /// <summary>
+    /// 把上次指标牌移回抽牌堆，同时保留 LastMetric 供不连续性验证。
+    /// </summary>
+    /// <param name="state">已完成一次规划的状态。</param>
+    private static void ResetSelectedCardsToDraw(EnemyCardCombatState state)
+    {
+        foreach (EnemyCardInstanceKey key in state.CurrentCards.Select(card => card.InstanceKey).ToArray())
+        {
+            state.MoveCard(key, EnemyCardZone.Draw);
+        }
+
+        state.ClearPreparedAction();
+    }
+
+    /// <summary>
+    /// 提供只承载不可变定义的领域测试敌人牌实例。
+    /// </summary>
+    private sealed class HarnessEnemyCard : BaseEnemyCard
+    {
+        /// <summary>
+        /// 从共享语义定义创建新的未绑定身份实例。
+        /// </summary>
+        /// <param name="definition">不可变语义定义。</param>
+        public HarnessEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+
+    /// <summary>
+    /// 使用预设索引序列记录所有随机请求，序列耗尽时返回首项。
+    /// </summary>
+    private sealed class RecordingRandomSource : IEnemyCardRandomSource
+    {
+        private readonly Queue<int> _indices;
+
+        /// <summary>
+        /// 创建确定性随机替身。
+        /// </summary>
+        /// <param name="indices">按调用顺序返回的原始索引。</param>
+        public RecordingRandomSource(IEnumerable<int> indices)
+        {
+            _indices = new Queue<int>(indices);
+        }
+
+        /// <summary>获取随机索引请求总次数。</summary>
+        public int CallCount { get; private set; }
+
+        /// <inheritdoc />
+        public int NextIndex(int exclusiveUpperBound)
+        {
+            CallCount++;
+            int value = _indices.Count > 0 ? _indices.Dequeue() : 0;
+            return Math.Abs(value % exclusiveUpperBound);
+        }
+    }
+}

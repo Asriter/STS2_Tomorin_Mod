@@ -1,0 +1,389 @@
+using System.Reflection;
+using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证深度优先执行引擎的重放、正常生命周期与素材不足边界。
+/// </summary>
+public sealed class ExecutionEngineTests
+{
+    /// <summary>
+    /// 验证每次冻结重放各执行一次直接效果，并且成功来源按定义进入弃牌堆。
+    /// </summary>
+    [Fact]
+    public async Task ReplayExecutesEachFrozenAttemptThenAppliesSuccessLifecycle()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        decimal block = new DefendTomorin().DynamicVars.Block.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition(
+            "REPLAY",
+            attack,
+            block,
+            EnemyCardLifecycle.Discard);
+        ExecutionFixture fixture = CreateFixture("REPLAY", definition);
+        BaseEnemyCard card = fixture.State.CombatState.DrawPile.Single();
+        card.IncreaseReplayCount();
+        List<decimal> attacks = [];
+        List<decimal> blocks = [];
+        fixture = CreateFixture(
+            "REPLAY_EXECUTE",
+            definition,
+            attackAllExecutor: (amount, _) =>
+            {
+                attacks.Add(amount);
+                return Task.CompletedTask;
+            },
+            defendExecutor: amount =>
+            {
+                blocks.Add(amount);
+                return Task.CompletedTask;
+            });
+        card = fixture.State.CombatState.DrawPile.Single();
+        card.IncreaseReplayCount();
+        Assert.True(fixture.State.PrepareCards());
+        int frozenAttempts = fixture.State.CombatState.PreparedAction!.Sources.Single().MaximumAttempts;
+
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.Equal(frozenAttempts, attacks.Count);
+        Assert.Equal(frozenAttempts, blocks.Count);
+        Assert.All(attacks, amount => Assert.Equal(attack, amount));
+        Assert.All(blocks, amount => Assert.Equal(block, amount));
+        Assert.Contains(fixture.State.CombatState.DiscardPile, item => item.InstanceKey == card.InstanceKey);
+        Assert.Equal(EnemyCardRuntimePhase.Idle, fixture.State.CombatState.RuntimePhase);
+    }
+
+    /// <summary>
+    /// 验证正常素材不足不会执行本体、不会进入故障态，并按失败去向保留来源牌。
+    /// </summary>
+    [Fact]
+    public async Task MaterialShortfallIsNormalAndUsesFailureDisposition()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:EXECUTION_SHORTFALL_CARD"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack | EnemyCardTag.Compose,
+            new EnemyCardScoreProfile(attack: attack),
+            materialRequests: [EnemyMaterialRequest.Compose(MegaCrit.Sts2.Core.Entities.Cards.CardType.Attack, 1)],
+            failureDisposition: EnemyCardFailureDisposition.Retain,
+            effects: [new EnemyAttackAllEffect("EXECUTION:SHORTFALL:ATTACK", attack)]);
+        List<decimal> attacks = [];
+        ExecutionFixture fixture = CreateFixture(
+            "SHORTFALL",
+            definition,
+            attackAllExecutor: (amount, _) =>
+            {
+                attacks.Add(amount);
+                return Task.CompletedTask;
+            });
+        BaseEnemyCard card = fixture.State.CombatState.DrawPile.Single();
+        Assert.True(fixture.State.PrepareCards());
+
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.Empty(attacks);
+        Assert.False(fixture.State.IsFaulted);
+        Assert.Contains(fixture.State.CombatState.RetainedCards, item => item.InstanceKey == card.InstanceKey);
+    }
+
+    /// <summary>
+    /// 验证成功来源的消耗生命周期与能力钩子替身不会改变直接效果次数。
+    /// </summary>
+    [Fact]
+    public async Task ExhaustLifecycleMovesTheSameInstanceAfterSuccess()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition(
+            "EXHAUST",
+            attack,
+            decimal.Zero,
+            EnemyCardLifecycle.Exhaust);
+        List<decimal> attacks = [];
+        ExecutionFixture fixture = CreateFixture(
+            "EXHAUST",
+            definition,
+            attackAllExecutor: (amount, _) =>
+            {
+                attacks.Add(amount);
+                return Task.CompletedTask;
+            });
+        BaseEnemyCard card = fixture.State.CombatState.DrawPile.Single();
+        Assert.True(fixture.State.PrepareCards());
+        int frozenAttempts = fixture.State.CombatState.PreparedAction!.Sources.Single().MaximumAttempts;
+
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.Equal(frozenAttempts, attacks.Count);
+        Assert.False(fixture.State.IsFaulted, fixture.State.CombatState.FaultDiagnostic);
+        Assert.Contains(fixture.State.CombatState.ExhaustPile, item => item.InstanceKey == card.InstanceKey);
+        Assert.DoesNotContain(fixture.State.CombatState.DiscardPile, item => item.InstanceKey == card.InstanceKey);
+    }
+
+    /// <summary>
+    /// 验证随机收藏品在准备阶段冻结，实际执行只读取稳定结果且不再次推进战斗 RNG。
+    /// </summary>
+    [Fact]
+    public async Task RandomCollectionResultsAreFrozenBeforeExecution()
+    {
+        WhyPlayHaruhikage model = new();
+        decimal attack = model.DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:EXECUTION_FROZEN_RANDOM_CARD"),
+            model,
+            EnemyCardTag.Attack | EnemyCardTag.CollectionGenerator,
+            new EnemyCardScoreProfile(attack: attack),
+            effects: [new EnemyAttackAllEffect("EXECUTION:FROZEN_RANDOM:ATTACK", attack)]);
+        int randomCalls = 0;
+        ExecutionFixture fixture = CreateFixture(
+            "FROZEN_RANDOM",
+            definition,
+            attackAllExecutor: (_, _) => Task.CompletedTask,
+            randomIndexSelector: _ =>
+            {
+                randomCalls++;
+                return 0;
+            });
+        Assert.True(fixture.State.PrepareCards());
+        PreparedEnemyCardSource source = fixture.State.CombatState.PreparedAction!.Sources.Single();
+        int callsAfterPreparation = randomCalls;
+        int frozenCollectionResults = source.Units
+            .SelectMany(unit => unit.OrderedSteps)
+            .OfType<PreparedGeneratedCollectionStep>()
+            .Count();
+
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.Equal(callsAfterPreparation, randomCalls);
+        Assert.Equal(frozenCollectionResults, fixture.State.CombatState.CollectionQueue.Count);
+        Assert.Equal(
+            frozenCollectionResults,
+            fixture.State.CombatState.CollectionQueue.Select(item => item.CollectionInstanceId).Distinct().Count());
+    }
+
+    /// <summary>验证执行阶段结构故障会输出上下文、完整异常及内部异常，而不是静默进入 Faulted。</summary>
+    [Fact]
+    public async Task ExecutionFaultLogsFullExceptionAndFailureContext()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition(
+            "FAULT_LOG",
+            attack,
+            decimal.Zero,
+            EnemyCardLifecycle.Discard);
+        ExecutionFixture fixture = CreateFixture(
+            "FAULT_LOG",
+            definition,
+            attackAllExecutor: ThrowExecutionFailure);
+        Assert.True(fixture.State.PrepareCards());
+
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.True(fixture.State.IsFaulted);
+        string log = Assert.Single(fixture.Owner.ErrorMessages);
+        Assert.Contains("[CardIntentFault]", log, StringComparison.Ordinal);
+        Assert.Contains("Stage=Execution", log, StringComparison.Ordinal);
+        Assert.Contains("StateId=EXECUTION_FAULT_LOG", log, StringComparison.Ordinal);
+        Assert.Contains("PhaseBeforeFault=Executing", log, StringComparison.Ordinal);
+        Assert.Contains("InvalidOperationException", log, StringComparison.Ordinal);
+        Assert.Contains("execution outer failure", log, StringComparison.Ordinal);
+        Assert.Contains("ApplicationException", log, StringComparison.Ordinal);
+        Assert.Contains("execution inner failure", log, StringComparison.Ordinal);
+        Assert.Contains(nameof(ThrowExecutionFailure), log, StringComparison.Ordinal);
+    }
+
+    /// <summary>验证准备阶段异常也输出同一组故障上下文和完整异常链。</summary>
+    [Fact]
+    public void PreparationFaultLogsFullExceptionAndFailureContext()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition(
+            "PREPARATION_FAULT_LOG",
+            attack,
+            decimal.Zero,
+            EnemyCardLifecycle.Discard);
+        ExecutionFixture fixture = CreateFixture(
+            "PREPARATION_FAULT_LOG",
+            definition,
+            randomIndexSelector: ThrowPreparationFailure);
+
+        Assert.False(fixture.State.PrepareCards());
+
+        Assert.True(fixture.State.IsFaulted);
+        string log = Assert.Single(fixture.Owner.ErrorMessages);
+        Assert.Contains("[CardIntentFault]", log, StringComparison.Ordinal);
+        Assert.Contains("Stage=Preparation", log, StringComparison.Ordinal);
+        Assert.Contains("StateId=EXECUTION_PREPARATION_FAULT_LOG", log, StringComparison.Ordinal);
+        Assert.Contains("PhaseBeforeFault=Idle", log, StringComparison.Ordinal);
+        Assert.Contains("InvalidOperationException", log, StringComparison.Ordinal);
+        Assert.Contains("preparation outer failure", log, StringComparison.Ordinal);
+        Assert.Contains("ApplicationException", log, StringComparison.Ordinal);
+        Assert.Contains("preparation inner failure", log, StringComparison.Ordinal);
+        Assert.Contains(nameof(ThrowPreparationFailure), log, StringComparison.Ordinal);
+    }
+
+    /// <summary>验证应用远端 Faulted 状态时输出其持久化失败原因，并注明不存在本机异常堆栈。</summary>
+    [Fact]
+    public void ReconnectRestoredFaultLogsPersistedReasonWithoutInventingException()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition(
+            "RECONNECT_FAULT_LOG",
+            attack,
+            decimal.Zero,
+            EnemyCardLifecycle.Discard);
+        ExecutionFixture fixture = CreateFixture("RECONNECT_FAULT_LOG", definition);
+        EnemyCardCombatState restored = EnemyCardDeckRegistry.CreateCombatState(fixture.State.DeckId);
+        restored.MarkFault("remote persisted failure reason");
+
+        typeof(CardIntentMoveState)
+            .GetMethod("ApplyValidatedCombatState", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(fixture.State, [restored]);
+
+        string log = Assert.Single(fixture.Owner.ErrorMessages);
+        Assert.Contains("[CardIntentFault]", log, StringComparison.Ordinal);
+        Assert.Contains("Stage=ReconnectRestore", log, StringComparison.Ordinal);
+        Assert.Contains("StateId=EXECUTION_RECONNECT_FAULT_LOG", log, StringComparison.Ordinal);
+        Assert.Contains("PhaseBeforeFault=Unavailable(RemoteFault)", log, StringComparison.Ordinal);
+        Assert.Contains("remote persisted failure reason", log, StringComparison.Ordinal);
+        Assert.Contains("Exception=Unavailable", log, StringComparison.Ordinal);
+    }
+
+    /// <summary>构造具有内部异常和可辨识堆栈帧的执行失败。</summary>
+    private static Task ThrowExecutionFailure(decimal _, int __) =>
+        throw new InvalidOperationException(
+            "execution outer failure",
+            new ApplicationException("execution inner failure"));
+
+    /// <summary>构造具有内部异常和可辨识堆栈帧的准备失败。</summary>
+    private static int ThrowPreparationFailure(int _) =>
+        throw new InvalidOperationException(
+            "preparation outer failure",
+            new ApplicationException("preparation inner failure"));
+
+    /// <summary>创建带标准全体攻击和自身格挡节点的测试定义。</summary>
+    private static EnemyCardDefinition CreateDefinition(
+        string scope,
+        decimal attack,
+        decimal block,
+        EnemyCardLifecycle lifecycle) =>
+        new(
+            new EnemyCardId($"STS2_TOMORIN_MOD:EXECUTION_{scope}_CARD"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack | (block > decimal.Zero ? EnemyCardTag.Defense : EnemyCardTag.None),
+            new EnemyCardScoreProfile(attack: attack, block: block),
+            lifecycle: lifecycle,
+            effects: CreateEffects(scope, attack, block));
+
+    /// <summary>只为正数基础值创建对应标准效果节点。</summary>
+    private static IReadOnlyList<IEnemyCardEffectNode> CreateEffects(
+        string scope,
+        decimal attack,
+        decimal block)
+    {
+        List<IEnemyCardEffectNode> effects =
+            [new EnemyAttackAllEffect($"EXECUTION:{scope}:ATTACK", attack)];
+        if (block > decimal.Zero)
+        {
+            effects.Add(new EnemyBlockEffect($"EXECUTION:{scope}:BLOCK", block));
+        }
+
+        return effects.AsReadOnly();
+    }
+
+    /// <summary>创建仅含一个来源实例、单槽配方和全部无副作用测试 seam 的执行夹具。</summary>
+    private static ExecutionFixture CreateFixture(
+        string scope,
+        EnemyCardDefinition definition,
+        Func<decimal, int, Task>? attackAllExecutor = null,
+        Func<decimal, Task>? defendExecutor = null,
+        Func<int, int>? randomIndexSelector = null)
+    {
+        EnemyCardDeckId deckId = new($"STS2_TOMORIN_MOD:EXECUTION_{scope}_DECK");
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(deckId, [() => new ExecutionEnemyCard(definition)]);
+        }
+
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [null]);
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
+        HarnessMonster owner = new();
+        CardIntentMoveState state = CardIntentMoveState.Create(
+            $"EXECUTION_{scope}",
+            owner,
+            deckId,
+            recipe.Slots.Count,
+            randomIndexSelector: randomIndexSelector ?? (_ => 0),
+            shouldStopExecution: () => false,
+            defendExecutor: defendExecutor,
+            attackAllExecutor: attackAllExecutor,
+            collectionPowerExecutor: _ => Task.CompletedTask,
+            combatStateOverride: DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
+            rules: rules,
+            executionEngine: new EnemyCardExecutionEngine(abilityHooks: new NoOpAbilityHooks()));
+        return new ExecutionFixture(state, owner);
+    }
+
+    /// <summary>保存执行测试所需的行动状态。</summary>
+    private sealed record ExecutionFixture(CardIntentMoveState State, HarnessMonster Owner);
+
+    /// <summary>承载共享定义且不增加额外执行状态的敌人牌。</summary>
+    private sealed class ExecutionEnemyCard : BaseEnemyCard
+    {
+        /// <summary>从共享不可变定义创建独立实例。</summary>
+        public ExecutionEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+
+    /// <summary>为领域测试关闭依赖怪物实体 Power 列表的能力钩子。</summary>
+    private sealed class NoOpAbilityHooks : IEnemyAbilityHookDispatcher
+    {
+        /// <inheritdoc />
+        public Task AfterComposeAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+
+        /// <inheritdoc />
+        public Task AfterSuccessfulUnitAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+    }
+
+    /// <summary>提供不会被当前 seam 路径调用的空战斗状态接口代理。</summary>
+    public class NullCombatStateProxy : DispatchProxy
+    {
+        /// <summary>为未调用的接口成员返回其返回类型默认值。</summary>
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            targetMethod?.ReturnType.IsValueType == true
+                ? Activator.CreateInstance(targetMethod.ReturnType)
+                : null;
+    }
+
+    /// <summary>提供不依赖真实战斗实体的最小卡牌 Intent 怪物模型。</summary>
+    private sealed class HarnessMonster : BaseCardIntentMonsterModel
+    {
+        /// <summary>捕获生产日志边界收到的全部卡牌 Intent 错误。</summary>
+        public List<string> ErrorMessages { get; } = [];
+
+        /// <inheritdoc />
+        public override int MinInitialHp => 1;
+
+        /// <inheritdoc />
+        public override int MaxInitialHp => MinInitialHp;
+
+        /// <inheritdoc />
+        public override string? CustomVisualPath => null;
+
+        /// <inheritdoc />
+        protected override MonsterMoveStateMachine GenerateMoveStateMachine() => null!;
+
+        /// <inheritdoc />
+        protected override void LogCardIntentError(string message)
+        {
+            ErrorMessages.Add(message);
+        }
+    }
+}

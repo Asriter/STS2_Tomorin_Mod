@@ -1,0 +1,26 @@
+<Project>
+  <Import Project="..\..\local.props" Condition="Exists('..\..\local.props')" />
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <CardIntentAutoSteamPath>D:\SteamLibrary\steamapps</CardIntentAutoSteamPath>
+    <SteamLibraryPath Condition="'$(SteamLibraryPath)' == '' and Exists('$(CardIntentAutoSteamPath)\common\Slay the Spire 2')">$(CardIntentAutoSteamPath)</SteamLibraryPath>
+    <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">G:\SteamLibrary\steamapps</SteamLibraryPath>
+    <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">$(SteamLibraryPath)\common\Slay the Spire 2\data_sts2_windows_x86_64</Sts2DataDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">$(HOME)/.local/share/Steam/steamapps</SteamLibraryPath>
+    <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">$(SteamLibraryPath)/common/Slay the Spire 2/data_sts2_linuxbsd_x86_64</Sts2DataDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">$(HOME)/Library/Application Support/Steam/steamapps</SteamLibraryPath>
+    <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">$(SteamLibraryPath)/common/Slay the Spire 2/SlayTheSpire2.app/Contents/Resources/data_sts2_macos_x86_64</Sts2DataDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <CardIntentHarnessOutputRoot>$([System.IO.Path]::Combine($([System.IO.Path]::GetTempPath()), 'STS2_Tomorin_Mod_CardIntentHarness'))</CardIntentHarnessOutputRoot>
+    <BaseIntermediateOutputPath>$(CardIntentHarnessOutputRoot)/obj/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(CardIntentHarnessOutputRoot)/bin/</BaseOutputPath>
+  </PropertyGroup>
+</Project>

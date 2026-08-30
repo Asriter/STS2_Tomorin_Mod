@@ -1,0 +1,206 @@
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证当前版本的主机权威重连状态能够完整往返，并在损坏输入下保持原状态不变。
+/// </summary>
+public sealed class ReconnectStateTests
+{
+    /// <summary>
+    /// 验证五牌区、重放、收藏品和安全步骤游标会按稳定身份无随机地往返。
+    /// </summary>
+    [Fact]
+    public void RuntimeStateRoundTripPreservesAuthoritativeIdentityAndCursor()
+    {
+        CardIntentTestDeck.EnsureRegistered();
+        EnemyCardCombatState source = EnemyCardDeckRegistry.CreateCombatState(CardIntentTestDeck.DeckId);
+        BaseEnemyCard current = source.DrawPile[0];
+        BaseEnemyCard retained = source.DrawPile[1];
+        BaseEnemyCard discard = source.DrawPile[2];
+        BaseEnemyCard exhaust = source.DrawPile[3];
+        current.IncreaseReplayCount();
+        source.MoveCard(current.InstanceKey, EnemyCardZone.Current);
+        source.MoveCard(retained.InstanceKey, EnemyCardZone.Retained);
+        source.MoveCard(discard.InstanceKey, EnemyCardZone.Discard);
+        source.MoveCard(exhaust.InstanceKey, EnemyCardZone.Exhaust);
+        EnemyCollectionDefinition collection = CardIntentTestCollectionCatalog.Catalog.Definitions[0];
+        EnemyCollectionInstance consumed = source.CollectionInventory.Append(collection);
+        source.CollectionInventory.Consume(consumed);
+        source.CollectionInventory.Append(CardIntentTestCollectionCatalog.Catalog.Definitions[1]);
+        EnemyCardExecutionCursor cursor = new()
+        {
+            SourceIndex = source.CurrentCards.Count,
+            ReplayIndex = current.ReplayCount,
+            CommittedStepCount = source.DiscardPile.Count,
+            IsCompleted = false
+        };
+        cursor.SetStepPath([source.RetainedCards.Count]);
+
+        EnemyCardRuntimeSyncState sync = EnemyCardRuntimeSynchronizer.Capture("TEST_STATE", source, cursor);
+        bool restored = EnemyCardRuntimeSynchronizer.TryRestore(
+            sync,
+            CardIntentTestDeck.DeckId,
+            CardIntentTestCardCatalog.AllDefinitions,
+            CardIntentTestCollectionCatalog.Catalog,
+            out EnemyCardCombatState? target,
+            out EnemyCardExecutionCursor? restoredCursor,
+            out string reason);
+
+        Assert.True(restored, reason);
+        Assert.NotNull(target);
+        Assert.Equal(source.DrawPile.Select(card => card.InstanceKey), target!.DrawPile.Select(card => card.InstanceKey));
+        Assert.Equal(source.CurrentCards.Select(card => card.InstanceKey), target.CurrentCards.Select(card => card.InstanceKey));
+        Assert.Equal(source.RetainedCards.Select(card => card.InstanceKey), target.RetainedCards.Select(card => card.InstanceKey));
+        Assert.Equal(source.DiscardPile.Select(card => card.InstanceKey), target.DiscardPile.Select(card => card.InstanceKey));
+        Assert.Equal(source.ExhaustPile.Select(card => card.InstanceKey), target.ExhaustPile.Select(card => card.InstanceKey));
+        Assert.Equal(current.ReplayCount, target.CurrentCards.Single().ReplayCount);
+        Assert.Equal(
+            source.CollectionInventory.Available.Select(item => item.CollectionInstanceId),
+            target.CollectionInventory.Available.Select(item => item.CollectionInstanceId));
+        Assert.Equal(
+            source.CollectionInventory.Consumed.Select(item => item.CollectionInstanceId),
+            target.CollectionInventory.Consumed.Select(item => item.CollectionInstanceId));
+        Assert.NotSame(cursor, restoredCursor);
+        Assert.Equal(cursor.SourceIndex, restoredCursor!.SourceIndex);
+        Assert.Equal(cursor.ReplayIndex, restoredCursor.ReplayIndex);
+        Assert.Equal(cursor.StepPath, restoredCursor.StepPath);
+        Assert.Equal(cursor.CommittedStepCount, restoredCursor.CommittedStepCount);
+        Assert.Equal(cursor.IsCompleted, restoredCursor.IsCompleted);
+    }
+
+    /// <summary>
+    /// 验证重复实例身份会被临时恢复校验整体拒绝，既不推进随机也不产生半成品状态。
+    /// </summary>
+    [Fact]
+    public void CorruptedDuplicateIdentityIsRejectedBeforeAnyStateCanBeApplied()
+    {
+        CardIntentTestDeck.EnsureRegistered();
+        EnemyCardCombatState source = EnemyCardDeckRegistry.CreateCombatState(CardIntentTestDeck.DeckId);
+        EnemyCardRuntimeSyncState valid = EnemyCardRuntimeSynchronizer.Capture("TEST_STATE", source, null);
+        EnemyCardRuntimeCardState duplicate = valid.DrawPile[0];
+        EnemyCardRuntimeSyncState corrupted = valid with
+        {
+            CurrentCards = valid.CurrentCards.Concat([duplicate]).ToArray()
+        };
+
+        bool restored = EnemyCardRuntimeSynchronizer.TryRestore(
+            corrupted,
+            CardIntentTestDeck.DeckId,
+            CardIntentTestCardCatalog.AllDefinitions,
+            CardIntentTestCollectionCatalog.Catalog,
+            out EnemyCardCombatState? target,
+            out _,
+            out string reason);
+
+        Assert.False(restored);
+        Assert.Null(target);
+        Assert.False(string.IsNullOrWhiteSpace(reason));
+        Assert.Equal(valid.DrawPile.Count, source.DrawPile.Count);
+        Assert.Empty(source.CurrentCards);
+    }
+
+    /// <summary>
+    /// 验证旧结构版本与越界游标均会被拒绝，调用方只能向主机请求重发当前版本数据。
+    /// </summary>
+    [Fact]
+    public void OldSchemaAndUnsafeCursorAreRejected()
+    {
+        CardIntentTestDeck.EnsureRegistered();
+        EnemyCardCombatState source = EnemyCardDeckRegistry.CreateCombatState(CardIntentTestDeck.DeckId);
+        EnemyCardRuntimeSyncState valid = EnemyCardRuntimeSynchronizer.Capture("TEST_STATE", source, null);
+        EnemyCardRuntimeSyncState oldSchema = valid with
+        {
+            SchemaVersion = EnemyCardRuntimeSyncState.CurrentSchemaVersion - 1
+        };
+        EnemyCardRuntimeSyncState unsafeCursor = valid with
+        {
+            Cursor = new EnemyCardExecutionCursor { SourceIndex = -1 }
+        };
+
+        Assert.False(TryRestore(oldSchema, out _));
+        Assert.False(TryRestore(unsafeCursor, out _));
+    }
+
+    /// <summary>
+    /// 验证准备行动的递归单元和显式步骤种类可以往返，未知步骤种类会整体拒绝。
+    /// </summary>
+    [Fact]
+    public void PreparedRecursivePlanRoundTripsAndRejectsUnknownStepKind()
+    {
+        CardIntentTestDeck.EnsureRegistered();
+        EnemyCardCombatState source = EnemyCardDeckRegistry.CreateCombatState(CardIntentTestDeck.DeckId);
+        EnemyActionMetricPlanner planner = new(
+            CardIntentTestRules.Default,
+            new EnemyCardScoreCalculator());
+        PreparedEnemyCardAction action = planner.Prepare(
+            source,
+            new EnemyPlanningContext(new ZeroRandomSource()));
+        PreparedEnemyCardSource sourcePlan = action.Sources.First(item => item.Units.Count > 0);
+        EnemyCardExecutionCursor cursor = new()
+        {
+            SourceIndex = action.Sources.ToList().IndexOf(sourcePlan),
+            ReplayIndex = sourcePlan.Units[0].ReplayIndex,
+            CommittedStepCount = 0
+        };
+        cursor.SetStepPath([0]);
+
+        EnemyCardRuntimeSyncState sync = EnemyCardRuntimeSynchronizer.Capture("RECURSIVE_PLAN", source, cursor);
+        Assert.True(TryRestore(sync, out string roundTripReason), roundTripReason);
+        PreparedEnemyCardUnitPlanSyncState transferUnit = sync.PreparedAction!.Sources
+            .Single(item => item.SourceInstanceKey == sourcePlan.SourceKey.Value)
+            .Units[0];
+        PreparedEnemyResolutionStepSyncState unknown = transferUnit.OrderedSteps[0] with
+        {
+            Kind = (PreparedEnemyResolutionStepSyncKind)int.MaxValue
+        };
+        PreparedEnemyCardUnitPlanSyncState corruptedUnit = transferUnit with
+        {
+            OrderedSteps = [unknown, .. transferUnit.OrderedSteps.Skip(1)]
+        };
+        PreparedEnemyCardSourceSyncState corruptedSource = sync.PreparedAction.Sources
+            .Single(item => item.SourceInstanceKey == sourcePlan.SourceKey.Value) with
+        {
+            Units = [corruptedUnit, .. sync.PreparedAction.Sources
+                .Single(item => item.SourceInstanceKey == sourcePlan.SourceKey.Value).Units.Skip(1)]
+        };
+        PreparedEnemyCardActionSyncState corruptedAction = sync.PreparedAction with
+        {
+            Sources = sync.PreparedAction.Sources
+                .Select(item => item.SourceInstanceKey == corruptedSource.SourceInstanceKey
+                    ? corruptedSource
+                    : item)
+                .ToArray()
+        };
+
+        Assert.False(TryRestore(sync with { PreparedAction = corruptedAction }, out _));
+
+        EnemyCardExecutionCursor outOfBounds = cursor.Clone();
+        outOfBounds.SetStepPath([sourcePlan.Units[0].OrderedSteps.Count + 1]);
+        Assert.False(TryRestore(sync with { Cursor = outOfBounds }, out _));
+    }
+
+    /// <summary>
+    /// 使用测试敌人的显式目录尝试恢复一个传输状态。
+    /// </summary>
+    private static bool TryRestore(EnemyCardRuntimeSyncState sync, out string reason) =>
+        EnemyCardRuntimeSynchronizer.TryRestore(
+            sync,
+            CardIntentTestDeck.DeckId,
+            CardIntentTestCardCatalog.AllDefinitions,
+            CardIntentTestCollectionCatalog.Catalog,
+            out _,
+            out _,
+            out reason);
+
+    /// <summary>
+    /// 为递归同步测试提供始终选择首个候选的确定性随机源。
+    /// </summary>
+    private sealed class ZeroRandomSource : IEnemyCardRandomSource
+    {
+        /// <inheritdoc />
+        public int NextIndex(int exclusiveUpperBound) => 0;
+    }
+}

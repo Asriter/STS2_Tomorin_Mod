@@ -63,13 +63,8 @@ public class FullPowerOblivionis : CustomMonsterModel
 
     public async Task Init()
     {
-        // SfxCmd.Play("start");
-        // await Cmd.Wait(2);
         await CreatureCmd.TriggerAnim(base.Creature, "Start", 0);
         await Cmd.Wait(1);
-        // await CreatureCmd.TriggerAnim(base.Creature, "Attack", 3);
-        // // Log.Warn("测试Log，正在播放动画！！！");
-        // await CreatureCmd.TriggerAnim(base.Creature, "TestName", 3);
 
         var power = await PowerCmd.Apply<OblivionisHiddenInheritPower>(new ThrowingPlayerChoiceContext(), Creature, 1, base.Creature, null);
         await power.SetNewPower();

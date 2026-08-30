@@ -5,7 +5,6 @@ using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
-using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Localization;
@@ -16,7 +15,6 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Nodes.Vfx;
-using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Cards;
@@ -58,19 +56,19 @@ public class Taki : CustomMonsterModel
     //第一阶段
     private int _phaseOneBuffCount = 1;
 
-    private int PhaseOneStateAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 18, 16);
+    protected virtual int PhaseOneStateAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 18, 16);
 
     //3*5
-    private int PhaseOneNormalAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3);
+    protected virtual int PhaseOneNormalAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3);
     private int PhaseOneNormalAtkCount => 5;
 
     //12*2
-    private int PhaseOneBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 13, 12);
+    protected virtual int PhaseOneBigAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 13, 12);
     private int PhaseOneBigAtkCount => 2;
 
     //第二阶段
     //5*3 命中时给一张伤口到弃牌堆
-    private int PhaseTwoCardAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);
+    protected virtual int PhaseTwoCardAtk => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);
     private int PhaseTwoCardAtkCount => 5;
     private int PhaseTwoCardCount => 1;
     private int PhaseBlock => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 28, 23);
@@ -78,12 +76,22 @@ public class Taki : CustomMonsterModel
 
     //第三阶段
     //10*3
-    private int PhaseThreeAtk => 10;
+    protected virtual int PhaseThreeAtk => 10;
     private int PhaseThreeAtkCount => 5;
 
     //各阶段血量
-    private int PhaseOneHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 235, 210);
-    private int PhaseTwoHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 225, 200);
+    protected virtual int PhaseOneHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 235, 210);
+    protected virtual int PhaseTwoHp => AscensionHelper.GetValueIfAscension(AscensionLevel.ToughEnemies, 225, 200);
+
+    /// <summary>
+    /// 是否发放立希首领战专属遗物奖励。
+    /// </summary>
+    protected virtual bool ShouldGrantBossReward => true;
+
+    /// <summary>
+    /// 立希逃跑后是否立即结束整个战斗房间。
+    /// </summary>
+    protected virtual bool ShouldEndRoomAfterEscape => true;
 
 
     #region 文本相关
@@ -353,13 +361,10 @@ public class Taki : CustomMonsterModel
     {
         TalkCmd.Play(_die, base.Creature, _takiColor);
 
-        //添加额外奖励
-        var room = (CombatRoom)creature.CombatState.RunState.CurrentRoom;
-        var players = room.CombatState.Players;
-        foreach (var player in players)
+        if (ShouldGrantBossReward)
         {
-            var relic = ModelDb.Relic<TakiDrum>().ToMutable();
-            room.AddExtraReward(player, new RelicReward(RelicRarity.Rare, player));
+            var room = (CombatRoom)creature.CombatState.RunState.CurrentRoom;
+            BandBossRelicReward.Add<TakiDrum>(room);
         }
 
         Creature.Died -= PhaseThreeClearCallBack;
@@ -373,7 +378,20 @@ public class Taki : CustomMonsterModel
         await Cmd.Wait(1f);
 
         await CreatureCmd.Escape(base.Creature);
-        room.OnCombatEnded();
+        await AfterEscapeCompleted(room);
+        if (ShouldEndRoomAfterEscape)
+        {
+            room.OnCombatEnded();
+        }
+    }
+
+    /// <summary>
+    /// 在立希完成逃跑后执行派生敌人需要的收尾逻辑。
+    /// </summary>
+    /// <param name="room">当前战斗房间。</param>
+    protected virtual Task AfterEscapeCompleted(CombatRoom room)
+    {
+        return Task.CompletedTask;
     }
 
     #endregion

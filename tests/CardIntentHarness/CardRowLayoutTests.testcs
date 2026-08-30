@@ -1,0 +1,59 @@
+using System.Reflection;
+using Godot;
+using STS2_Tomorin_Mod.Enemy.CardIntents.View;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证敌人卡牌队列始终以原版角色头顶 Intent 锚点为水平中心。
+/// </summary>
+public sealed class CardRowLayoutTests
+{
+    /// <summary>
+    /// 空队列不应偏移锚点。
+    /// </summary>
+    [Fact]
+    public void EmptyRowKeepsBothEdgesAtIntentCenter()
+    {
+        Vector2 offsets = CalculateOffsets(0);
+
+        Assert.Equal(Vector2.Zero, offsets);
+    }
+
+    /// <summary>
+    /// 奇数张卡时中间卡中心应落在角色头顶锚点上。
+    /// </summary>
+    [Fact]
+    public void OddCardCountExpandsSymmetricallyAroundIntentCenter()
+    {
+        Vector2 offsets = CalculateOffsets(3);
+
+        Assert.Equal(-150f, offsets.X);
+        Assert.Equal(150f, offsets.Y);
+    }
+
+    /// <summary>
+    /// 偶数张卡时中间两张卡之间的间隙应落在角色头顶锚点上。
+    /// </summary>
+    [Fact]
+    public void EvenCardCountExpandsSymmetricallyAroundIntentCenter()
+    {
+        Vector2 offsets = CalculateOffsets(4);
+
+        Assert.Equal(-201f, offsets.X);
+        Assert.Equal(201f, offsets.Y);
+    }
+
+    /// <summary>
+    /// 调用生产视图的纯布局计算，不创建 Godot 节点或模拟显示结果。
+    /// </summary>
+    private static Vector2 CalculateOffsets(int cardCount)
+    {
+        MethodInfo? method = typeof(NCardListIntentView).GetMethod(
+            "CalculateHorizontalOffsets",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsType<Vector2>(method.Invoke(null, [cardCount]));
+    }
+}

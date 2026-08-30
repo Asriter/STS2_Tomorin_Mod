@@ -1,0 +1,114 @@
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using STS2_Tomorin_Mod.Enemy.CardIntents.View;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证敌人卡牌描述覆写只影响专用视图文本，不进入领域身份或同步状态。
+/// </summary>
+public sealed class DescriptionOverrideTests
+{
+    /// <summary>
+    /// 验证省略覆写时得到非空空串，并且实例只读转发非空可信富文本。
+    /// </summary>
+    [Fact]
+    public void DefinitionDefaultsToEmptyAndCardForwardsTrustedOverride()
+    {
+        EnemyCardDefinition withoutOverride = CreateDefinition("DEFAULT");
+        string trustedText = "[color=yellow]测试描述[/color]\n第二行";
+        EnemyCardDefinition withOverride = CreateDefinition("TRUSTED", trustedText);
+        DescriptionEnemyCard card = new(withOverride);
+
+        Assert.NotNull(withoutOverride.DescriptionOverride);
+        Assert.Empty(withoutOverride.DescriptionOverride);
+        Assert.Same(withOverride.DescriptionOverride, card.DescriptionOverride);
+        Assert.Equal(trustedText, card.DescriptionOverride);
+    }
+
+    /// <summary>
+    /// 验证描述差异不会改变注册指纹、稳定身份、评分、效果程序或重连实例字段。
+    /// </summary>
+    [Fact]
+    public void OverrideDoesNotChangeSemanticFingerprintOrRuntimeStateContract()
+    {
+        EnemyCardDefinition plain = CreateDefinition("IDENTITY");
+        EnemyCardDefinition described = CreateDefinition("IDENTITY", "仅用于显示的覆写");
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DESCRIPTION_OVERRIDE_FINGERPRINT");
+        int invocation = 0;
+
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                deckId,
+                [() => new DescriptionEnemyCard(invocation++ % 2 == 0 ? plain : described)]);
+        }
+
+        Assert.Equal(plain.SemanticFingerprint, described.SemanticFingerprint);
+        Assert.Equal(plain.CardId, described.CardId);
+        Assert.Equal(plain.ScoreProfile, described.ScoreProfile);
+        Assert.Equal(plain.EffectProgramIds, described.EffectProgramIds);
+        Assert.DoesNotContain(
+            typeof(EnemyCardRuntimeCardState).GetProperties(),
+            property => property.Name.Contains("Description", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 验证纯文本 presenter 只包装非空覆写，并且连续复用时空覆写不会继承旧文本。
+    /// </summary>
+    [Fact]
+    public void PresenterCentersOnlyNonEmptyTextWithoutPoolingLeak()
+    {
+        string trustedText = "[color=cyan]覆写[/color]";
+        string? firstBinding = EnemyCardDescriptionPresenter.BuildOverrideText(trustedText);
+        string? secondBinding = EnemyCardDescriptionPresenter.BuildOverrideText(string.Empty);
+
+        Assert.NotNull(firstBinding);
+        Assert.StartsWith("[center]", firstBinding, StringComparison.Ordinal);
+        Assert.EndsWith("[/center]", firstBinding, StringComparison.Ordinal);
+        Assert.Contains(trustedText, firstBinding, StringComparison.Ordinal);
+        Assert.Null(secondBinding);
+    }
+
+    /// <summary>
+    /// 验证显式开发测试牌目录至少提供一张描述覆写牌，供实机池化切换路径验收。
+    /// </summary>
+    [Fact]
+    public void TestCatalogContainsAnExplicitDescriptionOverride()
+    {
+        Assert.Contains(
+            CardIntentTestCardCatalog.InitialCardDefinitions,
+            definition => !string.IsNullOrEmpty(definition.DescriptionOverride));
+    }
+
+    /// <summary>
+    /// 创建只从原版规范变量派生语义、可选显示覆写的测试定义。
+    /// </summary>
+    /// <param name="scope">测试身份后缀。</param>
+    /// <param name="descriptionOverride">只用于专用敌人卡面显示的文本。</param>
+    /// <returns>完整不可变敌人卡牌定义。</returns>
+    private static EnemyCardDefinition CreateDefinition(string scope, string descriptionOverride = "")
+    {
+        StrikeTomorin model = new();
+        decimal attack = model.DynamicVars.Damage.BaseValue;
+        return new EnemyCardDefinition(
+            new EnemyCardId($"STS2_TOMORIN_MOD:DESCRIPTION_OVERRIDE_{scope}"),
+            model,
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: attack),
+            effects: [new EnemyAttackAllEffect($"DESCRIPTION_OVERRIDE:{scope}", attack)],
+            descriptionOverride: descriptionOverride);
+    }
+
+    /// <summary>承载描述覆写定义而不增加可变状态的测试牌。</summary>
+    private sealed class DescriptionEnemyCard : BaseEnemyCard
+    {
+        /// <summary>从共享不可变定义创建测试牌实例。</summary>
+        /// <param name="definition">共享不可变定义。</param>
+        public DescriptionEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+}

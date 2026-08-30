@@ -1,0 +1,240 @@
+using MegaCrit.Sts2.Core.Entities.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.CardIntentHarness;
+
+/// <summary>
+/// 验证敌人素材资格、优先级、来源排除与完整预留语义。
+/// </summary>
+public sealed class MaterialResolverTests
+{
+    /// <summary>
+    /// 验证攻击或技能作词优先选择队列中最早的灵光收藏品。
+    /// </summary>
+    [Fact]
+    public void ComposeAttackOrSkillUsesEarliestCollectionEpiphanyBeforeHandCandidates()
+    {
+        EnemyCollectionDefinition ordinaryCollection = Collection("ordinary", isEpiphany: false);
+        EnemyCollectionDefinition laterEpiphany = Collection("later-epiphany", isEpiphany: true);
+        EnemyCollectionDefinition earliestEpiphany = Collection("earliest-epiphany", isEpiphany: true);
+        EnemyCollectionInventory inventory = new();
+        inventory.Append(ordinaryCollection);
+        EnemyCollectionInstance expected = inventory.Append(earliestEpiphany);
+        inventory.Append(laterEpiphany);
+
+        EnemyMaterialCandidate handNormal = Hand("normal", CardType.Attack);
+        EnemyMaterialCandidate handEpiphany = Hand("hand-epiphany", CardType.Status, isEpiphany: true);
+        EnemyMaterialCandidate handInspiration = Hand("inspiration", CardType.Attack, isInspiration: true);
+        EnemyMaterialContext context = new(
+            [handNormal, handEpiphany, handInspiration],
+            inventory,
+            new EnemyCardInstanceKey("source"));
+
+        bool success = new EnemyCardMaterialResolver().TryReserve(
+            EnemyMaterialRequest.Compose(CardType.Attack, 1),
+            context,
+            out EnemyMaterialReservation reservation);
+
+        Assert.True(success);
+        EnemyMaterialBinding binding = Assert.Single(reservation.Bindings);
+        Assert.Same(expected, binding.Candidate.Collection);
+        Assert.Equal(expected.CollectionInstanceId, binding.CollectionInstanceId);
+        Assert.Null(binding.CardInstanceKey);
+    }
+
+    /// <summary>
+    /// 验证状态作词先用最早收藏品，并保护不带灵光的状态灵感牌。
+    /// </summary>
+    [Fact]
+    public void ComposeStatusUsesEarliestCollectionAndProtectsOrdinaryInspirationStatus()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionInstance expected = inventory.Append(Collection("first", isEpiphany: false));
+        inventory.Append(Collection("second", isEpiphany: true));
+        EnemyMaterialCandidate protectedInspiration = Hand(
+            "protected",
+            CardType.Status,
+            isInspiration: true);
+        EnemyMaterialCandidate handEpiphany = Hand("hand-epiphany", CardType.Status, isEpiphany: true);
+        EnemyMaterialCandidate ordinaryStatus = Hand("ordinary-status", CardType.Status);
+
+        bool success = new EnemyCardMaterialResolver().TryReserve(
+            EnemyMaterialRequest.Compose(CardType.Status, 1),
+            new EnemyMaterialContext(
+                [protectedInspiration, handEpiphany, ordinaryStatus],
+                inventory,
+                new EnemyCardInstanceKey("source")),
+            out EnemyMaterialReservation reservation);
+
+        Assert.True(success);
+        Assert.Same(expected, Assert.Single(reservation.Bindings).Candidate.Collection);
+
+        inventory.Consume(expected);
+        inventory.Consume(inventory.Available[0]);
+        success = new EnemyCardMaterialResolver().TryReserve(
+            EnemyMaterialRequest.Compose(CardType.Status, 2),
+            new EnemyMaterialContext(
+                [protectedInspiration, handEpiphany, ordinaryStatus],
+                inventory,
+                new EnemyCardInstanceKey("source")),
+            out reservation);
+
+        Assert.True(success);
+        Assert.Equal(
+            [handEpiphany.CandidateId, ordinaryStatus.CandidateId],
+            reservation.Bindings.Select(binding => binding.Candidate.CandidateId));
+        Assert.DoesNotContain(
+            reservation.Bindings,
+            binding => binding.Candidate.CandidateId == protectedInspiration.CandidateId);
+    }
+
+    /// <summary>
+    /// 验证非作词素材依次优先手牌灵感、收藏品、手牌灵光和普通手牌。
+    /// </summary>
+    [Fact]
+    public void NonComposeUsesItsExplicitPriorityOrder()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionInstance collection = inventory.Append(Collection("collection", isEpiphany: false));
+        EnemyMaterialCandidate ordinary = Hand("ordinary", CardType.Status);
+        EnemyMaterialCandidate epiphany = Hand("epiphany", CardType.Status, isEpiphany: true);
+        EnemyMaterialCandidate inspiration = Hand("inspiration", CardType.Status, isInspiration: true);
+
+        bool success = new EnemyCardMaterialResolver().TryReserve(
+            EnemyMaterialRequest.NonCompose(CardType.Status, 4),
+            new EnemyMaterialContext(
+                [ordinary, epiphany, inspiration],
+                inventory,
+                new EnemyCardInstanceKey("source")),
+            out EnemyMaterialReservation reservation);
+
+        Assert.True(success);
+        Assert.Equal(
+            [
+                inspiration.CandidateId,
+                EnemyMaterialCandidate.FromCollection(collection).CandidateId,
+                epiphany.CandidateId,
+                ordinary.CandidateId
+            ],
+            reservation.Bindings.Select(binding => binding.Candidate.CandidateId));
+    }
+
+    /// <summary>
+    /// 验证来源牌不能消费自己，且非作词无类型请求接受任意其他手牌。
+    /// </summary>
+    [Fact]
+    public void SourceIsExcludedAndUntypedNonComposeAcceptsAnyOtherHandCard()
+    {
+        EnemyMaterialCandidate source = Hand("source", CardType.Attack, isInspiration: true);
+        EnemyMaterialCandidate other = Hand("other", CardType.Skill);
+
+        bool success = new EnemyCardMaterialResolver().TryReserve(
+            EnemyMaterialRequest.NonComposeAny(1),
+            new EnemyMaterialContext(
+                [source, other],
+                new EnemyCollectionInventory(),
+                source.CardInstanceKey!),
+            out EnemyMaterialReservation reservation);
+
+        Assert.True(success);
+        Assert.Same(other, Assert.Single(reservation.Bindings).Candidate);
+        Assert.Equal(other.CardInstanceKey, reservation.Bindings[0].CardInstanceKey);
+        Assert.Null(reservation.Bindings[0].CollectionInstanceId);
+    }
+
+    /// <summary>
+    /// 验证素材不足时返回空预留，不修改手牌或收藏品区域。
+    /// </summary>
+    [Fact]
+    public void IncompletePaymentReturnsEmptyReservationWithoutMutatingInputs()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionInstance collection = inventory.Append(Collection("only-collection", isEpiphany: true));
+        EnemyMaterialCandidate hand = Hand("only-hand", CardType.Attack);
+        EnemyMaterialContext context = new(
+            [hand],
+            inventory,
+            new EnemyCardInstanceKey("source"));
+        string[] availableBefore = inventory.Available.Select(item => item.CollectionInstanceId).ToArray();
+        string[] consumedBefore = inventory.Consumed.Select(item => item.CollectionInstanceId).ToArray();
+
+        bool success = new EnemyCardMaterialResolver().TryReserve(
+            EnemyMaterialRequest.Compose(CardType.Attack, context.Hand.Count + inventory.Available.Count + 1),
+            context,
+            out EnemyMaterialReservation reservation);
+
+        Assert.False(success);
+        Assert.False(reservation.IsComplete);
+        Assert.Empty(reservation.Bindings);
+        Assert.Equal([hand], context.Hand);
+        Assert.Equal(availableBefore, inventory.Available.Select(item => item.CollectionInstanceId));
+        Assert.Equal(consumedBefore, inventory.Consumed.Select(item => item.CollectionInstanceId));
+        Assert.Same(collection, inventory.Available[0]);
+    }
+
+    /// <summary>
+    /// 验证上下文创建后生成的新收藏品不能补足已经开始规划的当前支付。
+    /// </summary>
+    [Fact]
+    public void MaterialGeneratedAfterContextSnapshotCannotCompleteCurrentPayment()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyMaterialCandidate hand = Hand("only-hand", CardType.Attack);
+        EnemyMaterialContext context = new(
+            [hand],
+            inventory,
+            new EnemyCardInstanceKey("source"));
+        inventory.Append(Collection("too-late", isEpiphany: true));
+
+        bool success = new EnemyCardMaterialResolver().TryReserve(
+            EnemyMaterialRequest.Compose(CardType.Attack, context.Hand.Count + 1),
+            context,
+            out EnemyMaterialReservation reservation);
+
+        Assert.False(success);
+        Assert.Empty(reservation.Bindings);
+        Assert.Empty(context.Collections);
+        Assert.NotEmpty(inventory.Available);
+    }
+
+    /// <summary>
+    /// 验证作词请求拒绝三套显式策略以外的牌类型。
+    /// </summary>
+    [Fact]
+    public void ComposeRejectsUnsupportedMaterialCardType()
+    {
+        CardType unsupported = Enum.GetValues<CardType>()
+            .First(type => type is not (CardType.Attack or CardType.Skill or CardType.Status));
+
+        Assert.Throws<ArgumentException>(() => EnemyMaterialRequest.Compose(unsupported, 1));
+    }
+
+    /// <summary>
+    /// 创建用于测试的手牌素材视图。
+    /// </summary>
+    /// <param name="id">素材稳定实例标识。</param>
+    /// <param name="cardType">素材牌类型。</param>
+    /// <param name="isInspiration">是否为灵感。</param>
+    /// <param name="isEpiphany">是否为灵光。</param>
+    /// <returns>手牌素材候选。</returns>
+    private static EnemyMaterialCandidate Hand(
+        string id,
+        CardType cardType,
+        bool isInspiration = false,
+        bool isEpiphany = false) =>
+        EnemyMaterialCandidate.FromHand(
+            new EnemyCardInstanceKey(id),
+            cardType,
+            isInspiration,
+            isEpiphany);
+
+    /// <summary>
+    /// 创建用于测试的收藏品定义。
+    /// </summary>
+    /// <param name="id">收藏品定义标识。</param>
+    /// <param name="isEpiphany">是否为灵光。</param>
+    /// <returns>不可变收藏品定义。</returns>
+    private static EnemyCollectionDefinition Collection(string id, bool isEpiphany) =>
+        new(id, typeof(MaterialResolverTests), CardType.Status, isEpiphany, $"effect:{id}");
+}

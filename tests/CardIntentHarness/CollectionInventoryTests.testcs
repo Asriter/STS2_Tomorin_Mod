@@ -1,0 +1,176 @@
+using MegaCrit.Sts2.Core.Entities.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.CardIntentHarness;
+
+/// <summary>
+/// 验证收藏品目录和权威队列的顺序、唯一性及唯一写入口。
+/// </summary>
+public sealed class CollectionInventoryTests
+{
+    /// <summary>
+    /// 验证目录保留显式注册顺序并拒绝重复定义标识。
+    /// </summary>
+    [Fact]
+    public void CatalogPreservesRegistrationOrderAndRejectsDuplicateIds()
+    {
+        EnemyCollectionDefinition first = Definition("first");
+        EnemyCollectionDefinition second = Definition("second");
+        EnemyCollectionCatalog catalog = new([first, second]);
+
+        Assert.Equal([first, second], catalog.Definitions);
+        Assert.Same(first, catalog.GetRequired(first.CollectionId));
+        Assert.Throws<ArgumentException>(() => new EnemyCollectionCatalog([first, Definition(first.CollectionId)]));
+    }
+
+    /// <summary>
+    /// 验证追加、消费和回收维持稳定队列顺序及已消耗顺序。
+    /// </summary>
+    [Fact]
+    public void AppendConsumeAndRecoverPreserveAuthoritativeOrder()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionInstance first = inventory.Append(Definition("first"));
+        EnemyCollectionInstance second = inventory.Append(Definition("second"));
+        EnemyCollectionInstance third = inventory.Append(Definition("third"));
+
+        Assert.Same(first, inventory.Consume(first));
+        Assert.Equal([second, third], inventory.Available);
+        Assert.Equal([first], inventory.Consumed);
+
+        Assert.Same(first, inventory.Recover(first));
+        Assert.Equal([second, third, first], inventory.Available);
+        Assert.Empty(inventory.Consumed);
+    }
+
+    /// <summary>
+    /// 验证按条件消费总是选取队列中最早的合法实例。
+    /// </summary>
+    [Fact]
+    public void ConsumeFirstUsesEarliestMatchingAvailableInstance()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionInstance ignored = inventory.Append(Definition("ignored"));
+        EnemyCollectionInstance expected = inventory.Append(Definition("matching"));
+        inventory.Append(Definition("matching"));
+
+        bool consumed = inventory.TryConsumeFirst(
+            item => item.Definition.CollectionId == expected.Definition.CollectionId,
+            out EnemyCollectionInstance? actual);
+
+        Assert.True(consumed);
+        Assert.Same(expected, actual);
+        Assert.Same(ignored, inventory.Available[0]);
+    }
+
+    /// <summary>
+    /// 验证每次成功写入只发布一次变更事件，失败写入不发布事件。
+    /// </summary>
+    [Fact]
+    public void InventoryChangedIsRaisedExactlyOncePerSuccessfulMutation()
+    {
+        EnemyCollectionInventory inventory = new();
+        int eventCount = 0;
+        inventory.InventoryChanged += (_, _) => eventCount++;
+        EnemyCollectionInstance item = inventory.Append(Definition("item"));
+        int afterAppend = eventCount;
+        inventory.Consume(item);
+        int afterConsume = eventCount;
+        inventory.Recover(item);
+        int afterRecover = eventCount;
+
+        Assert.Equal(afterAppend + 1, afterConsume);
+        Assert.Equal(afterConsume + 1, afterRecover);
+        Assert.Throws<InvalidOperationException>(() => inventory.Recover(item));
+        Assert.Equal(afterRecover, eventCount);
+    }
+
+    /// <summary>
+    /// 验证实例序号和标识在多次移动中保持唯一且稳定。
+    /// </summary>
+    [Fact]
+    public void InstancesRemainUniqueAndStableAcrossZones()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionDefinition definition = Definition("duplicate-definition");
+        EnemyCollectionInstance first = inventory.Append(definition);
+        EnemyCollectionInstance second = inventory.Append(definition);
+        string firstId = first.CollectionInstanceId;
+
+        inventory.Consume(first);
+        inventory.Recover(first);
+
+        Assert.NotEqual(first.CollectionInstanceId, second.CollectionInstanceId);
+        Assert.Equal(firstId, first.CollectionInstanceId);
+        Assert.Equal(
+            inventory.Available.Count + inventory.Consumed.Count,
+            inventory.Available.Concat(inventory.Consumed).Select(item => item.CollectionInstanceId).Distinct().Count());
+    }
+
+    /// <summary>
+    /// 验证只读区域不能通过集合接口绕过库存写入口。
+    /// </summary>
+    [Fact]
+    public void InventoryZonesAreReadOnlyViews()
+    {
+        EnemyCollectionInventory inventory = new();
+        inventory.Append(Definition("item"));
+
+        Assert.False(inventory.Available is List<EnemyCollectionInstance>);
+        Assert.False(inventory.Consumed is List<EnemyCollectionInstance>);
+    }
+
+    /// <summary>
+    /// 验证事务克隆独立修改，并能通过一个原子快照一次提交。
+    /// </summary>
+    [Fact]
+    public void TransactionCloneCanBeAppliedAtomically()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionInstance first = inventory.Append(Definition("first"));
+        EnemyCollectionInventory transaction = inventory.CreateTransactionalClone();
+        transaction.Consume(first);
+        EnemyCollectionInstance generated = transaction.Append(Definition("generated"));
+        int eventCount = 0;
+        inventory.InventoryChanged += (_, _) => eventCount++;
+
+        bool applied = inventory.TryApplySnapshot(transaction.CaptureSnapshot(), out string reason);
+
+        Assert.True(applied, reason);
+        Assert.Equal([generated], inventory.Available);
+        Assert.Equal([first], inventory.Consumed);
+        Assert.Equal(1, eventCount);
+    }
+
+    /// <summary>
+    /// 验证损坏快照被整体拒绝且不会部分修改权威库存。
+    /// </summary>
+    [Fact]
+    public void InvalidSnapshotIsRejectedWithoutPartialMutation()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionInstance existing = inventory.Append(Definition("existing"));
+        EnemyCollectionInventorySnapshot before = inventory.CaptureSnapshot();
+        EnemyCollectionInventorySnapshot invalid = new(
+            [existing],
+            [existing],
+            before.NextSequence);
+
+        bool applied = inventory.TryApplySnapshot(invalid, out string reason);
+
+        Assert.False(applied);
+        Assert.False(string.IsNullOrWhiteSpace(reason));
+        Assert.Equal(before.Available, inventory.Available);
+        Assert.Equal(before.Consumed, inventory.Consumed);
+        Assert.Equal(before.NextSequence, inventory.NextSequence);
+    }
+
+    /// <summary>
+    /// 创建用于测试的收藏品定义。
+    /// </summary>
+    /// <param name="id">定义标识。</param>
+    /// <returns>不可变收藏品定义。</returns>
+    private static EnemyCollectionDefinition Definition(string id) =>
+        new(id, typeof(CollectionInventoryTests), CardType.Status, false, $"effect:{id}");
+}

@@ -1,0 +1,233 @@
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证实时结构投影被纯构建器按公开实例键归属并映射为固定顺序的原版 Intent 类别。
+/// </summary>
+public sealed class IntentPresentationTests
+{
+    /// <summary>
+    /// 验证输出严格保持卡列顺序，同定义副本仍按各自实例键分开，子步骤归到根来源。
+    /// </summary>
+    [Fact]
+    public void BuildPreservesCardOrderAndGroupsChildUnitsByRootInstance()
+    {
+        BaseEnemyCard first = CreateBoundCard("SHARED", 0);
+        BaseEnemyCard second = CreateBoundCard("SHARED", 1);
+        BaseEnemyCard child = CreateBoundCard("CHILD", 2);
+        decimal baseDamage = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        LiveActionProjection projection = new(
+            [
+                CreateUnit(second, child, [baseDamage]),
+                CreateUnit(first, first, [baseDamage])
+            ],
+            isComplete: true);
+
+        EnemyCardListPresentation result = EnemyCardIntentPresentationBuilder.Build([first, second], projection);
+
+        Assert.Equal([first.InstanceKey, second.InstanceKey], result.Cards.Select(card => card.CardInstanceKey));
+        Assert.Same(first, result.Cards[0].Card);
+        Assert.Same(second, result.Cards[1].Card);
+        Assert.All(result.Cards, card => Assert.Single(card.Effects.OfType<EnemyAttackPresentation>()));
+    }
+
+    /// <summary>
+    /// 验证相同基础伤害跨命中与重放合并，不同基础伤害保留首次出现顺序，其他类别各折叠一次。
+    /// </summary>
+    [Fact]
+    public void BuildMergesAttacksAndFoldsStandardCategoriesInFixedOrder()
+    {
+        BaseEnemyCard card = CreateBoundCard("CATEGORIES", 0);
+        decimal firstDamage = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        decimal secondDamage = firstDamage + decimal.One;
+        decimal block = new DefendTomorin().DynamicVars.Block.BaseValue;
+        string enemyPowerA = "ENEMY_POWER_A";
+        string enemyPowerB = "ENEMY_POWER_B";
+        string targetPowerA = "TARGET_POWER_A";
+        string targetPowerB = "TARGET_POWER_B";
+        LiveActionProjection projection = new(
+            [
+                CreateUnit(
+                    card,
+                    card,
+                    [firstDamage, secondDamage, firstDamage],
+                    block,
+                    new Dictionary<string, decimal>
+                    {
+                        [enemyPowerA] = decimal.One,
+                        [enemyPowerB] = decimal.One
+                    },
+                    new Dictionary<string, decimal>
+                    {
+                        [targetPowerA] = decimal.One,
+                        [targetPowerB] = -decimal.One
+                    }),
+                CreateUnit(card, card, [firstDamage])
+            ],
+            isComplete: true);
+
+        EnemyCardListPresentation result = EnemyCardIntentPresentationBuilder.Build([card], projection);
+        IReadOnlyList<EnemyCardEffectIntentPresentation> effects = result.Cards.Single().Effects;
+        EnemyAttackPresentation[] attacks = effects.OfType<EnemyAttackPresentation>().ToArray();
+
+        Assert.Equal([firstDamage, secondDamage], attacks.Select(attack => attack.BaseDamage));
+        Assert.Equal(
+            projection.Units.SelectMany(unit => unit.Targets[0].DamageHits)
+                .Count(hit => hit.BaseDamage == firstDamage),
+            attacks[0].HitCount);
+        Assert.Collection(
+            effects,
+            effect => Assert.IsType<EnemyAttackPresentation>(effect),
+            effect => Assert.IsType<EnemyAttackPresentation>(effect),
+            effect => Assert.IsType<EnemyDefendPresentation>(effect),
+            effect => Assert.IsType<EnemyBuffPresentation>(effect),
+            effect => Assert.IsType<EnemyDebuffPresentation>(effect));
+    }
+
+    /// <summary>
+    /// 验证不完整投影保留已知逐牌图标，并把原始诊断提升为卡列级 Unknown 状态。
+    /// </summary>
+    [Fact]
+    public void IncompleteProjectionKeepsKnownEffectsAndRequiresGlobalUnknown()
+    {
+        BaseEnemyCard card = CreateBoundCard("INCOMPLETE", 0);
+        decimal baseDamage = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        string projectionDiagnostic = "UNKNOWN_PROGRAM";
+        LiveActionProjection projection = new(
+            [CreateUnit(card, card, [baseDamage])],
+            isComplete: false,
+            [projectionDiagnostic]);
+
+        EnemyCardListPresentation result = EnemyCardIntentPresentationBuilder.Build([card], projection);
+
+        Assert.True(result.RequiresGlobalUnknown);
+        Assert.Contains(projectionDiagnostic, result.Diagnostics);
+        Assert.Single(result.Cards.Single().Effects.OfType<EnemyAttackPresentation>());
+        Assert.Empty(result.Cards.Single().Effects.OfType<EnemyUnknownPresentation>());
+    }
+
+    /// <summary>
+    /// 验证缺少投影、重复公开实例键和非法伤害只污染相关卡牌，并产生可定位诊断。
+    /// </summary>
+    [Fact]
+    public void InvalidLocalStructureAddsUnknownOnlyToAffectedCards()
+    {
+        BaseEnemyCard invalid = CreateBoundCard("INVALID", 0);
+        BaseEnemyCard valid = CreateBoundCard("VALID", 1);
+        decimal baseDamage = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        LiveActionProjection projection = new(
+            [
+                CreateUnit(invalid, invalid, [-baseDamage]),
+                CreateUnit(valid, valid, [baseDamage])
+            ],
+            isComplete: true);
+
+        EnemyCardListPresentation result = EnemyCardIntentPresentationBuilder.Build([invalid, valid], projection);
+
+        Assert.Single(result.Cards[0].Effects.OfType<EnemyUnknownPresentation>());
+        Assert.Empty(result.Cards[0].Effects.OfType<EnemyAttackPresentation>());
+        Assert.Empty(result.Cards[1].Effects.OfType<EnemyUnknownPresentation>());
+        Assert.Single(result.Cards[1].Effects.OfType<EnemyAttackPresentation>());
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains(invalid.InstanceKey.Value, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 验证未得到任何单元的公开卡和重复公开实例键分别被局部标为 Unknown。
+    /// </summary>
+    [Fact]
+    public void MissingProjectionAndDuplicatePublicKeysProducePerCardUnknown()
+    {
+        BaseEnemyCard projected = CreateBoundCard("PROJECTED", 0);
+        BaseEnemyCard missing = CreateBoundCard("MISSING", 1);
+        BaseEnemyCard duplicate = CreateBoundCard("DUPLICATE", 0);
+        decimal baseDamage = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        LiveActionProjection projection = new(
+            [CreateUnit(projected, projected, [baseDamage])],
+            isComplete: true);
+
+        EnemyCardListPresentation result = EnemyCardIntentPresentationBuilder.Build(
+            [projected, missing, duplicate],
+            projection);
+
+        Assert.All(
+            new[] { result.Cards[0], result.Cards[2] },
+            card => Assert.Single(card.Effects.OfType<EnemyUnknownPresentation>()));
+        Assert.Single(result.Cards[1].Effects.OfType<EnemyUnknownPresentation>());
+        Assert.NotEmpty(result.Diagnostics);
+    }
+
+    /// <summary>
+    /// 创建具有指定定义后缀与模板实例身份的测试牌。
+    /// </summary>
+    /// <param name="cardIdSuffix">稳定定义标识后缀。</param>
+    /// <param name="templateSlot">模拟公开牌区的模板槽位。</param>
+    /// <returns>已经绑定稳定实例键的敌人卡牌。</returns>
+    private static BaseEnemyCard CreateBoundCard(string cardIdSuffix, int templateSlot)
+    {
+        StrikeTomorin model = new();
+        decimal attack = model.DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = new(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PRESENTATION_{cardIdSuffix}"),
+            model,
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: attack),
+            effects: [new EnemyAttackAllEffect($"PRESENTATION:{cardIdSuffix}", attack)]);
+        EnemyCardDeckId deckId = new($"STS2_TOMORIN_MOD:PRESENTATION_{cardIdSuffix}_SLOT_{templateSlot}");
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                deckId,
+                Enumerable.Range(0, templateSlot + 1)
+                    .Select(_ => (Func<BaseEnemyCard>)(() => new PresentationEnemyCard(definition))));
+        }
+
+        return EnemyCardDeckRegistry.CreateCombatState(deckId).DrawPile[templateSlot];
+    }
+
+    /// <summary>
+    /// 创建一个归属于指定根来源、由指定实际卡牌执行的投影单元。
+    /// </summary>
+    /// <param name="root">公开根来源牌。</param>
+    /// <param name="executing">实际执行效果的卡牌。</param>
+    /// <param name="baseDamageHits">按执行顺序排列的标准攻击基础命中。</param>
+    /// <param name="enemyBlockDelta">敌人格挡变化。</param>
+    /// <param name="enemyPowerDeltas">敌人自身 Power 变化。</param>
+    /// <param name="targetPowerDeltas">玩家目标 Power 变化。</param>
+    /// <returns>只含一个模拟玩家目标的结构投影单元。</returns>
+    private static EnemyCardReplayProjection CreateUnit(
+        BaseEnemyCard root,
+        BaseEnemyCard executing,
+        IReadOnlyList<decimal> baseDamageHits,
+        decimal enemyBlockDelta = 0m,
+        IReadOnlyDictionary<string, decimal>? enemyPowerDeltas = null,
+        IReadOnlyDictionary<string, decimal>? targetPowerDeltas = null) =>
+        new(
+            root.InstanceKey,
+            executing.InstanceKey,
+            executing.CardId,
+            0,
+            [
+                new EnemyTargetProjection(
+                    "TARGET",
+                    baseDamageHits.Select(damage => new EnemyDamageHitProjection(damage, damage)).ToArray(),
+                    targetPowerDeltas ?? new Dictionary<string, decimal>())
+            ],
+            enemyBlockDelta,
+            enemyPowerDeltas ?? new Dictionary<string, decimal>(),
+            [],
+            []);
+
+    /// <summary>承载展示测试定义而不引入额外执行逻辑的敌人卡牌。</summary>
+    private sealed class PresentationEnemyCard : BaseEnemyCard
+    {
+        /// <summary>从共享不可变定义创建展示测试牌。</summary>
+        /// <param name="definition">共享不可变定义。</param>
+        public PresentationEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+}

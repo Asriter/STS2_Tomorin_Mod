@@ -1,0 +1,338 @@
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证冻结 DFS 行动的实时投影保留基础伤害、实际执行身份和结构变化且没有副作用。
+/// </summary>
+public sealed class LiveProjectionTests
+{
+    /// <summary>
+    /// 验证标准攻击同时保存定义基础值和逐目标模拟值，投影不会修改权威卡牌实例。
+    /// </summary>
+    [Fact]
+    public void ProjectionKeepsBaseAndProjectedDamageWithoutMutatingCard()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition("DAMAGE", attack);
+        EnemyCardCombatState state = CreateState("DAMAGE", definition);
+        BaseEnemyCard card = MoveOnlyCardToCurrent(state);
+        PreparedEnemyCardAction action = CreateAction(card, CreateDirectUnit(card));
+        decimal multiplier = decimal.One + decimal.One;
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", multiplier, decimal.One)],
+            definition.Effects.Count + action.Sources.Count);
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        EnemyDamageHitProjection hit = projection.Units.Single().Targets.Single().DamageHits.Single();
+        Assert.True(projection.IsComplete);
+        Assert.Equal(attack, hit.BaseDamage);
+        Assert.Equal(hit.BaseDamage * multiplier, hit.ProjectedDamage);
+        Assert.Equal(card.InstanceKey, projection.Units.Single().RootSourceKey);
+        Assert.Equal(card.InstanceKey, projection.Units.Single().ExecutingCardKey);
+        Assert.Same(card, state.CurrentCards.Single());
+        Assert.Equal(card.ReplayCount, state.CurrentCards.Single().ReplayCount);
+    }
+
+    /// <summary>
+    /// 验证即时子牌保留自己的执行身份，同时继承公开卡列中的根来源身份。
+    /// </summary>
+    [Fact]
+    public void ImmediateChildInheritsRootAndKeepsExecutingIdentity()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition rootDefinition = CreateDefinition("ROOT", attack);
+        EnemyCardCombatState state = CreateState("ROOT", rootDefinition);
+        BaseEnemyCard root = MoveOnlyCardToCurrent(state);
+        EnemyCardDefinition childDefinition = CardIntentTestCardCatalog.InitialCardDefinitions
+            .First(definition => definition.Effects.OfType<EnemyAttackAllEffect>().Any());
+        EnemyCardInstanceKey childKey = new($"CHILD:{root.InstanceKey.Value}");
+        PreparedEnemyCardUnitPlan child = new(
+            root.InstanceKey,
+            childKey,
+            childDefinition.CardId,
+            root.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep(childDefinition.EffectProgramIds)]);
+        PreparedEnemyCardUnitPlan rootUnit = new(
+            root.InstanceKey,
+            root.InstanceKey,
+            root.CardId,
+            root.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [
+                new PreparedDirectEffectsStep(root.Definition.EffectProgramIds),
+                new PreparedImmediateCardStep(childKey, child)
+            ]);
+        PreparedEnemyCardAction action = CreateAction(root, rootUnit);
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", decimal.One, decimal.One)],
+            rootDefinition.Effects.Count + childDefinition.Effects.Count + rootUnit.OrderedSteps.Count);
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        Assert.True(projection.IsComplete);
+        Assert.Equal(root.InstanceKey, projection.Units.First().RootSourceKey);
+        Assert.All(projection.Units, unit => Assert.Equal(root.InstanceKey, unit.RootSourceKey));
+        Assert.Contains(projection.Units, unit =>
+            unit.ExecutingCardKey == childKey && unit.ExecutingCardId == childDefinition.CardId);
+    }
+
+    /// <summary>
+    /// 验证即时子牌的附加重放按连续索引进入投影，并始终归属于同一公开根来源。
+    /// </summary>
+    [Fact]
+    public void ImmediateAdditionalReplayUnitsAreProjectedInOrder()
+    {
+        EnemyCardDefinition rootDefinition = CreateDefinition("REPLAY_ROOT", decimal.Zero);
+        EnemyCardCombatState state = CreateState("REPLAY_ROOT", rootDefinition);
+        BaseEnemyCard root = MoveOnlyCardToCurrent(state);
+        EnemyCardDefinition childDefinition = CardIntentTestCardCatalog.InitialCardDefinitions
+            .First(definition => definition.Effects.OfType<EnemyAttackAllEffect>().Any());
+        EnemyCardInstanceKey childKey = new($"REPLAY_CHILD:{root.InstanceKey.Value}");
+        PreparedEnemyCardUnitPlan firstChild = new(
+            root.InstanceKey,
+            childKey,
+            childDefinition.CardId,
+            root.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep(childDefinition.EffectProgramIds)]);
+        PreparedEnemyCardUnitPlan replayChild = new(
+            root.InstanceKey,
+            childKey,
+            childDefinition.CardId,
+            firstChild.ReplayIndex + 1,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep(childDefinition.EffectProgramIds)]);
+        PreparedEnemyCardUnitPlan rootUnit = new(
+            root.InstanceKey,
+            root.InstanceKey,
+            root.CardId,
+            root.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [
+                new PreparedDirectEffectsStep(root.Definition.EffectProgramIds),
+                new PreparedImmediateCardStep(childKey, firstChild, [replayChild])
+            ]);
+        PreparedEnemyCardAction action = CreateAction(root, rootUnit);
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", decimal.One, decimal.One)],
+            rootUnit.OrderedSteps.Count + childDefinition.Effects.Count * (root.ReplayCount + 2));
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        EnemyCardReplayProjection[] childUnits = projection.Units
+            .Where(unit => unit.ExecutingCardKey == childKey)
+            .ToArray();
+        Assert.True(projection.IsComplete);
+        Assert.Equal(
+            Enumerable.Range(firstChild.ReplayIndex, childUnits.Length),
+            childUnits.Select(unit => unit.ReplayIndex));
+        Assert.All(childUnits, unit => Assert.Equal(root.InstanceKey, unit.RootSourceKey));
+        Assert.All(childUnits, unit => Assert.NotEmpty(unit.Targets.Single().DamageHits));
+    }
+
+    /// <summary>
+    /// 验证收藏品直接效果和消费结构来自共享程序解析器并归到触发来源。
+    /// </summary>
+    [Fact]
+    public void CollectionProgramProjectsDirectEffectsAndConsumption()
+    {
+        EnemyCardDefinition rootDefinition = CreateDefinition("COLLECTION", decimal.Zero);
+        EnemyCardCombatState state = CreateState("COLLECTION", rootDefinition);
+        BaseEnemyCard root = MoveOnlyCardToCurrent(state);
+        EnemyCollectionDefinition collectionDefinition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
+            CardIntentTestCollectionCatalog.ColdRedTeaId);
+        EnemyCollectionInstance collection = state.CollectionInventory.Append(collectionDefinition);
+        EnemyCollectionEffectProgram program = EnemyCollectionEffectResolver.GetRequired(collectionDefinition);
+        PreparedConsumedCollectionStep collectionStep = new(
+            collection.CollectionInstanceId,
+            collection.Definition.CollectionId,
+            [new PreparedDirectEffectsStep(program.DirectEffects.Select(effect => effect.ProgramId))]);
+        PreparedEnemyCardUnitPlan unit = new(
+            root.InstanceKey,
+            root.InstanceKey,
+            root.CardId,
+            root.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep(root.Definition.EffectProgramIds), collectionStep]);
+        PreparedEnemyCardAction action = CreateAction(root, unit);
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", decimal.One, decimal.One)],
+            program.DirectEffects.Count + unit.OrderedSteps.Count + action.Sources.Count);
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        EnemyCardReplayProjection replay = projection.Units.Single();
+        Assert.True(projection.IsComplete);
+        Assert.Contains(replay.CollectionDeltas, delta =>
+            delta.CollectionInstanceId == collection.CollectionInstanceId &&
+            delta.Kind == EnemyCollectionProjectionKind.Consumed);
+        Assert.NotEmpty(replay.Targets.Single().PowerDeltas);
+        Assert.Contains(state.CollectionInventory.Available,
+            available => available.CollectionInstanceId == collection.CollectionInstanceId);
+    }
+
+    /// <summary>
+    /// 验证相同递归结构与输入复用缓存，而子步骤变化会产生新投影指纹。
+    /// </summary>
+    [Fact]
+    public void RecursiveFingerprintTracksChildSteps()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition("CACHE", attack);
+        EnemyCardCombatState state = CreateState("CACHE", definition);
+        BaseEnemyCard card = MoveOnlyCardToCurrent(state);
+        PreparedEnemyCardUnitPlan originalUnit = CreateDirectUnit(card);
+        PreparedEnemyCardAction originalAction = CreateAction(card, originalUnit);
+        PreparedEnemyCardUnitPlan changedUnit = new(
+            card.InstanceKey,
+            card.InstanceKey,
+            card.CardId,
+            card.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            originalUnit.OrderedSteps.Concat([
+                new PreparedGeneratedCollectionStep(
+                    CardIntentTestCollectionCatalog.StarStoneId,
+                    state.CollectionInventory.NextSequence)
+            ]));
+        PreparedEnemyCardAction changedAction = CreateAction(card, changedUnit);
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", decimal.One, decimal.One)],
+            changedUnit.OrderedSteps.Count + definition.Effects.Count + changedAction.Sources.Count);
+        EnemyActionProjectionService service = new();
+
+        LiveActionProjection first = service.Project(originalAction, input);
+        LiveActionProjection cached = service.Project(originalAction, input);
+        LiveActionProjection changed = service.Project(changedAction, input);
+
+        Assert.Same(first, cached);
+        Assert.NotSame(first, changed);
+        Assert.Empty(first.Units.Single().CollectionDeltas);
+        Assert.NotEmpty(changed.Units.Single().CollectionDeltas);
+    }
+
+    /// <summary>
+    /// 验证未知修改器和步骤上限都返回带诊断的不完整投影，而不是抛出或写入部分战斗状态。
+    /// </summary>
+    [Fact]
+    public void InvalidProgramAndStepLimitReturnIncompleteProjection()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition("INCOMPLETE", attack);
+        EnemyCardCombatState state = CreateState("INCOMPLETE", definition);
+        BaseEnemyCard card = MoveOnlyCardToCurrent(state);
+        string unknownProgram = $"{definition.EffectProgramIds.Single()}:UNKNOWN";
+        PreparedEnemyCardUnitPlan unit = new(
+            card.InstanceKey,
+            card.InstanceKey,
+            card.CardId,
+            card.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [
+                new PreparedDirectEffectsStep(definition.EffectProgramIds),
+                new PreparedGeneratedCollectionStep(
+                    CardIntentTestCollectionCatalog.StarStoneId,
+                    state.CollectionInventory.NextSequence)
+            ]);
+        PreparedEnemyCardAction action = CreateAction(card, unit);
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", decimal.One, decimal.One)],
+            action.Sources.Count,
+            [unknownProgram]);
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        Assert.False(projection.IsComplete);
+        Assert.Contains(projection.Diagnostics,
+            diagnostic => diagnostic.Contains(unknownProgram, StringComparison.Ordinal));
+        Assert.Contains(projection.Diagnostics,
+            diagnostic => diagnostic.Contains("上限", StringComparison.Ordinal));
+        Assert.Single(projection.Units);
+        Assert.Same(card, state.CurrentCards.Single());
+    }
+
+    /// <summary>创建包含一个标准全体攻击效果的测试定义。</summary>
+    private static EnemyCardDefinition CreateDefinition(string scope, decimal attack) =>
+        new(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PROJECTION_{scope}"),
+            new StrikeTomorin(),
+            attack > decimal.Zero ? EnemyCardTag.Attack : EnemyCardTag.None,
+            new EnemyCardScoreProfile(attack: attack),
+            effects: attack > decimal.Zero
+                ? [new EnemyAttackAllEffect($"PROJECTION:{scope}:ATTACK", attack)]
+                : []);
+
+    /// <summary>创建并注册只含一个独立实例的投影测试战斗状态。</summary>
+    private static EnemyCardCombatState CreateState(string scope, EnemyCardDefinition definition)
+    {
+        EnemyCardDeckId deckId = new($"STS2_TOMORIN_MOD:PROJECTION_{scope}_DECK");
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(deckId, [() => new ProjectionEnemyCard(definition)]);
+        }
+
+        return EnemyCardDeckRegistry.CreateCombatState(deckId);
+    }
+
+    /// <summary>把测试状态中的唯一卡牌移到公开当前牌区并返回权威实例。</summary>
+    private static BaseEnemyCard MoveOnlyCardToCurrent(EnemyCardCombatState state)
+    {
+        BaseEnemyCard card = state.DrawPile.Single();
+        state.MoveCard(card.InstanceKey, EnemyCardZone.Current);
+        return card;
+    }
+
+    /// <summary>为无素材来源创建只含其共享直接效果的成功执行单元。</summary>
+    private static PreparedEnemyCardUnitPlan CreateDirectUnit(BaseEnemyCard card) =>
+        new(
+            card.InstanceKey,
+            card.InstanceKey,
+            card.CardId,
+            card.ReplayCount,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep(card.Definition.EffectProgramIds)]);
+
+    /// <summary>从当前实例和成功单元创建不会触发软锁重算的单来源冻结行动。</summary>
+    private static PreparedEnemyCardAction CreateAction(
+        BaseEnemyCard card,
+        PreparedEnemyCardUnitPlan unit)
+    {
+        EnemyCardScore score = new EnemyCardScoreCalculator().Calculate([card], EnemyCardScoreContext.Identity);
+        PreparedEnemyCardSource source = new(card, card.ReplayCount + 1, [unit]);
+        return new PreparedEnemyCardAction(
+            EnemyActionMetric.Attack,
+            [],
+            [card],
+            [source],
+            new EnemySoftLockDiagnostic(
+                score,
+                score.Attack,
+                score.Total,
+                source.Units.Count,
+                source.Units.Count - source.Units.Count,
+                false));
+    }
+
+    /// <summary>承载投影测试定义且不包含额外可变状态的敌人牌。</summary>
+    private sealed class ProjectionEnemyCard : BaseEnemyCard
+    {
+        /// <summary>从共享定义创建独立实例。</summary>
+        public ProjectionEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+}

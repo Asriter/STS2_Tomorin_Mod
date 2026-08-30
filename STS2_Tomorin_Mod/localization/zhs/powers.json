@@ -1,4 +1,13 @@
 {
+  "STS2_TOMORIN_MOD-CARD_INTENT_SORROWFUL_RAIN_POWER.title": "敌人版「雨」",
+  "STS2_TOMORIN_MOD-CARD_INTENT_SORROWFUL_RAIN_POWER.description": "该敌人每次成功[gold]作词[/gold]后，获得[blue]1[/blue]点[gold]心之壁[/gold]。",
+  "STS2_TOMORIN_MOD-CARD_INTENT_SORROWFUL_RAIN_POWER.smartDescription": "该敌人每次成功[gold]作词[/gold]后，获得[blue]{Amount}[/blue]点[gold]心之壁[/gold]。",
+  "STS2_TOMORIN_MOD-CARD_INTENT_ADAYUME_POWER.title": "敌人版过堕幻",
+  "STS2_TOMORIN_MOD-CARD_INTENT_ADAYUME_POWER.description": "该敌人每成功执行一个卡牌单元，获得[blue]1[/blue]点[gold]格挡[/gold]和[blue]1[/blue]点[gold]心之壁[/gold]。",
+  "STS2_TOMORIN_MOD-CARD_INTENT_ADAYUME_POWER.smartDescription": "该敌人每成功执行一个卡牌单元，获得[blue]{Amount}[/blue]点[gold]格挡[/gold]和[blue]{Amount}[/blue]点[gold]心之壁[/gold]。",
+  "STS2_TOMORIN_MOD-ENEMY_COLLECTION_INVENTORY_POWER.title": "收藏品队列",
+  "STS2_TOMORIN_MOD-ENEMY_COLLECTION_INVENTORY_POWER.description": "当前可用的[gold]收藏品[/gold]，按触发顺序排列：\n{Queue}",
+  "STS2_TOMORIN_MOD-ENEMY_COLLECTION_INVENTORY_POWER.smartDescription": "当前共有[blue]{Amount}[/blue]件可用[gold]收藏品[/gold]。",
   "STS2_TOMORIN_MOD-AT_FIELD_POWER.description": "你的回合结束时，你可以保留当前[gold]心之壁[/gold]层数的[gold]格挡[/gold]；\n被攻击时，反击造成伤害；受到伤害时，[gold]心之壁[/gold]减少那个数值的层数。\n回合开始时，[gold]心之壁[/gold]层数减半。",
   "STS2_TOMORIN_MOD-AT_FIELD_POWER.smartDescription": "你的回合结束时，你可以保留[blue]{Amount}[/blue][gold]点格挡[/gold]；\n被攻击时，反击造成[blue]{Amount}[/blue]点伤害；受到伤害时，[gold]心之壁[/gold]减少那个数值的层数。\n回合开始时，[gold]心之壁[/gold]层数减半。",
   "STS2_TOMORIN_MOD-AT_FIELD_POWER.title": "心之壁",

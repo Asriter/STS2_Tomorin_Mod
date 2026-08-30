@@ -10,20 +10,20 @@ using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.RelicPools;
 using STS2_Tomorin_Mod.Powers;
-using STS2_Tomorin_Mod.RelicPools;
 
 namespace STS2_Tomorin_Mod.Relics;
 
 /// <summary>
 /// 素世的贝斯
-/// Uncommon 遗物：每打出三张技能卡，获得1层心之壁（ATField）。
+/// 事件遗物：每打出三张技能卡，获得1层心之壁（ATField）。
 /// 整场战斗累计计数，可多次触发。
 /// </summary>
-[Pool(typeof(TomorinRelicPool))]
+[Pool(typeof(EventRelicPool))]
 public class SoyoBase : BaseRelicModel
 {
-    public override RelicRarity Rarity => RelicRarity.Uncommon;
+    public override RelicRarity Rarity => RelicRarity.Event;
 
     protected override IEnumerable<DynamicVar> CanonicalVars => new List<DynamicVar>()
     {

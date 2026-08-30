@@ -1,0 +1,197 @@
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证递归冻结计划的身份、顺序、模式和不可变性约束。
+/// </summary>
+public sealed class FrozenResolutionPlanTests
+{
+    /// <summary>
+    /// 验证一个公开来源的不同成功重放拥有独立单元，并允许子牌保留相同根来源。
+    /// </summary>
+    [Fact]
+    public void UnitsKeepRootIdentityWhileExecutingCardsRemainIndependent()
+    {
+        EnemyCardInstanceKey root = new("TEST:ROOT");
+        EnemyCardInstanceKey childKey = new("TEST:CHILD");
+        EnemyCardId rootId = new("STS2_TOMORIN_MOD:FROZEN_ROOT");
+        EnemyCardId childId = new("STS2_TOMORIN_MOD:FROZEN_CHILD");
+        PreparedEnemyCardUnitPlan first = new(
+            root,
+            root,
+            rootId,
+            replayIndex: 0,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep(["PROGRAM:ROOT"])]);
+        PreparedEnemyCardUnitPlan second = new(
+            root,
+            childKey,
+            childId,
+            replayIndex: 1,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep(["PROGRAM:CHILD"])]);
+
+        Assert.NotSame(first, second);
+        Assert.Equal(root, first.RootSourceKey);
+        Assert.Equal(root, second.RootSourceKey);
+        Assert.Equal(childKey, second.ExecutingCardKey);
+        Assert.Equal(childId, second.ExecutingCardId);
+        Assert.NotEqual(first.ReplayIndex, second.ReplayIndex);
+    }
+
+    /// <summary>
+    /// 验证输入集合在构造时复制，且对外视图不能被转换为可修改列表。
+    /// </summary>
+    [Fact]
+    public void OrderedCollectionsAreCopiedAndReadOnly()
+    {
+        List<string> programs = ["PROGRAM:FIRST"];
+        PreparedDirectEffectsStep direct = new(programs);
+        List<PreparedEnemyResolutionStep> steps = [direct];
+        PreparedEnemyCardUnitPlan unit = CreateUnit(steps);
+        programs.Add("PROGRAM:LATE");
+        steps.Add(new PreparedGeneratedCollectionStep("COLLECTION:LATE", expectedSequence: 0));
+
+        Assert.Equal(["PROGRAM:FIRST"], direct.EffectProgramIds);
+        Assert.Equal([direct], unit.OrderedSteps);
+        Assert.Throws<NotSupportedException>(() =>
+            ((IList<PreparedEnemyResolutionStep>)unit.OrderedSteps).Add(
+                new PreparedGeneratedCollectionStep("COLLECTION:OTHER", expectedSequence: 0)));
+    }
+
+    /// <summary>
+    /// 验证受控直接执行单元不能携带素材递归或作词结果步骤。
+    /// </summary>
+    [Fact]
+    public void ControlledDirectOnlyRejectsRecursivePaymentAndComposeSteps()
+    {
+        EnemyCardInstanceKey key = new("TEST:CONTROLLED");
+        EnemyCardId cardId = new("STS2_TOMORIN_MOD:FROZEN_CONTROLLED");
+        PreparedConsumedCardStep consumed = new(key, controlledChild: null);
+        PreparedComposeResultStep compose = new(
+            cardId,
+            key,
+            EnemyCardTokenTiming.RetainedNextTurn,
+            increasesExistingReplay: true,
+            immediateChild: null);
+
+        Assert.Throws<ArgumentException>(() => new PreparedEnemyCardUnitPlan(
+            key,
+            key,
+            cardId,
+            replayIndex: 0,
+            EnemyPreparedExecutionMode.ControlledDirectOnly,
+            [],
+            [consumed]));
+        Assert.Throws<ArgumentException>(() => new PreparedEnemyCardUnitPlan(
+            key,
+            key,
+            cardId,
+            replayIndex: 0,
+            EnemyPreparedExecutionMode.ControlledDirectOnly,
+            [],
+            [compose]));
+    }
+
+    /// <summary>
+    /// 验证非法身份、重放、空步骤以及互斥字段组合均在边界被拒绝。
+    /// </summary>
+    [Fact]
+    public void ConstructorsRejectInvalidIdentityAndFieldCombinations()
+    {
+        EnemyCardInstanceKey key = new("TEST:VALID");
+        EnemyCardId cardId = new("STS2_TOMORIN_MOD:FROZEN_VALID");
+
+        Assert.Throws<ArgumentNullException>(() => new PreparedEnemyCardUnitPlan(
+            null!, key, cardId, 0, EnemyPreparedExecutionMode.Normal, [], []));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PreparedEnemyCardUnitPlan(
+            key, key, cardId, -1, EnemyPreparedExecutionMode.Normal, [], []));
+        Assert.Throws<ArgumentException>(() => new PreparedEnemyCardUnitPlan(
+            key, key, cardId, 0, EnemyPreparedExecutionMode.Normal, [], [null!]));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new PreparedGeneratedCollectionStep("COLLECTION", expectedSequence: -1));
+        Assert.Throws<ArgumentException>(() =>
+            new PreparedImmediateCardStep(key, CreateUnit([], executingKey: new EnemyCardInstanceKey("TEST:OTHER"))));
+        Assert.Throws<ArgumentException>(() => new PreparedComposeResultStep(
+            cardId,
+            key,
+            EnemyCardTokenTiming.RetainedNextTurn,
+            increasesExistingReplay: false,
+            immediateChild: CreateUnit([])));
+        Assert.Throws<ArgumentException>(() => new PreparedRecoveryStep(
+            EnemyPreparedRecoveryKind.Collection,
+            "COLLECTION:RECOVER",
+            CreateUnit([])));
+    }
+
+    /// <summary>
+    /// 验证即时、回收和作词步骤会保留首单元后的连续重放单元，而不是静默丢弃。
+    /// </summary>
+    [Fact]
+    public void RecursiveCardStepsKeepAllAdditionalReplayUnits()
+    {
+        EnemyCardInstanceKey key = new("TEST:REPLAY_CHILD");
+        PreparedEnemyCardUnitPlan first = CreateReplayUnit(key, replayIndex: 0);
+        PreparedEnemyCardUnitPlan replay = CreateReplayUnit(key, replayIndex: first.ReplayIndex + 1);
+        PreparedImmediateCardStep immediate = new(key, first, [replay]);
+        PreparedRecoveryStep recovery = new(
+            EnemyPreparedRecoveryKind.Card,
+            key.Value,
+            first,
+            [replay]);
+        PreparedComposeResultStep compose = new(
+            first.ExecutingCardId,
+            key,
+            EnemyCardTokenTiming.Immediate,
+            increasesExistingReplay: false,
+            first,
+            [replay]);
+
+        Assert.Equal([replay], immediate.AdditionalReplayUnits);
+        Assert.Equal([replay], recovery.AdditionalReplayUnits);
+        Assert.Equal([replay], compose.AdditionalReplayUnits);
+    }
+
+    /// <summary>
+    /// 创建具有有效身份和可选步骤的最小单元。
+    /// </summary>
+    /// <param name="steps">按执行顺序提供的步骤。</param>
+    /// <param name="executingKey">可选实际执行实例键。</param>
+    /// <returns>可用于组合约束测试的冻结单元。</returns>
+    private static PreparedEnemyCardUnitPlan CreateUnit(
+        IEnumerable<PreparedEnemyResolutionStep> steps,
+        EnemyCardInstanceKey? executingKey = null)
+    {
+        EnemyCardInstanceKey root = new("TEST:UNIT_ROOT");
+        return new PreparedEnemyCardUnitPlan(
+            root,
+            executingKey ?? root,
+            new EnemyCardId("STS2_TOMORIN_MOD:FROZEN_UNIT"),
+            replayIndex: 0,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            steps);
+    }
+
+    /// <summary>
+    /// 创建具有指定实际身份和连续重放索引的递归子单元。
+    /// </summary>
+    /// <param name="key">实际执行卡牌实例键。</param>
+    /// <param name="replayIndex">从零开始的重放索引。</param>
+    /// <returns>最小完整执行单元。</returns>
+    private static PreparedEnemyCardUnitPlan CreateReplayUnit(
+        EnemyCardInstanceKey key,
+        int replayIndex) =>
+        new(
+            new EnemyCardInstanceKey("TEST:REPLAY_ROOT"),
+            key,
+            new EnemyCardId("STS2_TOMORIN_MOD:FROZEN_REPLAY_CHILD"),
+            replayIndex,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedDirectEffectsStep([])]);
+}

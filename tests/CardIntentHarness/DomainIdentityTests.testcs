@@ -1,0 +1,160 @@
+using MegaCrit.Sts2.Core.Models.Cards;
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using Xunit;
+
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证敌人卡牌定义、实例身份与五牌区唯一权威状态。
+/// </summary>
+public sealed class DomainIdentityTests
+{
+    /// <summary>
+    /// 验证注册模板会为每个槽位创建唯一且稳定的战斗实例身份。
+    /// </summary>
+    [Fact]
+    public void RegisteredDeckCreatesUniqueInstancesMatchingItsTemplate()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_TEMPLATE");
+        EnemyCardDefinition repeated = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_CARD");
+        EnemyCardDefinition distinct = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_OTHER");
+        EnsureRegistered(deckId, repeated, repeated, distinct);
+
+        EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(deckId);
+        BaseEnemyCard[] allCards = AllCards(state).ToArray();
+
+        Assert.Equal(state.TemplateSlots, state.DrawPile.Select(card => card.TemplateSlot!.Value));
+        Assert.Equal(allCards.Length, allCards.Select(card => card.InstanceKey).Distinct().Count());
+        Assert.Equal(
+            EnemyCardDeckRegistry.GetTemplateCardIds(deckId),
+            allCards.Select(card => card.CardId));
+    }
+
+    /// <summary>
+    /// 验证实例跨牌区移动保持身份，且五个只读区域始终守恒同一实例全集。
+    /// </summary>
+    [Fact]
+    public void MovingInstancesAcrossFiveZonesPreservesIdentityAndReadOnlyBoundaries()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_ZONES");
+        EnemyCardDefinition definition = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_ZONE_CARD");
+        EnsureRegistered(deckId, definition, definition, definition, definition, definition);
+        EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(deckId);
+        EnemyCardInstanceKey[] universe = AllCards(state).Select(card => card.InstanceKey).ToArray();
+        EnemyCardInstanceKey[] keys = universe.ToArray();
+
+        state.MoveCard(keys[0], EnemyCardZone.Current);
+        state.MoveCard(keys[1], EnemyCardZone.Retained);
+        state.MoveCard(keys[2], EnemyCardZone.Discard);
+        state.MoveCard(keys[3], EnemyCardZone.Exhaust);
+
+        Assert.Equal(universe.Order(), AllCards(state).Select(card => card.InstanceKey).Order());
+        Assert.Equal(universe.Length, AllCards(state).Count());
+        Assert.Throws<NotSupportedException>(() => ((IList<BaseEnemyCard>)state.DrawPile).Add(state.CurrentCards[0]));
+    }
+
+    /// <summary>
+    /// 验证同名副本拥有互不共享的重放计数，生成实例也使用独立运行时身份。
+    /// </summary>
+    [Fact]
+    public void DuplicateDefinitionsKeepIndependentReplayAndGeneratedIdentity()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_RUNTIME");
+        EnemyCardDefinition definition = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_RUNTIME_CARD");
+        EnsureRegistered(deckId, definition, definition);
+        EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(deckId);
+        BaseEnemyCard first = state.DrawPile[0];
+        BaseEnemyCard second = state.DrawPile[1];
+        HarnessEnemyCard generated = new(definition);
+
+        first.IncreaseReplayCount();
+        state.AddGeneratedCard(generated, EnemyCardZone.Discard);
+
+        Assert.NotEqual(first.ReplayCount, second.ReplayCount);
+        Assert.NotEqual(first.InstanceKey, second.InstanceKey);
+        Assert.Null(generated.TemplateSlot);
+        Assert.NotNull(generated.RuntimeInstanceId);
+        Assert.Equal(AllCards(state).Count(), AllCards(state).Select(card => card.InstanceKey).Distinct().Count());
+    }
+
+    /// <summary>
+    /// 验证注册表会拒绝同一工厂跨探测改变 Tag 等语义定义字段。
+    /// </summary>
+    [Fact]
+    public void RegistrationRejectsSemanticDefinitionDrift()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_DRIFT");
+        EnemyCardDefinition first = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_DRIFT_CARD");
+        EnemyCardDefinition second = new(
+            first.CardId,
+            first.CardModel,
+            first.Tags | EnemyCardTag.Buff,
+            first.ScoreProfile,
+            effectProgramIds: first.EffectProgramIds);
+        int invocation = 0;
+
+        Assert.Throws<InvalidOperationException>(() => EnemyCardDeckRegistry.Register(
+            deckId,
+            [() => new HarnessEnemyCard(invocation++ == 0 ? first : second)]));
+    }
+
+    /// <summary>
+    /// 创建不依赖固定平衡数值的测试卡牌定义。
+    /// </summary>
+    /// <param name="rawId">测试定义稳定标识。</param>
+    /// <returns>从玩家规范变量关系派生评分的不可变定义。</returns>
+    private static EnemyCardDefinition CreateDefinition(string rawId)
+    {
+        StrikeTomorin model = new();
+        decimal attack = model.DynamicVars.Damage.BaseValue;
+        return new EnemyCardDefinition(
+            new EnemyCardId(rawId),
+            model,
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: attack));
+    }
+
+    /// <summary>
+    /// 幂等注册按输入顺序排列的测试定义工厂。
+    /// </summary>
+    /// <param name="deckId">测试牌组稳定标识。</param>
+    /// <param name="definitions">允许包含重复语义定义的模板。</param>
+    private static void EnsureRegistered(EnemyCardDeckId deckId, params EnemyCardDefinition[] definitions)
+    {
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                deckId,
+                definitions.Select(definition => (Func<BaseEnemyCard>)(() => new HarnessEnemyCard(definition))));
+        }
+    }
+
+    /// <summary>
+    /// 枚举五个权威牌区中的全部实例。
+    /// </summary>
+    /// <param name="state">待检查的战斗级状态。</param>
+    /// <returns>按牌区规范顺序拼接的实例序列。</returns>
+    private static IEnumerable<BaseEnemyCard> AllCards(EnemyCardCombatState state) =>
+        state.DrawPile
+            .Concat(state.CurrentCards)
+            .Concat(state.RetainedCards)
+            .Concat(state.DiscardPile)
+            .Concat(state.ExhaustPile);
+
+    /// <summary>
+    /// 提供只承载不可变定义的领域测试敌人牌实例。
+    /// </summary>
+    private sealed class HarnessEnemyCard : BaseEnemyCard
+    {
+        /// <summary>
+        /// 从共享语义定义创建独立实例。
+        /// </summary>
+        /// <param name="definition">不可变语义定义。</param>
+        public HarnessEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+}

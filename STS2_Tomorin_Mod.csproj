@@ -30,9 +30,9 @@
     <AutoSteamPath>D:/SteamLibrary/steamapps</AutoSteamPath>
     <SteamLibraryPath Condition="'$(SteamLibraryPath)' == '' and Exists('$(AutoSteamPath)/common/Slay the Spire 2')">$(AutoSteamPath)</SteamLibraryPath>
 
-    <GodotPath Condition="'$(GodotPath)' == ''">E:/Resources/sts2/godot4.5.1_spineRuntime/godot-4.2-4.5.1-stable-mono.exe</GodotPath>
+    <GodotPath Condition="'$(GodotPath)' == ''">F:\Resources\godot4.5.1_spineRuntime\godot-4.2-4.5.1-stable-mono.exe</GodotPath>
     <!-- If on Windows and Slay the Spire 2 is not installed in your default steam library, adjust the following.-->
-    <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">D:/SteamLibrary/steamapps</SteamLibraryPath>
+    <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">G:/SteamLibrary/steamapps</SteamLibraryPath>
 
     <!-- The below should not need to be changed. -->
     <Sts2Path>$(SteamLibraryPath)/common/Slay the Spire 2</Sts2Path>
@@ -92,6 +92,7 @@
     <Compile Remove="materials/**" />
     <Compile Remove="shaders/**" />
     <Compile Remove="images/**" />
+    <Compile Remove="local-tests/**" />
     <EmbeddedResource Remove="STS2_Tomorin_Mod/**" />
     <EmbeddedResource Remove="content/**" />
     <EmbeddedResource Remove="materials/**" />

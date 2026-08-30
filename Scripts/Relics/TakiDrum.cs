@@ -1,26 +1,25 @@
 using BaseLib.Abstracts;
 using BaseLib.Utils;
-using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
-using STS2_Tomorin_Mod.RelicPools;
+using MegaCrit.Sts2.Core.Models.RelicPools;
 
 namespace STS2_Tomorin_Mod.Relics;
 
 /// <summary>
 /// 立希的鼓
-/// Rare 遗物：每回合打出的第五张牌会被额外打出一次。
+/// 事件遗物：每场战斗打出的第五张牌会被额外打出一次。
 /// 只计算玩家手动打出的牌（不含 auto-play）。
 /// 通过 ModifyCardPlayCount 实现额外打出。
 /// </summary>
-[Pool(typeof(TomorinRelicPool))]
+[Pool(typeof(EventRelicPool))]
 public class TakiDrum : BaseRelicModel
 {
-    public override RelicRarity Rarity => RelicRarity.Rare;
+    public override RelicRarity Rarity => RelicRarity.Event;
 
     private int _cardPlayCount = 0;
 
@@ -28,14 +27,12 @@ public class TakiDrum : BaseRelicModel
     // public override int DisplayAmount => _cardPlayCount;
 
     /// <summary>
-    /// 每回合开始时重置计数器
+    /// 每场战斗开始时重置计数器。
     /// </summary>
-    public override Task AfterSideTurnStart(CombatSide side, IReadOnlyList<Creature> participants, ICombatState combatState)
+    public override Task BeforeCombatStart()
     {
-        if (side == Owner.Creature.Side)
-        {
-            _cardPlayCount = 0;
-        }
+        _cardPlayCount = 0;
+        UpdateDisplay();
         return Task.CompletedTask;
     }
 

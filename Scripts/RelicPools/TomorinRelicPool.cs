@@ -17,10 +17,6 @@ public class TomorinRelicPool : CustomRelicPoolModel
         return
         [
             ModelDb.Relic<NormalPencil>(),
-            ModelDb.Relic<SoyoBase>(),
-            ModelDb.Relic<TakiDrum>(),
-            ModelDb.Relic<AnonGuitar>(),
-            ModelDb.Relic<RaanaGuitar>(),
             // ModelDb.Relic<MatchaParfait>(),
             // ModelDb.Relic<EmptyParfait>(),
         ];

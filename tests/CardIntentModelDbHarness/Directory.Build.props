@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="..\CardIntentHarness\Directory.Build.props" />
+
+  <PropertyGroup>
+    <CardIntentModelDbHarnessOutputRoot>$([System.IO.Path]::Combine($([System.IO.Path]::GetTempPath()), 'STS2_Tomorin_Mod_CardIntentModelDbHarness'))</CardIntentModelDbHarnessOutputRoot>
+    <BaseIntermediateOutputPath>$(CardIntentModelDbHarnessOutputRoot)/obj/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(CardIntentModelDbHarnessOutputRoot)/bin/</BaseOutputPath>
+  </PropertyGroup>
+</Project>

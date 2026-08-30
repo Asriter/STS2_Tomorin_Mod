@@ -10,19 +10,19 @@ using MegaCrit.Sts2.Core.Extensions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.CardPools;
+using MegaCrit.Sts2.Core.Models.RelicPools;
 using STS2_Tomorin_Mod.CardPools;
-using STS2_Tomorin_Mod.RelicPools;
 
 namespace STS2_Tomorin_Mod.Relics;
 
 /// <summary>
 /// 爱音的吉他
-/// Common 遗物：每场战斗开始时，将一张随机收集品加入手牌。
+/// 事件遗物：每场战斗开始时，将一张随机收集品加入手牌。
 /// </summary>
-[Pool(typeof(TomorinRelicPool))]
+[Pool(typeof(EventRelicPool))]
 public class AnonGuitar : BaseRelicModel
 {
-    public override RelicRarity Rarity => RelicRarity.Common;
+    public override RelicRarity Rarity => RelicRarity.Event;
 
     /// <summary>
     /// 战斗第一回合开始时，随机将一张收集品加入手牌

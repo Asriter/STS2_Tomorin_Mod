@@ -8,5 +8,7 @@
   "STS2_TOMORIN_MOD-OBLIVIONIS_BOSS.title": "Oblivionis",
   "STS2_TOMORIN_MOD-OBLIVIONIS_BOSS.loss": "你的歌没能传达给Oblivionis......", 
   "STS2_TOMORIN_MOD-SOYO_BOSS.title": "长崎素世",
-  "STS2_TOMORIN_MOD-SOYO_BOSS.loss": "你重新成为了Crychic的主唱。"
+  "STS2_TOMORIN_MOD-SOYO_BOSS.loss": "你重新成为了Crychic的主唱。",
+  "STS2_TOMORIN_MOD-BAND_MEMBER_ENCOUNTER.title": "乐队",
+  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_ENCOUNTER.title": "卡牌意图测试"
 }

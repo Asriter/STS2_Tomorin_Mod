@@ -1,0 +1,169 @@
+using MegaCrit.Sts2.Core.Models.Powers;
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using STS2_Tomorin_Mod.Powers;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>验证完整冻结行动使用终态总存量计算四部分风险。</summary>
+public sealed class ActionRiskTests
+{
+    [Fact]
+    public void AttackRiskUsesMaximumAccumulatedProjectedDamageWithoutRescaling()
+    {
+        EnemyCardReplayProjection first = Unit(
+            "FIRST",
+            Target("P1", 5m, 7m),
+            Target("P2", 20m, 4m));
+        EnemyCardReplayProjection second = Unit(
+            "SECOND",
+            Target("P1", 9m, 6m),
+            Target("P2", 3m, 2m));
+        LiveActionProjection projection = new([first, second], true, endState: EnemyProjectionEndState.Empty);
+
+        EnemyActionRiskScore score = new EnemyActionRiskCalculator().Calculate(projection, CreateContext());
+
+        Assert.Equal(13m, score.AttackRisk);
+    }
+
+    [Fact]
+    public void ExistingEndStockContributesEvenWhenActionAddsNoStock()
+    {
+        Dictionary<string, decimal> powers = new(StringComparer.Ordinal)
+        {
+            [PowerId(typeof(StrengthPower))] = 2m,
+            [PowerId(typeof(DexterityPower))] = 3m,
+            [PowerId(typeof(AtFieldPower))] = 4m,
+            [PowerId(typeof(DuckAndCoverPower))] = 1m,
+            [PowerId(typeof(HeartBeatPower))] = 2m,
+            [PowerId(typeof(SorrowfulRainPower))] = 1m,
+            [PowerId(typeof(AdayumePower))] = 1m,
+            [PowerId(typeof(NameOfTearPower))] = 1m
+        };
+        Dictionary<string, IReadOnlyDictionary<string, decimal>> targets = new(StringComparer.Ordinal)
+        {
+            ["P1"] = new Dictionary<string, decimal>
+            {
+                [PowerId(typeof(VulnerablePower))] = 2m,
+                ["OTHER_DEBUFF"] = 1m
+            }
+        };
+        EnemyProjectionEndState end = new(
+            enemyBlock: 10m,
+            enemyPowers: powers,
+            targetPowers: targets);
+        LiveActionProjection projection = new([], true, endState: end);
+
+        EnemyActionRiskScore score = new EnemyActionRiskCalculator().Calculate(projection, CreateContext());
+
+        Assert.Equal(47.1m, score.SurvivalRisk);
+        Assert.Equal(62m, score.EngineRisk);
+        Assert.Equal(3m, score.DeferredRisk);
+        Assert.Equal(score.AttackRisk + score.SurvivalRisk + score.EngineRisk + score.DeferredRisk, score.TotalRisk);
+    }
+
+    [Fact]
+    public void CarryTokenBodyAndOneReplayAreCountedExactlyTwice()
+    {
+        (EnemyActionRiskContext context, EnemyCardId cardId) = CreateCarryContext(attack: 10m);
+        EnemyProjectedCardZoneState bodyOnly = new(
+            new EnemyCardInstanceKey("CARRY:BODY"),
+            cardId,
+            EnemyCardZone.Retained,
+            EnemyCardPhase.Phase3,
+            CarryAcrossPhase: true,
+            ReplayCount: 0);
+        EnemyProjectedCardZoneState withReplay = bodyOnly with { ReplayCount = 1 };
+        EnemyActionRiskCalculator calculator = new();
+
+        decimal oneBody = calculator.Calculate(
+            new LiveActionProjection([], true, endState: new EnemyProjectionEndState(cards: [bodyOnly])),
+            context).DeferredRisk;
+        decimal bodyAndReplay = calculator.Calculate(
+            new LiveActionProjection([], true, endState: new EnemyProjectionEndState(cards: [withReplay])),
+            context).DeferredRisk;
+
+        Assert.Equal(7.5m, oneBody);
+        Assert.Equal(oneBody * 2m, bodyAndReplay);
+    }
+
+    [Fact]
+    public void PhaseThreeCompressionCountsInstancesAndExcludesCarryTokens()
+    {
+        (EnemyActionRiskContext context, EnemyCardId id) = CreateCarryContext(
+            0m,
+            EnemyCardPhase.Phase3,
+            initialCount: 3);
+        EnemyProjectionEndState end = new(cards:
+        [
+            new EnemyProjectedCardZoneState(new EnemyCardInstanceKey("A"), id, EnemyCardZone.Discard,
+                EnemyCardPhase.Phase3, false, 0),
+            new EnemyProjectedCardZoneState(new EnemyCardInstanceKey("B"), id, EnemyCardZone.Exhaust,
+                EnemyCardPhase.Phase3, false, 0),
+            new EnemyProjectedCardZoneState(new EnemyCardInstanceKey("TOKEN"), id, EnemyCardZone.Retained,
+                EnemyCardPhase.Phase3, true, 0)
+        ]);
+
+        EnemyActionRiskScore score = new EnemyActionRiskCalculator().Calculate(
+            new LiveActionProjection([], true, endState: end),
+            context);
+
+        Assert.Equal(6m, score.EngineRisk);
+    }
+
+    private static EnemyTargetProjection Target(string id, decimal baseDamage, decimal projectedDamage) =>
+        new(id, [new EnemyDamageHitProjection(baseDamage, projectedDamage)],
+            new Dictionary<string, decimal>());
+
+    private static EnemyCardReplayProjection Unit(string id, params EnemyTargetProjection[] targets)
+    {
+        EnemyCardInstanceKey key = new(id);
+        return new EnemyCardReplayProjection(
+            key,
+            key,
+            new EnemyCardId($"STS2_TOMORIN_MOD:{id}"),
+            0,
+            targets,
+            0m,
+            new Dictionary<string, decimal>(),
+            [],
+            []);
+    }
+
+    private static EnemyActionRiskContext CreateContext(
+        EnemyCardPhase phase = EnemyCardPhase.Phase1,
+        int initialCount = 0)
+    {
+        (EnemyActionRiskContext context, _) = CreateCarryContext(0m, phase, initialCount);
+        return context;
+    }
+
+    private static (EnemyActionRiskContext Context, EnemyCardId CardId) CreateCarryContext(
+        decimal attack,
+        EnemyCardPhase phase = EnemyCardPhase.Phase3,
+        int initialCount = 0)
+    {
+        EnemyCardId cardId = new("STS2_TOMORIN_MOD:RISK_CARRY");
+        EnemyCardDefinition definition = new(
+            cardId,
+            new StrikeTomorin(),
+            attack > 0 ? EnemyCardTag.Attack : EnemyCardTag.None,
+            new EnemyCardScoreProfile(attack: attack),
+            carryAcrossPhase: true);
+        Func<BaseEnemyCard> factory = () => new RiskEnemyCard(definition);
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:RISK_DECK");
+        EnemyCardContentDirectory directory = new(
+            deckId,
+            phase,
+            [new EnemyCardPhaseTemplate(phase, [factory], CardIntentTestRules.Default, 1)],
+            new Dictionary<EnemyCardId, Func<BaseEnemyCard>> { [cardId] = factory },
+            new EnemyCollectionCatalog([]));
+        return (new EnemyActionRiskContext(phase, initialCount, directory), cardId);
+    }
+
+    private static string PowerId(Type type) => type.FullName ?? type.Name;
+
+    private sealed class RiskEnemyCard(EnemyCardDefinition definition) : BaseEnemyCard(definition);
+}

@@ -18,6 +18,15 @@ public sealed class EnemyCardSimulationContext
     private readonly List<UnitAccumulator> _units = [];
     private readonly Stack<UnitAccumulator> _parentUnits = new();
     private readonly List<string> _diagnostics = [];
+    private readonly EnemyCardContentDirectory? _contentDirectory;
+    private readonly EnemyCardPhase _activePhase;
+    private readonly Dictionary<string, decimal> _endEnemyPowers;
+    private readonly Dictionary<string, Dictionary<string, decimal>> _endTargetPowers;
+    private readonly Dictionary<EnemyCardInstanceKey, EnemyProjectedCardZoneState> _endCards;
+    private readonly List<EnemyCollectionInstance> _endAvailableCollections;
+    private readonly List<EnemyCollectionInstance> _endConsumedCollections;
+    private readonly bool _strictStructuralState;
+    private decimal _endEnemyBlock;
     private UnitAccumulator? _current;
     private bool _stepLimitReached;
 
@@ -29,7 +38,10 @@ public sealed class EnemyCardSimulationContext
     public EnemyCardSimulationContext(
         IEnumerable<EnemySimulationTarget> targets,
         int stepLimit,
-        IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState>? effectiveCardStates = null)
+        IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState>? effectiveCardStates = null,
+        EnemyProjectionInitialState? initialState = null,
+        EnemyCardContentDirectory? contentDirectory = null,
+        bool strictStructuralState = false)
     {
         _targets = Array.AsReadOnly((targets ?? throw new ArgumentNullException(nameof(targets))).ToArray());
         if (_targets.Any(target => string.IsNullOrWhiteSpace(target.TargetId)))
@@ -50,6 +62,24 @@ public sealed class EnemyCardSimulationContext
         StepLimit = stepLimit;
         _effectiveCardStates = effectiveCardStates ??
                                new Dictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState>();
+        initialState ??= new EnemyProjectionInitialState();
+        _contentDirectory = contentDirectory;
+        _strictStructuralState = strictStructuralState;
+        _activePhase = initialState.ActivePhase;
+        _endEnemyBlock = initialState.EnemyBlock;
+        _endEnemyPowers = new Dictionary<string, decimal>(initialState.EnemyPowers, StringComparer.Ordinal);
+        _endTargetPowers = initialState.TargetPowers.ToDictionary(
+            pair => pair.Key,
+            pair => new Dictionary<string, decimal>(pair.Value, StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        foreach (EnemySimulationTarget target in _targets)
+        {
+            _endTargetPowers.TryAdd(target.TargetId, new Dictionary<string, decimal>(StringComparer.Ordinal));
+        }
+
+        _endCards = initialState.Cards.ToDictionary(card => card.InstanceKey);
+        _endAvailableCollections = initialState.AvailableCollections.ToList();
+        _endConsumedCollections = initialState.ConsumedCollections.ToList();
     }
 
     /// <summary>获取本次模拟的有限步骤上限。</summary>
@@ -160,6 +190,7 @@ public sealed class EnemyCardSimulationContext
         }
 
         RequireCurrentUnit().EnemyBlock += amount;
+        _endEnemyBlock = Math.Max(decimal.Zero, _endEnemyBlock + amount);
     }
 
     /// <summary>
@@ -175,6 +206,7 @@ public sealed class EnemyCardSimulationContext
         }
 
         AddDelta(RequireCurrentUnit().EnemyPowers, powerId, amount);
+        AddDelta(_endEnemyPowers, powerId, amount);
     }
 
     /// <summary>
@@ -192,6 +224,10 @@ public sealed class EnemyCardSimulationContext
         foreach (TargetAccumulator target in RequireCurrentUnit().Targets.Values)
         {
             AddDelta(target.PowerDeltas, powerId, amount * target.Input.DebuffMultiplier);
+        }
+        foreach (EnemySimulationTarget target in _targets)
+        {
+            AddDelta(_endTargetPowers[target.TargetId], powerId, amount * target.DebuffMultiplier);
         }
     }
 
@@ -214,6 +250,7 @@ public sealed class EnemyCardSimulationContext
         }
 
         RequireCurrentUnit().CollectionDeltas.Add(projection);
+        ApplyCollectionDelta(projection);
     }
 
     /// <summary>
@@ -234,6 +271,42 @@ public sealed class EnemyCardSimulationContext
         }
 
         RequireCurrentUnit().GeneratedCards.Add(projection);
+        ApplyGeneratedCard(projection);
+    }
+
+    /// <summary>把素材或来源牌移动到投影终态区域；不存在时保持诊断性兼容。</summary>
+    public void MoveProjectedCard(EnemyCardInstanceKey instanceKey, EnemyCardZone destination)
+    {
+        ArgumentNullException.ThrowIfNull(instanceKey);
+        if (_endCards.TryGetValue(instanceKey, out EnemyProjectedCardZoneState? card))
+        {
+            _endCards[instanceKey] = card with { Zone = destination };
+        }
+    }
+
+    /// <summary>按定义的成功或失败规则结束一张牌的行动生命周期。</summary>
+    public void ApplyProjectedLifecycle(
+        EnemyCardInstanceKey instanceKey,
+        EnemyCardDefinition definition,
+        bool successful,
+        bool immediateFailure = false)
+    {
+        ArgumentNullException.ThrowIfNull(instanceKey);
+        ArgumentNullException.ThrowIfNull(definition);
+        if (!_endCards.TryGetValue(instanceKey, out EnemyProjectedCardZoneState? card) ||
+            card.Zone == EnemyCardZone.Exhaust)
+        {
+            return;
+        }
+
+        EnemyCardZone destination = successful
+            ? definition.Lifecycle == EnemyCardLifecycle.Exhaust
+                ? EnemyCardZone.Exhaust
+                : EnemyCardZone.Discard
+            : immediateFailure || definition.FailureDisposition == EnemyCardFailureDisposition.Discard
+                ? EnemyCardZone.Discard
+                : EnemyCardZone.Retained;
+        _endCards[instanceKey] = card with { Zone = destination };
     }
 
     /// <summary>
@@ -273,8 +346,123 @@ public sealed class EnemyCardSimulationContext
             _units.Select(unit => unit.ToProjection()),
             IsComplete,
             _diagnostics,
-            _effectiveCardStates.Values);
+            _effectiveCardStates.Values,
+            new EnemyProjectionEndState(
+                _endEnemyBlock,
+                _endEnemyPowers,
+                _endTargetPowers.ToDictionary(
+                    pair => pair.Key,
+                    pair => (IReadOnlyDictionary<string, decimal>)pair.Value,
+                    StringComparer.Ordinal),
+                _endCards.Values,
+                _endAvailableCollections,
+                _endConsumedCollections));
     }
+
+    private void ApplyGeneratedCard(EnemyGeneratedCardProjection projection)
+    {
+        if (projection.IncreasesExistingReplay)
+        {
+            if (_endCards.TryGetValue(projection.CardInstanceKey, out EnemyProjectedCardZoneState? existing))
+            {
+                _endCards[projection.CardInstanceKey] = existing with
+                {
+                    ReplayCount = checked(existing.ReplayCount + 1)
+                };
+            }
+            else
+            {
+                if (_strictStructuralState)
+                {
+                    MarkIncomplete($"作词增层目标 {projection.CardInstanceKey} 不在投影牌区。 ");
+                }
+            }
+
+            return;
+        }
+
+        if (_endCards.ContainsKey(projection.CardInstanceKey))
+        {
+            if (_strictStructuralState)
+            {
+                MarkIncomplete($"作词生成牌 {projection.CardInstanceKey} 与现有实例重复。 ");
+            }
+            return;
+        }
+
+        EnemyCardDefinition definition = ResolveDefinition(projection.CardId);
+        EnemyCardZone zone = projection.Timing == EnemyCardTokenTiming.RetainedNextTurn
+            ? EnemyCardZone.Retained
+            : EnemyCardZone.Current;
+        _endCards.Add(projection.CardInstanceKey, new EnemyProjectedCardZoneState(
+            projection.CardInstanceKey,
+            projection.CardId,
+            zone,
+            _activePhase,
+            definition.CarryAcrossPhase,
+            ReplayCount: 0));
+    }
+
+    private void ApplyCollectionDelta(EnemyCollectionProjection projection)
+    {
+        switch (projection.Kind)
+        {
+            case EnemyCollectionProjectionKind.Consumed:
+                MoveCollection(projection.CollectionInstanceId, _endAvailableCollections, _endConsumedCollections);
+                break;
+            case EnemyCollectionProjectionKind.Recovered:
+                MoveCollection(projection.CollectionInstanceId, _endConsumedCollections, _endAvailableCollections);
+                break;
+            case EnemyCollectionProjectionKind.Generated:
+                if (_endAvailableCollections.Concat(_endConsumedCollections)
+                    .Any(item => item.CollectionInstanceId == projection.CollectionInstanceId))
+                {
+                    MarkIncomplete($"生成收藏品 {projection.CollectionInstanceId} 与现有实例重复。 ");
+                    break;
+                }
+
+                int separator = projection.CollectionInstanceId.LastIndexOf('@');
+                if (separator <= 0 ||
+                    !long.TryParse(projection.CollectionInstanceId[(separator + 1)..], out long sequence))
+                {
+                    MarkIncomplete($"生成收藏品实例标识非法：{projection.CollectionInstanceId}");
+                    break;
+                }
+
+                _endAvailableCollections.Add(new EnemyCollectionInstance(
+                    ResolveCollection(projection.CollectionId),
+                    sequence));
+                break;
+        }
+    }
+
+    private void MoveCollection(
+        string instanceId,
+        List<EnemyCollectionInstance> source,
+        List<EnemyCollectionInstance> destination)
+    {
+        int index = source.FindIndex(item => item.CollectionInstanceId == instanceId);
+        if (index < 0)
+        {
+            if (_strictStructuralState)
+            {
+                MarkIncomplete($"收藏品 {instanceId} 不在预期投影区域。 ");
+            }
+            return;
+        }
+
+        EnemyCollectionInstance item = source[index];
+        source.RemoveAt(index);
+        destination.Add(item);
+    }
+
+    private EnemyCardDefinition ResolveDefinition(EnemyCardId cardId) =>
+        _contentDirectory?.CreateDefinition(cardId).Definition ??
+        Test.CardIntentTestCardCatalog.CreateCard(cardId).Definition;
+
+    private EnemyCollectionDefinition ResolveCollection(string collectionId) =>
+        (_contentDirectory?.CollectionCatalog ?? Test.CardIntentTestCollectionCatalog.Catalog)
+        .GetRequired(collectionId);
 
     /// <summary>
     /// 获取当前模拟单元，防止效果节点脱离来源牌写入。

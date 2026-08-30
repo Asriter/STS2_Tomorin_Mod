@@ -80,7 +80,9 @@ public sealed class LiveActionProjection
         IEnumerable<EnemyCardReplayProjection> units,
         bool isComplete,
         IEnumerable<string>? diagnostics = null,
-        IEnumerable<EnemyFrozenEffectiveCardState>? effectiveCardStates = null)
+        IEnumerable<EnemyFrozenEffectiveCardState>? effectiveCardStates = null,
+        EnemyProjectionEndState? endState = null,
+        EnemyActionRiskScore? riskScore = null)
     {
         Units = Array.AsReadOnly((units ?? throw new ArgumentNullException(nameof(units))).ToArray());
         IsComplete = isComplete;
@@ -95,6 +97,8 @@ public sealed class LiveActionProjection
         EffectiveCardStates = new System.Collections.ObjectModel.ReadOnlyDictionary<
             EnemyCardInstanceKey,
             EnemyFrozenEffectiveCardState>(states.ToDictionary(state => state.ExecutingCardInstanceKey));
+        EndState = endState ?? EnemyProjectionEndState.Empty;
+        RiskScore = riskScore;
     }
 
     /// <summary>获取按深度优先执行顺序排列的逐牌逐重放结果。</summary>
@@ -108,4 +112,20 @@ public sealed class LiveActionProjection
 
     /// <summary>获取与冻结行动共享的逐实际实例 N/X 元数据。</summary>
     public IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> EffectiveCardStates { get; }
+
+    /// <summary>获取行动全部递归效果和生命周期结束后的总存量快照。</summary>
+    public EnemyProjectionEndState EndState { get; }
+
+    /// <summary>获取可选的四部分完整风险分；未提供评分上下文时为空。</summary>
+    public EnemyActionRiskScore? RiskScore { get; }
+
+    /// <summary>复用同一不可变投影数据并附加风险分。</summary>
+    public LiveActionProjection WithRiskScore(EnemyActionRiskScore riskScore) =>
+        new(
+            Units,
+            IsComplete,
+            Diagnostics,
+            EffectiveCardStates.Values,
+            EndState,
+            riskScore ?? throw new ArgumentNullException(nameof(riskScore)));
 }

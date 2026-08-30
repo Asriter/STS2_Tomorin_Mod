@@ -1,6 +1,7 @@
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using MegaCrit.Sts2.Core.Models.Powers;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -10,6 +11,38 @@ namespace CardIntentHarness;
 /// </summary>
 public sealed class LiveProjectionTests
 {
+    [Fact]
+    public void ProjectionCarriesExistingStockAndAppliesSourceLifecycleToEndState()
+    {
+        EnemyCardDefinition definition = CreateDefinition("END_STATE", decimal.Zero);
+        EnemyCardCombatState state = CreateState("END_STATE", definition);
+        BaseEnemyCard card = MoveOnlyCardToCurrent(state);
+        PreparedEnemyCardAction action = CreateAction(card, CreateDirectUnit(card));
+        string strengthId = typeof(StrengthPower).FullName!;
+        EnemyProjectionInitialState initial = EnemyProjectionInitialState.FromCombatState(
+            state,
+            enemyBlock: 10m,
+            enemyPowers: new Dictionary<string, decimal> { [strengthId] = 2m });
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(state.DeckId);
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", 1m, 1m)],
+            stepLimit: 8,
+            initialState: initial,
+            contentDirectory: directory,
+            riskContext: new EnemyActionRiskContext(state.ActivePhase, 1, directory));
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        Assert.True(projection.IsComplete);
+        Assert.Equal(10m, projection.EndState.EnemyBlock);
+        Assert.Equal(2m, projection.EndState.EnemyPowers[strengthId]);
+        Assert.Equal(EnemyCardZone.Discard,
+            Assert.Single(projection.EndState.Cards, item => item.InstanceKey == card.InstanceKey).Zone);
+        Assert.NotNull(projection.RiskScore);
+        Assert.Equal(20m, projection.RiskScore!.EngineRisk);
+        Assert.Same(card, state.CurrentCards.Single());
+    }
+
     /// <summary>
     /// 验证标准攻击同时保存定义基础值和逐目标模拟值，投影不会修改权威卡牌实例。
     /// </summary>

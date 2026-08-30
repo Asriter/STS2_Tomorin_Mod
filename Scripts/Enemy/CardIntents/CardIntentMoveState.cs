@@ -269,7 +269,11 @@ public sealed class CardIntentMoveState : MoveState
             .ToArray();
         _liveProjection = _projectionService.Project(
             action,
-            new EnemyActionProjectionInput(projectionTargets, _rules.StepLimit));
+            new EnemyActionProjectionInput(
+                projectionTargets,
+                _rules.StepLimit,
+                initialState: EnemyProjectionInitialState.FromCombatState(CombatState),
+                contentDirectory: EnemyCardDeckRegistry.GetContentDirectory(DeckId)));
         return _liveProjection;
     }
 

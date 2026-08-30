@@ -18,7 +18,10 @@ public sealed class EnemyActionProjectionInput
     public EnemyActionProjectionInput(
         IEnumerable<EnemySimulationTarget> targets,
         int stepLimit,
-        IEnumerable<string>? unknownModifierIds = null)
+        IEnumerable<string>? unknownModifierIds = null,
+        EnemyProjectionInitialState? initialState = null,
+        EnemyCardContentDirectory? contentDirectory = null,
+        EnemyActionRiskContext? riskContext = null)
     {
         Targets = Array.AsReadOnly((targets ?? throw new ArgumentNullException(nameof(targets))).ToArray());
         if (stepLimit < 1)
@@ -28,6 +31,10 @@ public sealed class EnemyActionProjectionInput
 
         StepLimit = stepLimit;
         UnknownModifierIds = Array.AsReadOnly((unknownModifierIds ?? []).ToArray());
+        HasInitialState = initialState is not null;
+        InitialState = initialState ?? new EnemyProjectionInitialState();
+        ContentDirectory = contentDirectory ?? riskContext?.ContentDirectory;
+        RiskContext = riskContext;
     }
 
     /// <summary>获取逐目标已知修正。</summary>
@@ -38,6 +45,18 @@ public sealed class EnemyActionProjectionInput
 
     /// <summary>获取不能安全执行的未知第三方修改器。</summary>
     public IReadOnlyList<string> UnknownModifierIds { get; }
+
+    /// <summary>获取行动开始前的总存量纯数据快照。</summary>
+    public EnemyProjectionInitialState InitialState { get; }
+
+    /// <summary>获取调用方是否显式提供了需要严格推进的初始结构快照。</summary>
+    public bool HasInitialState { get; }
+
+    /// <summary>获取用于解析生成链和收藏品的可选完整内容目录。</summary>
+    public EnemyCardContentDirectory? ContentDirectory { get; }
+
+    /// <summary>获取可选的完整行动评分上下文。</summary>
+    public EnemyActionRiskContext? RiskContext { get; }
 }
 
 /// <summary>
@@ -69,7 +88,10 @@ public sealed class EnemyActionProjectionService
         EnemyCardSimulationContext simulation = new(
             input.Targets,
             input.StepLimit,
-            action.EffectiveCardStates);
+            action.EffectiveCardStates,
+            input.InitialState,
+            input.ContentDirectory,
+            input.HasInitialState);
         foreach (string unknown in input.UnknownModifierIds)
         {
             simulation.MarkIncomplete($"未知第三方数值修改器未执行：{unknown}");
@@ -95,12 +117,24 @@ public sealed class EnemyActionProjectionService
                     break;
                 }
 
-                ProjectUnit(action, unit, source.SourceKey, simulation);
+                ProjectUnit(action, unit, source.SourceKey, simulation, input.ContentDirectory);
             }
+
+            simulation.ApplyProjectedLifecycle(
+                source.SourceKey,
+                source.SourceCard.Definition,
+                successful: source.Units.Count > 0);
+        }
+
+        LiveActionProjection projection = simulation.BuildProjection();
+        if (input.RiskContext is not null)
+        {
+            projection = projection.WithRiskScore(
+                new EnemyActionRiskCalculator().Calculate(projection, input.RiskContext));
         }
 
         _cachedFingerprint = fingerprint;
-        _cachedProjection = simulation.BuildProjection();
+        _cachedProjection = projection;
         return _cachedProjection;
     }
 
@@ -124,7 +158,8 @@ public sealed class EnemyActionProjectionService
         PreparedEnemyCardAction action,
         PreparedEnemyCardUnitPlan unit,
         EnemyCardInstanceKey expectedRootSourceKey,
-        EnemyCardSimulationContext simulation)
+        EnemyCardSimulationContext simulation,
+        EnemyCardContentDirectory? contentDirectory)
     {
         simulation.BeginUnit(
             unit.RootSourceKey,
@@ -139,7 +174,7 @@ public sealed class EnemyActionProjectionService
                     $"执行牌 {unit.ExecutingCardKey} 的根来源 {unit.RootSourceKey} 与父计划 {expectedRootSourceKey} 不一致。");
             }
 
-            EnemyCardDefinition definition = ResolveCardDefinition(action, unit);
+            EnemyCardDefinition definition = ResolveCardDefinition(action, unit, contentDirectory);
             unit.ValidateFrozenDefinition(definition);
             bool requiresFrozenX = definition.Effects.Any(effect => effect is EnemyFrozenXAttackAllEffect);
             try
@@ -163,7 +198,8 @@ public sealed class EnemyActionProjectionService
                     unit,
                     unit.OrderedSteps,
                     definition.Effects,
-                    simulation);
+                    simulation,
+                    contentDirectory);
             }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
@@ -188,7 +224,8 @@ public sealed class EnemyActionProjectionService
         PreparedEnemyCardUnitPlan ownerUnit,
         IReadOnlyList<PreparedEnemyResolutionStep> steps,
         IReadOnlyList<IEnemyCardEffectNode> directEffects,
-        EnemyCardSimulationContext simulation)
+        EnemyCardSimulationContext simulation,
+        EnemyCardContentDirectory? contentDirectory)
     {
         foreach (PreparedEnemyResolutionStep step in steps)
         {
@@ -203,14 +240,15 @@ public sealed class EnemyActionProjectionService
                     ProjectDirectEffects(direct, directEffects, ownerUnit, simulation);
                     break;
                 case PreparedConsumedCardStep consumedCard:
+                    simulation.MoveProjectedCard(consumedCard.MaterialKey, EnemyCardZone.Exhaust);
                     if (consumedCard.ControlledChild is not null)
                     {
-                        ProjectUnit(action, consumedCard.ControlledChild, ownerUnit.RootSourceKey, simulation);
+                        ProjectUnit(action, consumedCard.ControlledChild, ownerUnit.RootSourceKey, simulation, contentDirectory);
                     }
 
                     break;
                 case PreparedConsumedCollectionStep consumedCollection:
-                    ProjectConsumedCollection(action, ownerUnit, consumedCollection, simulation);
+                    ProjectConsumedCollection(action, ownerUnit, consumedCollection, simulation, contentDirectory);
                     break;
                 case PreparedGeneratedCollectionStep generatedCollection:
                     simulation.AddCollectionDelta(new EnemyCollectionProjection(
@@ -226,26 +264,37 @@ public sealed class EnemyActionProjectionService
                         compose.IncreasesExistingReplay));
                     if (compose.ImmediateChild is not null)
                     {
-                        ProjectUnit(action, compose.ImmediateChild, ownerUnit.RootSourceKey, simulation);
+                        ProjectUnit(action, compose.ImmediateChild, ownerUnit.RootSourceKey, simulation, contentDirectory);
+                        simulation.ApplyProjectedLifecycle(
+                            compose.ResultInstanceKey,
+                            ResolveCardDefinition(action, compose.ImmediateChild, contentDirectory),
+                            successful: true);
                     }
 
                     ProjectAdditionalReplayUnits(
                         action,
                         compose.AdditionalReplayUnits,
                         ownerUnit.RootSourceKey,
-                        simulation);
+                        simulation,
+                        contentDirectory);
 
                     break;
                 case PreparedImmediateCardStep immediate:
-                    ProjectUnit(action, immediate.Child, ownerUnit.RootSourceKey, simulation);
+                    simulation.MoveProjectedCard(immediate.SelectedCardKey, EnemyCardZone.Current);
+                    ProjectUnit(action, immediate.Child, ownerUnit.RootSourceKey, simulation, contentDirectory);
                     ProjectAdditionalReplayUnits(
                         action,
                         immediate.AdditionalReplayUnits,
                         ownerUnit.RootSourceKey,
-                        simulation);
+                        simulation,
+                        contentDirectory);
+                    simulation.ApplyProjectedLifecycle(
+                        immediate.SelectedCardKey,
+                        ResolveCardDefinition(action, immediate.Child, contentDirectory),
+                        successful: true);
                     break;
                 case PreparedRecoveryStep recovery:
-                    ProjectRecovery(action, ownerUnit, recovery, simulation);
+                    ProjectRecovery(action, ownerUnit, recovery, simulation, contentDirectory);
                     break;
                 default:
                     simulation.MarkIncomplete(
@@ -298,16 +347,18 @@ public sealed class EnemyActionProjectionService
         PreparedEnemyCardAction action,
         PreparedEnemyCardUnitPlan ownerUnit,
         PreparedConsumedCollectionStep step,
-        EnemyCardSimulationContext simulation)
+        EnemyCardSimulationContext simulation,
+        EnemyCardContentDirectory? contentDirectory)
     {
         EnemyCollectionDefinition definition =
-            CardIntentTestCollectionCatalog.Catalog.GetRequired(step.CollectionId);
+            (contentDirectory?.CollectionCatalog ?? CardIntentTestCollectionCatalog.Catalog)
+            .GetRequired(step.CollectionId);
         EnemyCollectionEffectProgram program = EnemyCollectionEffectResolver.GetRequired(definition);
         simulation.AddCollectionDelta(new EnemyCollectionProjection(
             step.CollectionInstanceId,
             step.CollectionId,
             EnemyCollectionProjectionKind.Consumed));
-        ProjectSteps(action, ownerUnit, step.Children, program.DirectEffects, simulation);
+        ProjectSteps(action, ownerUnit, step.Children, program.DirectEffects, simulation, contentDirectory);
     }
 
     /// <summary>
@@ -321,20 +372,28 @@ public sealed class EnemyActionProjectionService
         PreparedEnemyCardAction action,
         PreparedEnemyCardUnitPlan ownerUnit,
         PreparedRecoveryStep step,
-        EnemyCardSimulationContext simulation)
+        EnemyCardSimulationContext simulation,
+        EnemyCardContentDirectory? contentDirectory)
     {
         if (step.Kind == EnemyPreparedRecoveryKind.Card)
         {
             if (step.ImmediateCardChild is not null)
             {
-                ProjectUnit(action, step.ImmediateCardChild, ownerUnit.RootSourceKey, simulation);
+                EnemyCardInstanceKey recoveredKey = step.ImmediateCardChild.ExecutingCardKey;
+                simulation.MoveProjectedCard(recoveredKey, EnemyCardZone.Current);
+                ProjectUnit(action, step.ImmediateCardChild, ownerUnit.RootSourceKey, simulation, contentDirectory);
+                simulation.ApplyProjectedLifecycle(
+                    recoveredKey,
+                    ResolveCardDefinition(action, step.ImmediateCardChild, contentDirectory),
+                    successful: true);
             }
 
             ProjectAdditionalReplayUnits(
                 action,
                 step.AdditionalReplayUnits,
                 ownerUnit.RootSourceKey,
-                simulation);
+                simulation,
+                contentDirectory);
 
             return;
         }
@@ -363,7 +422,8 @@ public sealed class EnemyActionProjectionService
         PreparedEnemyCardAction action,
         IReadOnlyList<PreparedEnemyCardUnitPlan> units,
         EnemyCardInstanceKey expectedRootSourceKey,
-        EnemyCardSimulationContext simulation)
+        EnemyCardSimulationContext simulation,
+        EnemyCardContentDirectory? contentDirectory)
     {
         foreach (PreparedEnemyCardUnitPlan unit in units)
         {
@@ -372,7 +432,7 @@ public sealed class EnemyActionProjectionService
                 return;
             }
 
-            ProjectUnit(action, unit, expectedRootSourceKey, simulation);
+            ProjectUnit(action, unit, expectedRootSourceKey, simulation, contentDirectory);
         }
     }
 
@@ -384,7 +444,8 @@ public sealed class EnemyActionProjectionService
     /// <returns>与执行单元 CardId 完全一致的不可变定义。</returns>
     private static EnemyCardDefinition ResolveCardDefinition(
         PreparedEnemyCardAction action,
-        PreparedEnemyCardUnitPlan unit)
+        PreparedEnemyCardUnitPlan unit,
+        EnemyCardContentDirectory? contentDirectory)
     {
         BaseEnemyCard? publicCard = action.Sources
             .Select(source => source.SourceCard)
@@ -400,7 +461,8 @@ public sealed class EnemyActionProjectionService
             return publicCard.Definition;
         }
 
-        BaseEnemyCard resolved = CardIntentTestCardCatalog.CreateCard(unit.ExecutingCardId);
+        BaseEnemyCard resolved = contentDirectory?.CreateDefinition(unit.ExecutingCardId) ??
+                                 CardIntentTestCardCatalog.CreateCard(unit.ExecutingCardId);
         if (resolved.CardId != unit.ExecutingCardId)
         {
             throw new InvalidOperationException($"目录未能稳定解析执行牌 {unit.ExecutingCardId}。");
@@ -454,6 +516,61 @@ public sealed class EnemyActionProjectionService
                 .Append(target.DamageMultiplier.ToString(CultureInfo.InvariantCulture))
                 .Append(':')
                 .Append(target.DebuffMultiplier.ToString(CultureInfo.InvariantCulture));
+        }
+
+        builder.Append("|IB:").Append(input.HasInitialState).Append(':')
+            .Append(input.InitialState.ActivePhase).Append(':')
+            .Append(input.InitialState.EnemyBlock.ToString(CultureInfo.InvariantCulture));
+        foreach ((string powerId, decimal amount) in input.InitialState.EnemyPowers.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            builder.Append("|IP:").Append(powerId).Append(':')
+                .Append(amount.ToString(CultureInfo.InvariantCulture));
+        }
+
+        foreach ((string targetId, IReadOnlyDictionary<string, decimal> powers) in
+                 input.InitialState.TargetPowers.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            foreach ((string powerId, decimal amount) in powers.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            {
+                builder.Append("|ITP:").Append(targetId).Append(':').Append(powerId).Append(':')
+                    .Append(amount.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        foreach (EnemyProjectedCardZoneState card in input.InitialState.Cards
+                     .OrderBy(card => card.InstanceKey.Value, StringComparer.Ordinal))
+        {
+            builder.Append("|IZ:").Append(card.InstanceKey.Value).Append(':')
+                .Append(card.CardId.Value).Append(':').Append(card.Zone).Append(':')
+                .Append(card.SourcePhase).Append(':').Append(card.CarryAcrossPhase).Append(':')
+                .Append(card.ReplayCount);
+        }
+
+        foreach (EnemyCollectionInstance item in input.InitialState.AvailableCollections)
+        {
+            builder.Append("|ICA:").Append(item.CollectionInstanceId);
+        }
+
+        foreach (EnemyCollectionInstance item in input.InitialState.ConsumedCollections)
+        {
+            builder.Append("|ICC:").Append(item.CollectionInstanceId);
+        }
+
+        if (input.RiskContext is { } risk)
+        {
+            builder.Append("|RISK:").Append(risk.Phase).Append(':')
+                .Append(risk.PhaseInitialTemplateInstanceCount).Append(':')
+                .Append(risk.ContentDirectory.DeckId.Value);
+            foreach (string powerId in risk.AdditionalDefensivePowerIds.Order(StringComparer.Ordinal))
+            {
+                builder.Append("|RDP:").Append(powerId);
+            }
+
+            foreach ((EnemyCardInstanceKey key, int count) in risk.PendingDeferredReplayIncrements
+                         .OrderBy(pair => pair.Key.Value, StringComparer.Ordinal))
+            {
+                builder.Append("|RPI:").Append(key.Value).Append(':').Append(count);
+            }
         }
 
         builder.Append("|U:")

@@ -344,7 +344,9 @@ public sealed class EnemyCardExecutionEngine
                 $"作词生成实例预期 {compose.ResultInstanceKey}，实际下一实例为 {expectedKey}。 ");
         }
 
-        BaseEnemyCard generated = Test.CardIntentTestCardCatalog.CreateCard(compose.ResultCardId);
+        BaseEnemyCard generated = EnemyCardDeckRegistry.CanResolveCardId(state.DeckId, compose.ResultCardId)
+            ? EnemyCardDeckRegistry.ResolveDefinition(state.DeckId, compose.ResultCardId)
+            : Test.CardIntentTestCardCatalog.CreateCard(compose.ResultCardId);
         EnemyCardZone destination = compose.Timing == EnemyCardTokenTiming.Immediate
             ? EnemyCardZone.Current
             : EnemyCardZone.Retained;

@@ -74,7 +74,8 @@ public sealed class CardIntentMoveRuntime
     /// </summary>
     /// <param name="targets">原版怪物行动目标。</param>
     /// <returns>绑定状态的顺序执行任务。</returns>
-    internal Task ExecuteCardsAsync(IReadOnlyList<Creature> targets) => State.ExecuteCardsAsync(targets);
+    internal Task ExecuteCardsAsync(IReadOnlyList<Creature> targets) =>
+        State.ExecuteCardsAndSettleAsync(targets);
 
     /// <summary>
     /// 由绑定状态在权威数据变化后触发只读视图通知。

@@ -144,6 +144,45 @@ public sealed class ShadowTomorinCatalogTests
         }
     }
 
+    [Fact]
+    public void FormalComposePlanningResolvesTokenFromShadowDirectory()
+    {
+        ShadowTomorinDeck.EnsureRegistered();
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(ShadowTomorinDeck.DeckId);
+        List<BaseEnemyCard> phaseCards = EnemyCardDeckRegistry.CreatePhaseDeck(
+            ShadowTomorinDeck.DeckId,
+            EnemyCardPhase.Phase2);
+        BaseEnemyCard source = phaseCards.Single(card =>
+            card.CardId == ShadowTomorinCardCatalog.CardId("HITOSHIZUKU"));
+        BaseEnemyCard material = phaseCards.First(card =>
+            card.CardId == ShadowTomorinCardCatalog.CardId("TOMORIN_PUNCH"));
+        EnemyPreparedPlanningState transaction = new(
+            drawPile: phaseCards.Except([source, material]),
+            currentCards: [source, material],
+            retainedCards: [],
+            discardPile: [],
+            exhaustPile: [],
+            collectionInventory: new EnemyCollectionInventory(),
+            nextGeneratedCardSequence: 0,
+            contentDirectory: directory,
+            activePhase: EnemyCardPhase.Phase2);
+
+        PreparedEnemyCardSource planned = new EnemyPreparedResolutionPlanner().PlanSource(
+            source,
+            maximumAttempts: 1,
+            transaction,
+            new EnemyCardRandomSource(_ => 0),
+            ShadowTomorinRules.ForPhase(EnemyCardPhase.Phase2).StepLimit);
+
+        PreparedComposeResultStep compose = Assert.Single(Assert.Single(planned.Units).OrderedSteps
+            .OfType<PreparedComposeResultStep>());
+        EnemyCardId expectedTokenId = ShadowTomorinCardCatalog.CardId("HITOSHIZUKU_TOKEN");
+        Assert.Equal(expectedTokenId, compose.ResultCardId);
+        BaseEnemyCard generated = Assert.Single(transaction.DiscardPile, card => card.CardId == expectedTokenId);
+        Assert.Same(ShadowTomorinCardCatalog.Get("HITOSHIZUKU_TOKEN").CardModel, generated.CardModel);
+        Assert.Equal(EnemyCardPhase.Phase2, generated.SourcePhase);
+    }
+
     private static void AssertPhaseCounts(
         EnemyCardPhase phase,
         params (string Suffix, int Count)[] expected)

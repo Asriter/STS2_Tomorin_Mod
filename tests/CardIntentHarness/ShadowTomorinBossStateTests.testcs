@@ -1,0 +1,163 @@
+using System.Reflection;
+using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
+using STS2_Tomorin_Mod.Enemy;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Powers;
+using Xunit;
+
+namespace CardIntentHarness;
+
+public sealed class ShadowTomorinBossStateTests
+{
+    [Fact]
+    public void DamageOverflowIsClampedAndPhaseRequestPreservesPublishedAction()
+    {
+        Fixture fixture = Fixture.Create();
+        PreparedEnemyCardAction oldAction = fixture.PreparePhase1Action();
+
+        decimal accepted = EnemyMaxDamageReceivedPower.LimitDamageToRemainingAllowance(
+            ShadowTomorinBalance.Phase1DamageAllowance + 72m,
+            ShadowTomorinBalance.Phase1DamageAllowance);
+        fixture.State.RequestPhase(EnemyCardPhase.Phase2);
+
+        Assert.Equal(ShadowTomorinBalance.Phase1DamageAllowance, accepted);
+        Assert.Equal(EnemyCardPhase.Phase1, fixture.State.CombatState.ActivePhase);
+        Assert.Equal(EnemyCardPhase.Phase2, fixture.State.CombatState.PendingPhase);
+        Assert.Same(oldAction, fixture.State.CombatState.PreparedAction);
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.State.BuildPendingPhaseTransitionCandidate());
+    }
+
+    [Fact]
+    public async Task OldPreparedActionSettlesBeforeIdleMigration()
+    {
+        Fixture fixture = Fixture.Create();
+        PreparedEnemyCardAction oldAction = fixture.PreparePhase1Action();
+        fixture.Owner.ExpectedOldSources = oldAction.Sources.Select(source => source.SourceCard).ToArray();
+        fixture.State.RequestPhase(EnemyCardPhase.Phase2);
+
+        await fixture.State.ExecuteCardsAndSettleAsync([]);
+
+        Assert.True(fixture.Owner.SettledHookObservedStrictIdle);
+        Assert.True(fixture.Owner.SettledOldSourcesCompletedLifecycle);
+        Assert.NotEmpty(fixture.ExecutionEvents);
+        Assert.Equal(EnemyCardPhase.Phase2, fixture.State.CombatState.ActivePhase);
+        Assert.Equal(EnemyCardPhase.None, fixture.State.CombatState.PendingPhase);
+        Assert.Null(fixture.State.CombatState.PreparedAction);
+        Assert.Equal(1, fixture.State.CombatState.PhaseRevision);
+    }
+
+    [Fact]
+    public void ShadowGateKeepsLegacyDefaultAndUsesSingleEncounterScale()
+    {
+        EnemyMaxDamageReceivedPower legacy = new();
+        ShadowTomorinDamageGatePower shadow = new();
+
+        Assert.True(legacy.RemoveAtEnemyTurnStartWhenDepleted);
+        Assert.False(shadow.ShouldScaleInMultiplayer);
+        Assert.Equal(
+            ShadowTomorinBalance.Phase1DamageAllowance * 3m / 2m,
+            ShadowTomorin.ScaleDamageAllowance(
+                ShadowTomorinBalance.Phase1DamageAllowance,
+                ShadowTomorinBalance.MaxHp * 3m / 2m));
+        Assert.Equal(
+            ShadowTomorinBalance.Phase2DamageAllowance * 3m / 2m,
+            ShadowTomorin.ScaleDamageAllowance(
+                ShadowTomorinBalance.Phase2DamageAllowance,
+                ShadowTomorinBalance.MaxHp * 3m / 2m));
+    }
+
+    private sealed record Fixture(
+        CardIntentMoveState State,
+        HarnessMonster Owner,
+        List<string> ExecutionEvents)
+    {
+        public static Fixture Create()
+        {
+            ShadowTomorinDeck.EnsureRegistered();
+            HarnessMonster owner = new();
+            List<string> events = [];
+            CardIntentMoveState state = CardIntentMoveState.Create(
+                "SHADOW_BOSS_STATE_HARNESS",
+                owner,
+                ShadowTomorinDeck.DeckId,
+                ShadowTomorinBalance.MaxEffectiveCards,
+                randomIndexSelector: _ => 0,
+                shouldStopExecution: () => false,
+                attackExecutor: amount => Record($"attack:{amount}"),
+                defendExecutor: amount => Record($"block:{amount}"),
+                attackAllExecutor: (amount, hits) => Record($"attack-all:{amount}x{hits}"),
+                enemyPowerExecutor: (type, amount) => Record($"self-power:{type.Name}:{amount}"),
+                targetPowerExecutor: (type, amount) => Record($"target-power:{type.Name}:{amount}"),
+                collectionPowerExecutor: ids => Record($"collections:{string.Join(',', ids)}"),
+                combatStateOverride: DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
+                rules: ShadowTomorinRules.ForPhase(EnemyCardPhase.Phase1),
+                executionEngine: new EnemyCardExecutionEngine(abilityHooks: new NoOpAbilityHooks()));
+            owner.State = state;
+            return new Fixture(state, owner, events);
+
+            Task Record(string value)
+            {
+                events.Add(value);
+                return Task.CompletedTask;
+            }
+        }
+
+        public PreparedEnemyCardAction PreparePhase1Action()
+        {
+            PreparedEnemyCardAction action = new EnemyActionMetricPlanner(
+                    ShadowTomorinRules.ForPhase(EnemyCardPhase.Phase1),
+                    new EnemyCardScoreCalculator())
+                .Prepare(
+                    State.CombatState,
+                    new EnemyPlanningContext(new EnemyCardRandomSource(_ => 0)));
+            Assert.Same(action, State.CombatState.PreparedAction);
+            return action;
+        }
+    }
+
+    private sealed class HarnessMonster : BaseCardIntentMonsterModel
+    {
+        public CardIntentMoveState State { get; set; } = null!;
+        public IReadOnlyList<BaseEnemyCard> ExpectedOldSources { get; set; } = [];
+        public bool SettledHookObservedStrictIdle { get; private set; }
+        public bool SettledOldSourcesCompletedLifecycle { get; private set; }
+        public override int MinInitialHp => 1;
+        public override int MaxInitialHp => 1;
+        public override string? CustomVisualPath => null;
+        protected override MonsterMoveStateMachine GenerateMoveStateMachine() => null!;
+        protected override void LogCardIntentError(string message) => throw new Xunit.Sdk.XunitException(message);
+
+        protected override Task AfterCardIntentActionSettledAsync(
+            CardIntentMoveState state,
+            CancellationToken cancellationToken = default)
+        {
+            SettledHookObservedStrictIdle =
+                state.CombatState.RuntimePhase == EnemyCardRuntimePhase.Idle &&
+                state.CombatState.PreparedAction is null &&
+                state.CombatState.ImmediateResolutionStack.Count == 0;
+            SettledOldSourcesCompletedLifecycle = ExpectedOldSources.All(source =>
+                state.CombatState.DiscardPile.Concat(state.CombatState.ExhaustPile)
+                    .Any(card => card.InstanceKey == source.InstanceKey));
+            EnemyCardPhaseTransitionCandidate candidate = state.BuildPendingPhaseTransitionCandidate();
+            state.ApplyPhaseTransition(candidate);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NoOpAbilityHooks : IEnemyAbilityHookDispatcher
+    {
+        public Task AfterComposeAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+        public Task AfterSuccessfulUnitAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+    }
+
+    public class NullCombatStateProxy : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            targetMethod?.ReturnType.IsValueType == true
+                ? Activator.CreateInstance(targetMethod.ReturnType)
+                : null;
+    }
+}

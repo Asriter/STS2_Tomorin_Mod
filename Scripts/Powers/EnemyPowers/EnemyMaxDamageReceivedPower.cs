@@ -21,10 +21,17 @@ public class EnemyMaxDamageReceivedPower : BasePowerModel
 
     public override bool ShouldScaleInMultiplayer => true;
 
-    public override int DisplayAmount => (int)Math.Max(0m, (decimal)base.Amount - GetInternalData<Data>().damageReceivedThisPhase);
+    public override int DisplayAmount => (int)RemainingAllowance;
+
+    /// <summary>伤害额度耗尽后是否保持 Taki 既有的敌方回合开始自动移除行为。</summary>
+    public bool RemoveAtEnemyTurnStartWhenDepleted { get; set; } = true;
+
+    /// <summary>当前阶段尚可承受的非负伤害额度。</summary>
+    public decimal RemainingAllowance =>
+        Math.Max(0m, Amount - GetInternalData<Data>().damageReceivedThisPhase);
     
     //转阶段的回调
-    public required Action DamageCallBack;
+    public Action? DamageCallBack { get; set; }
 
     protected override object InitInternalData()
     {
@@ -41,7 +48,7 @@ public class EnemyMaxDamageReceivedPower : BasePowerModel
         {
             return amount;
         }
-        return Math.Min(amount, (decimal)base.Amount - GetInternalData<Data>().damageReceivedThisPhase);
+        return LimitDamageToRemainingAllowance(amount, RemainingAllowance);
     }
 
     public override Task AfterModifyingHpLostBeforeOsty()
@@ -82,10 +89,23 @@ public class EnemyMaxDamageReceivedPower : BasePowerModel
     public override Task BeforeSideTurnStart(PlayerChoiceContext choiceContext, CombatSide side, IReadOnlyList<Creature> participants,
         ICombatState combatState)
     {
-        if (side != CombatSide.Player && GetInternalData<Data>().damageReceivedThisPhase >= Amount)
+        if (RemoveAtEnemyTurnStartWhenDepleted &&
+            side != CombatSide.Player &&
+            RemainingAllowance <= 0m)
         {
             PowerCmd.Remove(this);
         }
         return Task.CompletedTask;
+    }
+
+    /// <summary>把一次非负入站伤害截断到当前非负额度，供伤害钩子与领域测试共享。</summary>
+    public static decimal LimitDamageToRemainingAllowance(decimal amount, decimal remainingAllowance)
+    {
+        if (amount < 0m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount));
+        }
+
+        return Math.Min(amount, Math.Max(0m, remainingAllowance));
     }
 }

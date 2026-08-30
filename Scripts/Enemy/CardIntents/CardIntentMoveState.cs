@@ -21,10 +21,10 @@ public sealed class CardIntentMoveState : MoveState
     private readonly Func<Type, decimal, Task>? _enemyPowerExecutor;
     private readonly Func<Type, decimal, Task>? _targetPowerExecutor;
     private readonly Func<IReadOnlyList<string>, Task>? _collectionPowerExecutor;
+    private readonly Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle>? _createPreparationCycle;
     private readonly EnemyPlanningProjectionInputFactory? _createPlanningProjectionInput;
     private readonly ICombatState? _combatStateOverride;
     private readonly EnemyCardPlanningRules _rules;
-    private readonly EnemyActionMetricPlanner _planner;
     private readonly EnemyCardExecutionEngine _executionEngine;
     private readonly EnemyActionProjectionService _projectionService = new();
     private LiveActionProjection? _liveProjection;
@@ -46,6 +46,7 @@ public sealed class CardIntentMoveState : MoveState
         Func<Type, decimal, Task>? enemyPowerExecutor,
         Func<Type, decimal, Task>? targetPowerExecutor,
         Func<IReadOnlyList<string>, Task>? collectionPowerExecutor,
+        Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle>? createPreparationCycle,
         EnemyPlanningProjectionInputFactory? createPlanningProjectionInput,
         ICombatState? combatStateOverride,
         EnemyCardPlanningRules rules,
@@ -79,10 +80,10 @@ public sealed class CardIntentMoveState : MoveState
         _enemyPowerExecutor = enemyPowerExecutor;
         _targetPowerExecutor = targetPowerExecutor;
         _collectionPowerExecutor = collectionPowerExecutor;
+        _createPreparationCycle = createPreparationCycle;
         _createPlanningProjectionInput = createPlanningProjectionInput;
         _combatStateOverride = combatStateOverride;
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
-        _planner = new EnemyActionMetricPlanner(_rules, new EnemyCardScoreCalculator());
         _executionEngine = executionEngine ?? new EnemyCardExecutionEngine();
         CombatState = CreateFreshCombatState();
         runtime.Attach(this);
@@ -120,6 +121,7 @@ public sealed class CardIntentMoveState : MoveState
         Func<Type, decimal, Task>? enemyPowerExecutor = null,
         Func<Type, decimal, Task>? targetPowerExecutor = null,
         Func<IReadOnlyList<string>, Task>? collectionPowerExecutor = null,
+        Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle>? createPreparationCycle = null,
         EnemyPlanningProjectionInputFactory? createPlanningProjectionInput = null,
         ICombatState? combatStateOverride = null,
         EnemyCardPlanningRules? rules = null,
@@ -140,6 +142,7 @@ public sealed class CardIntentMoveState : MoveState
             enemyPowerExecutor,
             targetPowerExecutor,
             collectionPowerExecutor,
+            createPreparationCycle,
             createPlanningProjectionInput,
             combatStateOverride,
             rules ?? CardIntentTestRules.Default,
@@ -216,11 +219,14 @@ public sealed class CardIntentMoveState : MoveState
         EnemyCardRuntimePhase phaseBeforePreparation = CombatState.RuntimePhase;
         try
         {
+            EnemyCardPlanningRules activeRules = ResolveRules(CombatState.ActivePhase);
             EnemyPlanningContext planningContext = new(
                 CreateRandomSource(),
+                createPreparationCycle: _createPreparationCycle,
                 createProjectionInput: _createPlanningProjectionInput);
             PreparedEnemyCardAction action =
-                _planner.Prepare(CombatState, planningContext);
+                new EnemyActionMetricPlanner(activeRules, new EnemyCardScoreCalculator())
+                    .Prepare(CombatState, planningContext);
             _liveProjection = planningContext.AcceptedProjection ?? throw new InvalidOperationException(
                 "规划器已提交行动但没有保留提交前的完整投影。");
             string cardOrder = string.Join(
@@ -282,7 +288,7 @@ public sealed class CardIntentMoveState : MoveState
             action,
             new EnemyActionProjectionInput(
                 projectionTargets,
-                _rules.StepLimit,
+                ResolveRules(action.Phase).StepLimit,
                 initialState: EnemyProjectionInitialState.FromCombatState(CombatState),
                 contentDirectory: EnemyCardDeckRegistry.GetContentDirectory(DeckId)));
     }
@@ -313,11 +319,58 @@ public sealed class CardIntentMoveState : MoveState
             enemyPowerExecutor: _enemyPowerExecutor,
             targetPowerExecutor: _targetPowerExecutor,
             collectionPowerExecutor: _collectionPowerExecutor);
+        EnemyCardPlanningRules actionRules = ResolveRules(
+            CombatState.PreparedAction?.Phase ?? CombatState.ActivePhase);
         await _executionEngine.ExecutePreparedActionAsync(
             CombatState,
             context,
             CreateRandomSource(),
-            _rules.StepLimit);
+            actionRules.StepLimit);
+        NotifyStateChanged();
+    }
+
+    /// <summary>
+    /// 供原版 MoveState 委托使用：先完成引擎与全部来源生命周期，再在严格 Idle 条件下调用首领安全点钩子。
+    /// </summary>
+    public async Task ExecuteCardsAndSettleAsync(
+        IReadOnlyList<Creature> targets,
+        CancellationToken cancellationToken = default)
+    {
+        await ExecuteCardsAsync(targets);
+        if (CombatState.RuntimePhase == EnemyCardRuntimePhase.Idle &&
+            CombatState.PreparedAction is null &&
+            CombatState.ImmediateResolutionStack.Count == 0)
+        {
+            await Owner.AfterCardIntentActionSettledAsync(this, cancellationToken);
+        }
+    }
+
+    /// <summary>只记录更高阶段请求并刷新权威展示；不会取消或替换当前公开行动。</summary>
+    public void RequestPhase(EnemyCardPhase phase)
+    {
+        CombatState.RequestPhase(phase);
+        NotifyStateChanged();
+    }
+
+    /// <summary>在当前 Idle 安全点使用权威战斗随机源构造完整阶段迁移候选。</summary>
+    public EnemyCardPhaseTransitionCandidate BuildPendingPhaseTransitionCandidate()
+    {
+        EnemyCardPhase pending = CombatState.PendingPhase;
+        if (pending == EnemyCardPhase.None)
+        {
+            throw new InvalidOperationException("没有待处理阶段时不能构造迁移候选。");
+        }
+
+        EnemyCardPhaseTemplate template = EnemyCardDeckRegistry
+            .GetContentDirectory(DeckId)
+            .GetPhase(pending);
+        return CombatState.BuildPhaseTransitionCandidate(template, CreateRandomSource());
+    }
+
+    /// <summary>提交已经完整构造并校验的阶段状态，然后一次性刷新 Intent。</summary>
+    public void ApplyPhaseTransition(EnemyCardPhaseTransitionCandidate candidate)
+    {
+        CombatState.ApplyPhaseTransition(candidate);
         NotifyStateChanged();
     }
 
@@ -419,6 +472,15 @@ public sealed class CardIntentMoveState : MoveState
     private IEnemyCardRandomSource CreateRandomSource() =>
         new EnemyCardRandomSource(count =>
             _randomIndexSelector?.Invoke(count) ?? Owner.RunRng.CombatCardSelection.NextInt(count));
+
+    /// <summary>正式阶段牌组读取权威阶段模板；旧单阶段测试牌组保留调用方覆盖规则。</summary>
+    private EnemyCardPlanningRules ResolveRules(EnemyCardPhase phase)
+    {
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(DeckId);
+        return phase == EnemyCardPhase.None
+            ? _rules
+            : directory.GetPhase(phase).PlanningRules;
+    }
 
     /// <summary>
     /// 创建全新战斗级状态并按规则追加初始星石收藏品。

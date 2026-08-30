@@ -11,6 +11,8 @@ namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 public sealed class EnemyPreparedPlanningState
 {
     private readonly Dictionary<EnemyCardInstanceKey, int> _plannedReplayIncreases = [];
+    private readonly EnemyCardContentDirectory _contentDirectory;
+    private readonly EnemyCardPhase _activePhase;
 
     /// <summary>
     /// 从完整权威区域复制可独立推进的准备事务。
@@ -22,6 +24,8 @@ public sealed class EnemyPreparedPlanningState
     /// <param name="exhaustPile">候选消耗堆。</param>
     /// <param name="collectionInventory">候选收藏品库存。</param>
     /// <param name="nextGeneratedCardSequence">下一张生成牌序号。</param>
+    /// <param name="contentDirectory">当前牌组的正式内容目录。</param>
+    /// <param name="activePhase">生成牌应绑定的当前来源阶段。</param>
     public EnemyPreparedPlanningState(
         IEnumerable<BaseEnemyCard> drawPile,
         IEnumerable<BaseEnemyCard> currentCards,
@@ -29,7 +33,9 @@ public sealed class EnemyPreparedPlanningState
         IEnumerable<BaseEnemyCard> discardPile,
         IEnumerable<BaseEnemyCard> exhaustPile,
         EnemyCollectionInventory collectionInventory,
-        long nextGeneratedCardSequence)
+        long nextGeneratedCardSequence,
+        EnemyCardContentDirectory? contentDirectory = null,
+        EnemyCardPhase activePhase = EnemyCardPhase.None)
     {
         ArgumentNullException.ThrowIfNull(drawPile);
         ArgumentNullException.ThrowIfNull(currentCards);
@@ -43,6 +49,19 @@ public sealed class EnemyPreparedPlanningState
         ExhaustPile = exhaustPile.ToList();
         CollectionInventory = (collectionInventory ?? throw new ArgumentNullException(nameof(collectionInventory)))
             .CreateTransactionalClone();
+        if (contentDirectory is null)
+        {
+            CardIntentTestDeck.EnsureRegistered();
+            contentDirectory = EnemyCardDeckRegistry.GetContentDirectory(CardIntentTestDeck.DeckId);
+        }
+
+        _contentDirectory = contentDirectory;
+        if (!Enum.IsDefined(activePhase))
+        {
+            throw new ArgumentOutOfRangeException(nameof(activePhase), activePhase, "未知敌人卡牌阶段。");
+        }
+
+        _activePhase = activePhase;
         if (nextGeneratedCardSequence < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(nextGeneratedCardSequence));
@@ -115,7 +134,10 @@ public sealed class EnemyPreparedPlanningState
     /// <returns>已绑定预计实例键的候选对象。</returns>
     public BaseEnemyCard AddGeneratedCard(EnemyCardId cardId, EnemyCardZone destination)
     {
-        BaseEnemyCard generated = CardIntentTestCardCatalog.CreateCard(cardId);
+        BaseEnemyCard generated = _contentDirectory.DefinitionFactories.ContainsKey(cardId)
+            ? _contentDirectory.CreateDefinition(cardId)
+            : CardIntentTestCardCatalog.CreateCard(cardId);
+        generated.AssignSourcePhase(_activePhase);
         generated.AssignRuntimeInstanceId(NextGeneratedCardSequence);
         checked
         {

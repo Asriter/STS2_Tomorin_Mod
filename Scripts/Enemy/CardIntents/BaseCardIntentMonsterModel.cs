@@ -34,6 +34,14 @@ public abstract class BaseCardIntentMonsterModel : CustomMonsterModel
     internal void ReportCardIntentError(string message) => LogCardIntentError(message);
 
     /// <summary>
+    /// 冻结行动已经完成全部来源生命周期、清空公开行动并回到 Idle 后触发。
+    /// 派生首领只能在此安全点提交阶段迁移，不得替换刚刚执行完的行动。
+    /// </summary>
+    protected internal virtual Task AfterCardIntentActionSettledAsync(
+        CardIntentMoveState state,
+        CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <summary>
     /// 注册派生怪物创建的卡牌行动状态；同 StateId 重建时先解除旧订阅。
     /// </summary>
     /// <param name="state">Owner 必须为当前怪物的状态。</param>

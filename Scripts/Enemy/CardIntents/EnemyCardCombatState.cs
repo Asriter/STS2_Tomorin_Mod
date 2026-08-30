@@ -490,7 +490,9 @@ public sealed class EnemyCardCombatState
             snapshot.DiscardPile,
             _exhaustPile,
             planningInventory,
-            NextGeneratedCardSequence);
+            NextGeneratedCardSequence,
+            EnemyCardDeckRegistry.GetContentDirectory(DeckId),
+            ActivePhase);
     }
 
     /// <summary>

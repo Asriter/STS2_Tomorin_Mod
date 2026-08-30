@@ -201,6 +201,65 @@ public sealed class DomainIdentityTests
     }
 
     /// <summary>
+    /// 验证注册完成后定义闭包改变 Carry、效果分类或效果程序时，解析仍按注册指纹拒绝漂移。
+    /// </summary>
+    [Fact]
+    public void ResolveDefinitionRejectsPostRegistrationSemanticDrift()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_POST_REGISTER_DRIFT");
+        StrikeTomorin model = new();
+        EnemyCardId cardId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_POST_REGISTER_DRIFT_CARD");
+        EnemyCardScoreProfile score = new(attack: model.DynamicVars.Damage.BaseValue);
+        EnemyCardDefinition canonical = new(
+            cardId,
+            model,
+            EnemyCardTag.Attack,
+            score,
+            effectProgramIds: ["DOMAIN_IDENTITY_STABLE_EFFECT"],
+            carryAcrossPhase: false,
+            effectClasses: EnemyCardEffectClass.Control);
+        EnemyCardDefinition drifted = new(
+            cardId,
+            model,
+            EnemyCardTag.Attack,
+            score,
+            effectProgramIds: ["DOMAIN_IDENTITY_DRIFTED_EFFECT"],
+            carryAcrossPhase: true,
+            effectClasses: EnemyCardEffectClass.Control | EnemyCardEffectClass.Finisher);
+        bool driftAfterRegistration = false;
+        Func<BaseEnemyCard> factory = () =>
+            new HarnessEnemyCard(driftAfterRegistration ? drifted : canonical);
+        RegisterSingleDefinitionDirectory(deckId, cardId, factory);
+
+        driftAfterRegistration = true;
+
+        Assert.Throws<InvalidOperationException>(() =>
+            EnemyCardDeckRegistry.ResolveDefinition(deckId, cardId));
+    }
+
+    /// <summary>
+    /// 验证注册期间正常的新鲜工厂在注册后改为复用单例时，单次解析也会双探针拒绝。
+    /// </summary>
+    [Fact]
+    public void ResolveDefinitionRejectsPostRegistrationReusedReference()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_POST_REGISTER_SINGLETON");
+        EnemyCardDefinition definition = CreateDefinition(
+            "STS2_TOMORIN_MOD:DOMAIN_IDENTITY_POST_REGISTER_SINGLETON_CARD");
+        HarnessEnemyCard singleton = new(definition);
+        bool reuseAfterRegistration = false;
+        Func<BaseEnemyCard> factory = () => reuseAfterRegistration
+            ? singleton
+            : new HarnessEnemyCard(definition);
+        RegisterSingleDefinitionDirectory(deckId, definition.CardId, factory);
+
+        reuseAfterRegistration = true;
+
+        Assert.Throws<InvalidOperationException>(() =>
+            EnemyCardDeckRegistry.ResolveDefinition(deckId, definition.CardId));
+    }
+
+    /// <summary>
     /// 创建不依赖固定平衡数值的测试卡牌定义。
     /// </summary>
     /// <param name="rawId">测试定义稳定标识。</param>
@@ -226,6 +285,21 @@ public sealed class DomainIdentityTests
             [new EnemyWeightedActionRecipe(
                 new EnemyActionRecipe(EnemyActionMetric.Attack, [null]),
                 weight: 1)]);
+
+    /// <summary>用一个真实来源定义建立最小完整目录。</summary>
+    private static void RegisterSingleDefinitionDirectory(
+        EnemyCardDeckId deckId,
+        EnemyCardId cardId,
+        Func<BaseEnemyCard> factory)
+    {
+        EnemyCardPlanningRules rules = CreateSingleSlotRules();
+        EnemyCardDeckRegistry.Register(new EnemyCardContentDirectory(
+            deckId,
+            EnemyCardPhase.Phase1,
+            [new EnemyCardPhaseTemplate(EnemyCardPhase.Phase1, [factory], rules, 1)],
+            new Dictionary<EnemyCardId, Func<BaseEnemyCard>> { [cardId] = factory },
+            new EnemyCollectionCatalog([])));
+    }
 
     /// <summary>
     /// 幂等注册按输入顺序排列的测试定义工厂。

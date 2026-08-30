@@ -143,6 +143,11 @@ public sealed class PhaseMigrationTests
     {
         PhaseFixture fixture = PhaseFixture.Create("REVISION");
         fixture.State.RequestPhase(EnemyCardPhase.Phase2);
+        BaseEnemyCard pendingGenerated = fixture.CreateCarry();
+        fixture.State.AddGeneratedCard(pendingGenerated, EnemyCardZone.Discard);
+
+        Assert.Equal(EnemyCardPhase.Phase1, pendingGenerated.SourcePhase);
+
         EnemyCardPhaseTransitionCandidate candidate = fixture.State.BuildPhaseTransitionCandidate(
             fixture.Directory.GetPhase(EnemyCardPhase.Phase2), fixture.Random);
         fixture.State.ApplyPhaseTransition(candidate);
@@ -154,6 +159,32 @@ public sealed class PhaseMigrationTests
         Assert.Throws<InvalidOperationException>(() => fixture.State.ApplyPhaseTransition(candidate));
         Assert.Equal(EnemyCardPhase.Phase2, fixture.State.ActivePhase);
         Assert.Same(generated, fixture.State.RetainedCards.Single());
+        Assert.Same(pendingGenerated, fixture.State.DiscardPile.Single());
+        Assert.Equal(EnemyCardPhase.Phase1, pendingGenerated.SourcePhase);
+    }
+
+    /// <summary>
+    /// 验证旧两参 None 目录中的运行时生成牌也记录明确的 None 来源阶段。
+    /// </summary>
+    [Fact]
+    public void LegacyNonePhaseGeneratedCardsRecordNoneSourcePhase()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:PHASE_MIGRATION_LEGACY_NONE");
+        StrikeTomorin model = new();
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:PHASE_MIGRATION_LEGACY_NONE_CARD"),
+            model,
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: model.DynamicVars.Damage.BaseValue));
+        EnemyCardDeckRegistry.Register(deckId, [() => new HarnessEnemyCard(definition)]);
+        EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(deckId);
+        BaseEnemyCard generated = new HarnessEnemyCard(definition);
+
+        state.AddGeneratedCard(generated, EnemyCardZone.Discard);
+
+        Assert.Equal(EnemyCardPhase.None, state.ActivePhase);
+        Assert.Equal(EnemyCardPhase.None, generated.SourcePhase);
+        Assert.Same(generated, state.DiscardPile.Single());
     }
 
     /// <summary>

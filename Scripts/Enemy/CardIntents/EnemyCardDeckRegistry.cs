@@ -185,9 +185,34 @@ public static class EnemyCardDeckRegistry
     public static EnemyCardContentDirectory GetContentDirectory(EnemyCardDeckId deckId) =>
         GetDefinition(deckId).ContentDirectory;
 
-    /// <summary>从已注册完整目录创建未绑定身份的新定义实例。</summary>
-    public static BaseEnemyCard ResolveDefinition(EnemyCardDeckId deckId, EnemyCardId cardId) =>
-        GetContentDirectory(deckId).CreateDefinition(cardId);
+    /// <summary>从已注册完整目录创建未绑定身份的新定义实例，并持续校验注册时的规范语义。</summary>
+    public static BaseEnemyCard ResolveDefinition(EnemyCardDeckId deckId, EnemyCardId cardId)
+    {
+        DeckDefinition definition = GetDefinition(deckId);
+        CardDefinitionFingerprint canonical = definition.GetCanonicalDefinition(cardId);
+        BaseEnemyCard first = definition.ContentDirectory.CreateDefinition(cardId);
+        BaseEnemyCard second = definition.ContentDirectory.CreateDefinition(cardId);
+        if (ReferenceEquals(first, second))
+        {
+            throw new InvalidOperationException(
+                $"敌人牌组 {deckId} 的定义工厂 {cardId} 在解析时复用了卡牌对象。");
+        }
+
+        CardDefinitionFingerprint firstFingerprint = CardDefinitionFingerprint.FromCard(first);
+        if (!firstFingerprint.Matches(second))
+        {
+            throw new InvalidOperationException(
+                $"敌人牌组 {deckId} 的定义工厂 {cardId} 在同次解析的双探针间改变了完整语义。");
+        }
+
+        if (!canonical.Matches(first) || !canonical.Matches(second))
+        {
+            throw new InvalidOperationException(
+                $"敌人牌组 {deckId} 的定义工厂 {cardId} 在注册后偏离了规范语义。");
+        }
+
+        return first;
+    }
 
     /// <summary>获取已注册牌组的收藏品目录。</summary>
     public static EnemyCollectionCatalog GetCollectionCatalog(EnemyCardDeckId deckId) =>
@@ -287,7 +312,7 @@ public static class EnemyCardDeckRegistry
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        return new DeckDefinition(directory, phases, assetPaths);
+        return new DeckDefinition(directory, phases, canonicalDefinitions, assetPaths);
     }
 
     /// <summary>
@@ -385,15 +410,18 @@ public static class EnemyCardDeckRegistry
         public DeckDefinition(
             EnemyCardContentDirectory contentDirectory,
             IReadOnlyDictionary<EnemyCardPhase, PhaseDefinition> phases,
+            IReadOnlyDictionary<EnemyCardId, CardDefinitionFingerprint> canonicalDefinitions,
             IReadOnlyList<string> assetPaths)
         {
             ContentDirectory = contentDirectory;
             Phases = new Dictionary<EnemyCardPhase, PhaseDefinition>(phases);
+            CanonicalDefinitions = new Dictionary<EnemyCardId, CardDefinitionFingerprint>(canonicalDefinitions);
             AssetPaths = Array.AsReadOnly(assetPaths.ToArray());
         }
 
         public EnemyCardContentDirectory ContentDirectory { get; }
         public IReadOnlyDictionary<EnemyCardPhase, PhaseDefinition> Phases { get; }
+        private IReadOnlyDictionary<EnemyCardId, CardDefinitionFingerprint> CanonicalDefinitions { get; }
 
         /// <summary>获取已缓存并去重的牌面显示资源路径。</summary>
         public IReadOnlyList<string> AssetPaths { get; }
@@ -402,6 +430,11 @@ public static class EnemyCardDeckRegistry
             Phases.TryGetValue(phase, out PhaseDefinition? definition)
                 ? definition
                 : throw new KeyNotFoundException($"牌组 {ContentDirectory.DeckId} 未注册阶段 {phase}。");
+
+        public CardDefinitionFingerprint GetCanonicalDefinition(EnemyCardId cardId) =>
+            cardId.IsValid && CanonicalDefinitions.TryGetValue(cardId, out CardDefinitionFingerprint? definition)
+                ? definition
+                : throw new KeyNotFoundException($"牌组 {ContentDirectory.DeckId} 未注册卡牌定义 {cardId}。");
     }
 
     /// <summary>保存一个阶段的有序工厂、语义指纹和全局模板槽位起点。</summary>

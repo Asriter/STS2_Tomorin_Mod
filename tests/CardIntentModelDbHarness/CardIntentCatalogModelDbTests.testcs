@@ -22,6 +22,20 @@ public sealed class CardIntentCatalogModelDbTests
             typeof(NamelessPaper),
             typeof(HitoshizukuToken),
             typeof(Hitoshizuku),
+            typeof(HeartBeat),
+            typeof(DuckAndCover),
+            typeof(BuildAtField),
+            typeof(TomorinPunch),
+            typeof(UnwantedSixth),
+            typeof(PoetryOrLyrics),
+            typeof(WantBeYourGod),
+            typeof(WantBeYourGodToken),
+            typeof(Mayoiuta),
+            typeof(MayoiutaToken),
+            typeof(Senzaihyoumei),
+            typeof(SenzaihyoumeiToken),
+            typeof(SingFullPower),
+            typeof(WantToBeingHuman),
             typeof(SorrowfulRain),
             typeof(Adayume),
             typeof(NameOfTear),
@@ -34,7 +48,11 @@ public sealed class CardIntentCatalogModelDbTests
             typeof(CannotBeingHuman),
             typeof(Woodlouse),
             typeof(BrokenNote),
-            typeof(ColdRedTea)
+            typeof(ColdRedTea),
+            typeof(CrumpledPaper),
+            typeof(LeftoverBuffet),
+            typeof(MidnightCoffee),
+            typeof(StarStone)
         ];
 
         ModelDb.ResetForTest();
@@ -48,6 +66,20 @@ public sealed class CardIntentCatalogModelDbTests
                 [typeof(NamelessPaper)] = ModelDb.Card<NamelessPaper>(),
                 [typeof(HitoshizukuToken)] = ModelDb.Card<HitoshizukuToken>(),
                 [typeof(Hitoshizuku)] = ModelDb.Card<Hitoshizuku>(),
+                [typeof(HeartBeat)] = ModelDb.Card<HeartBeat>(),
+                [typeof(DuckAndCover)] = ModelDb.Card<DuckAndCover>(),
+                [typeof(BuildAtField)] = ModelDb.Card<BuildAtField>(),
+                [typeof(TomorinPunch)] = ModelDb.Card<TomorinPunch>(),
+                [typeof(UnwantedSixth)] = ModelDb.Card<UnwantedSixth>(),
+                [typeof(PoetryOrLyrics)] = ModelDb.Card<PoetryOrLyrics>(),
+                [typeof(WantBeYourGod)] = ModelDb.Card<WantBeYourGod>(),
+                [typeof(WantBeYourGodToken)] = ModelDb.Card<WantBeYourGodToken>(),
+                [typeof(Mayoiuta)] = ModelDb.Card<Mayoiuta>(),
+                [typeof(MayoiutaToken)] = ModelDb.Card<MayoiutaToken>(),
+                [typeof(Senzaihyoumei)] = ModelDb.Card<Senzaihyoumei>(),
+                [typeof(SenzaihyoumeiToken)] = ModelDb.Card<SenzaihyoumeiToken>(),
+                [typeof(SingFullPower)] = ModelDb.Card<SingFullPower>(),
+                [typeof(WantToBeingHuman)] = ModelDb.Card<WantToBeingHuman>(),
                 [typeof(SorrowfulRain)] = ModelDb.Card<SorrowfulRain>(),
                 [typeof(Adayume)] = ModelDb.Card<Adayume>(),
                 [typeof(NameOfTear)] = ModelDb.Card<NameOfTear>(),
@@ -58,7 +90,13 @@ public sealed class CardIntentCatalogModelDbTests
                 [typeof(AtField)] = ModelDb.Card<AtField>(),
                 [typeof(HopeOnTheVoice)] = ModelDb.Card<HopeOnTheVoice>(),
                 [typeof(CannotBeingHuman)] = ModelDb.Card<CannotBeingHuman>(),
-                [typeof(Woodlouse)] = ModelDb.Card<Woodlouse>()
+                [typeof(Woodlouse)] = ModelDb.Card<Woodlouse>(),
+                [typeof(BrokenNote)] = ModelDb.Card<BrokenNote>(),
+                [typeof(ColdRedTea)] = ModelDb.Card<ColdRedTea>(),
+                [typeof(CrumpledPaper)] = ModelDb.Card<CrumpledPaper>(),
+                [typeof(LeftoverBuffet)] = ModelDb.Card<LeftoverBuffet>(),
+                [typeof(MidnightCoffee)] = ModelDb.Card<MidnightCoffee>(),
+                [typeof(StarStone)] = ModelDb.Card<StarStone>()
             };
 
         IReadOnlyCollection<EnemyCardDefinition> definitions =
@@ -67,6 +105,22 @@ public sealed class CardIntentCatalogModelDbTests
         Assert.Equal(17, definitions.Count);
         Assert.All(definitions, definition =>
             Assert.Same(registeredCards[definition.CardModel.GetType()], definition.CardModel));
+
+        ShadowTomorinDeck.EnsureRegistered();
+        IReadOnlyCollection<EnemyCardDefinition> shadowDefinitions =
+            ShadowTomorinCardCatalog.AllDefinitions.Values.ToArray();
+        Assert.NotEmpty(shadowDefinitions);
+        Assert.All(shadowDefinitions, definition =>
+            Assert.Same(registeredCards[definition.CardModel.GetType()], definition.CardModel));
+        Assert.NotEmpty(EnemyCardDeckRegistry.GetAssetPaths(ShadowTomorinDeck.DeckId));
+        Assert.All(ShadowTomorinCollectionCatalog.Catalog.Definitions, definition =>
+            Assert.Same(registeredCards[definition.CardModelType], definition.ResolveCardModel()));
+
+        IReadOnlyCollection<EnemyCollectionDefinition> collectionDefinitions =
+            CardIntentTestCollectionCatalog.Catalog.Definitions;
+        Assert.Equal(6, collectionDefinitions.Count);
+        Assert.All(collectionDefinitions, definition =>
+            Assert.Same(registeredCards[definition.CardModelType], definition.ResolveCardModel()));
 
         EnemyCollectionEffectProgram brokenNoteProgram = EnemyCollectionEffectResolver.GetRequired(
             CardIntentTestCollectionCatalog.Catalog.GetRequired(CardIntentTestCollectionCatalog.BrokenNoteId));

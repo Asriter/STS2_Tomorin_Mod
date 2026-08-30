@@ -1,0 +1,159 @@
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using Xunit;
+
+namespace CardIntentHarness;
+
+public sealed class ShadowTomorinCatalogTests
+{
+    [Fact]
+    public void PhaseTemplatesMatchBalanceAndCarryContract()
+    {
+        ShadowTomorinDeck.EnsureRegistered();
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(
+            ShadowTomorinDeck.DeckId);
+
+        Assert.Equal(ShadowTomorinBalance.Phase1TemplateCount,
+            directory.GetPhase(EnemyCardPhase.Phase1).SourceFactories.Count);
+        Assert.Equal(ShadowTomorinBalance.Phase2TemplateCount,
+            directory.GetPhase(EnemyCardPhase.Phase2).SourceFactories.Count);
+        Assert.Equal(ShadowTomorinBalance.Phase3TemplateCount,
+            directory.GetPhase(EnemyCardPhase.Phase3).SourceFactories.Count);
+        Assert.DoesNotContain(directory.GetPhase(EnemyCardPhase.Phase1).SourceFactories.Select(factory => factory()),
+            card => card.Definition.Tags.HasFlag(EnemyCardTag.Compose));
+        Assert.Equal(7, ShadowTomorinCardCatalog.CarryDefinitions.Count);
+        Assert.All(ShadowTomorinCardCatalog.CarryDefinitions,
+            definition => Assert.True(definition.CarryAcrossPhase));
+        Assert.DoesNotContain(ShadowTomorinCardCatalog.AllDefinitions.Values,
+            definition => definition.CardId.Value.Contains("UTAKOTOBA", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExactPhaseMultiplicitiesAndCardEffectsAreRegistered()
+    {
+        AssertPhaseCounts(EnemyCardPhase.Phase1,
+            ("SORROWFUL_RAIN", 1), ("ADAYUME", 1), ("HEART_BEAT", 1),
+            ("DUCK_AND_COVER", 1), ("NAME_OF_TEAR", 1), ("BUILD_AT_FIELD", 2),
+            ("DEFEND", 2), ("STRIKE", 2), ("TOMORIN_PUNCH", 1));
+        AssertPhaseCounts(EnemyCardPhase.Phase2,
+            ("AT_FIELD", 2), ("CANNOT_BEING_HUMAN", 1), ("WOODLOUSE", 1),
+            ("UNWANTED_SIXTH", 1), ("POETRY_OR_LYRICS", 1), ("THIS_NO_NEED", 1),
+            ("HOPE_ON_THE_VOICE", 1), ("HITOSHIZUKU", 1), ("WANT_BE_YOUR_GOD", 1),
+            ("TOMORIN_PUNCH", 1));
+        AssertPhaseCounts(EnemyCardPhase.Phase3,
+            ("NAMELESS_PAPER", 2), ("MAYOIUTA", 1), ("HITOSHIZUKU", 1),
+            ("SENZAIHYOUMEI", 1), ("SING_FULL_POWER", 1), ("WHY_PLAY_HARUHIKAGE", 1),
+            ("TOMORIN_PUNCH", 1), ("WANT_TO_BEING_HUMAN", 1));
+
+        EnemyCardDefinition punch = ShadowTomorinCardCatalog.Get("TOMORIN_PUNCH");
+        Assert.Equal(8m, punch.ScoreProfile.Attack);
+        Assert.Equal(8m, punch.ScoreProfile.Block);
+        Assert.Equal(2m, punch.ScoreProfile.AtField);
+        Assert.Equal(EnemyCardFailureDisposition.Retain,
+            ShadowTomorinCardCatalog.Get("WANT_TO_BEING_HUMAN").FailureDisposition);
+    }
+
+    [Fact]
+    public void CollectionsUseExactWeightsAndOnlyStarStoneIsWildcard()
+    {
+        IReadOnlyList<(EnemyCollectionDefinition Definition, int Weight)> weighted =
+            ShadowTomorinCollectionCatalog.WeightedDefinitions;
+
+        Assert.Equal(6, weighted.Count);
+        Assert.Equal(100, weighted.Sum(item => item.Weight));
+        Assert.Equal(ShadowTomorinBalance.BrokenNoteWeight,
+            Weight(ShadowTomorinCollectionCatalog.BrokenNoteId));
+        Assert.Equal(ShadowTomorinBalance.CrumpledPaperWeight,
+            Weight(ShadowTomorinCollectionCatalog.CrumpledPaperId));
+        Assert.Equal(ShadowTomorinBalance.MidnightCoffeeWeight,
+            Weight(ShadowTomorinCollectionCatalog.MidnightCoffeeId));
+        Assert.Equal(ShadowTomorinBalance.ColdRedTeaWeight,
+            Weight(ShadowTomorinCollectionCatalog.ColdRedTeaId));
+        Assert.Equal(ShadowTomorinBalance.LeftoverBuffetWeight,
+            Weight(ShadowTomorinCollectionCatalog.LeftoverBuffetId));
+        Assert.Equal(ShadowTomorinBalance.StarStoneWeight,
+            Weight(ShadowTomorinCollectionCatalog.StarStoneId));
+        Assert.Equal(
+            ShadowTomorinCollectionCatalog.StarStoneId,
+            Assert.Single(weighted, item => item.Definition.IsEpiphany).Definition.CollectionId);
+        return;
+
+        int Weight(string id) => weighted.Single(item => item.Definition.CollectionId == id).Weight;
+    }
+
+    [Theory]
+    [InlineData(EnemyCardPhase.Phase1, 100, 0)]
+    [InlineData(EnemyCardPhase.Phase2, 100, 1)]
+    [InlineData(EnemyCardPhase.Phase3, 100, 2)]
+    public void PhaseRulesExposeExactWeightsAndComposeLimits(
+        EnemyCardPhase phase,
+        int totalWeight,
+        int maxCompose)
+    {
+        EnemyCardPlanningRules rules = ShadowTomorinRules.ForPhase(phase);
+
+        Assert.Equal(totalWeight, rules.WeightedRecipes.Sum(recipe => recipe.Weight));
+        Assert.Equal(ShadowTomorinBalance.MaxCandidateAttempts, rules.MaxCandidateAttempts);
+        Assert.Equal(ShadowTomorinBalance.StaticLocks(phase), rules.StaticLocks);
+        Assert.Equal(ShadowTomorinBalance.FullLocks(phase), rules.FullLocks);
+        Assert.All(rules.WeightedRecipes,
+            recipe => Assert.Equal(maxCompose, recipe.Recipe.Constraints.MaxComposeSources));
+        if (phase == EnemyCardPhase.Phase3)
+        {
+            Assert.All(rules.WeightedRecipes, recipe =>
+            {
+                Assert.Equal(1, recipe.Recipe.Constraints.MaxImmediateAttackComposeSources);
+                Assert.Equal(1, recipe.Recipe.Constraints.MaxComposeSourcesProducingImmediateAttack);
+            });
+        }
+    }
+
+    [Fact]
+    public void NonComposeMetricsHardExcludeComposeDefinitions()
+    {
+        foreach (EnemyCardPhase phase in new[] { EnemyCardPhase.Phase2, EnemyCardPhase.Phase3 })
+        {
+            IEnumerable<EnemyActionRecipe> recipes = ShadowTomorinRules.ForPhase(phase)
+                .WeightedRecipes
+                .Where(weighted => weighted.Recipe.Metric != EnemyActionMetric.Compose)
+                .Select(weighted => weighted.Recipe);
+
+            foreach (EnemyActionSlotRule slot in recipes.SelectMany(recipe => recipe.Slots))
+            {
+                IReadOnlySet<EnemyCardId> allowed = Assert.IsAssignableFrom<IReadOnlySet<EnemyCardId>>(
+                    slot.AllowedDefinitionIds);
+                Assert.DoesNotContain(allowed, cardId =>
+                    ShadowTomorinCardCatalog.AllDefinitions[cardId].MaterialRequests.Any(request =>
+                        request.PaymentKind == EnemyMaterialPaymentKind.Compose));
+            }
+        }
+    }
+
+    [Fact]
+    public void RegisteredFactoriesAlwaysReturnFreshInstancesUsingCanonicalDisplayModels()
+    {
+        ShadowTomorinDeck.EnsureRegistered();
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(ShadowTomorinDeck.DeckId);
+
+        foreach (EnemyCardDefinition definition in ShadowTomorinCardCatalog.AllDefinitions.Values)
+        {
+            BaseEnemyCard first = directory.CreateDefinition(definition.CardId);
+            BaseEnemyCard second = directory.CreateDefinition(definition.CardId);
+            Assert.NotSame(first, second);
+            Assert.Same(definition.CardModel, first.CardModel);
+            Assert.Equal(definition.SemanticFingerprint, first.Definition.SemanticFingerprint);
+        }
+    }
+
+    private static void AssertPhaseCounts(
+        EnemyCardPhase phase,
+        params (string Suffix, int Count)[] expected)
+    {
+        IReadOnlyList<EnemyCardDefinition> actual = ShadowTomorinCardCatalog.GetPhaseDefinitions(phase);
+        Assert.Equal(expected.Sum(item => item.Count), actual.Count);
+        foreach ((string suffix, int count) in expected)
+        {
+            EnemyCardId id = ShadowTomorinCardCatalog.CardId(suffix);
+            Assert.Equal(count, actual.Count(definition => definition.CardId == id));
+        }
+    }
+}

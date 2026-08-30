@@ -21,6 +21,20 @@ internal static class ModelDbBootstrap
             typeof(NamelessPaper),
             typeof(HitoshizukuToken),
             typeof(Hitoshizuku),
+            typeof(HeartBeat),
+            typeof(DuckAndCover),
+            typeof(BuildAtField),
+            typeof(TomorinPunch),
+            typeof(UnwantedSixth),
+            typeof(PoetryOrLyrics),
+            typeof(WantBeYourGod),
+            typeof(WantBeYourGodToken),
+            typeof(Mayoiuta),
+            typeof(MayoiutaToken),
+            typeof(Senzaihyoumei),
+            typeof(SenzaihyoumeiToken),
+            typeof(SingFullPower),
+            typeof(WantToBeingHuman),
             typeof(SorrowfulRain),
             typeof(Adayume),
             typeof(NameOfTear),
@@ -33,11 +47,24 @@ internal static class ModelDbBootstrap
             typeof(CannotBeingHuman),
             typeof(Woodlouse),
             typeof(BrokenNote),
-            typeof(ColdRedTea)
+            typeof(ColdRedTea),
+            typeof(CrumpledPaper),
+            typeof(LeftoverBuffet),
+            typeof(MidnightCoffee),
+            typeof(StarStone)
         ]);
         // 仅用真实游戏顺序预热静态目录；其余领域测试仍依赖空 ModelDb 来直接构造测试模型。
         // 任何需要持续访问 ModelDb.Card<T>() 的测试必须放入独立 CardIntentModelDbHarness。
         RuntimeHelpers.RunClassConstructor(typeof(CardIntentTestCardCatalog).TypeHandle);
+        RuntimeHelpers.RunClassConstructor(typeof(CardIntentTestCollectionCatalog).TypeHandle);
+        RuntimeHelpers.RunClassConstructor(typeof(ShadowTomorinCollectionCatalog).TypeHandle);
+        RuntimeHelpers.RunClassConstructor(typeof(ShadowTomorinCardCatalog).TypeHandle);
+        ShadowTomorinDeck.EnsureRegistered();
+        foreach (EnemyCollectionDefinition definition in CardIntentTestCollectionCatalog.Catalog.Definitions)
+        {
+            _ = definition.ResolveCardModel();
+        }
+
         RuntimeHelpers.RunClassConstructor(typeof(EnemyCollectionEffectResolver).TypeHandle);
         ModelDb.ResetForTest();
     }

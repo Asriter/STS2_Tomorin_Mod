@@ -1,9 +1,3 @@
-using MegaCrit.Sts2.Core.Models;
-using MegaCrit.Sts2.Core.Models.Powers;
-using STS2_Tomorin_Mod.Cards.Collections;
-using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
-using STS2_Tomorin_Mod.Powers;
-
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
 /// <summary>
@@ -69,7 +63,7 @@ public sealed class EnemyCollectionEffectProgram
 public static class EnemyCollectionEffectResolver
 {
     private static readonly IReadOnlyDictionary<string, EnemyCollectionEffectProgram> Programs =
-        BuildPrograms();
+        TomorinEnemyCollectionCatalogFactory.CreateEffectPrograms();
 
     /// <summary>
     /// 解析已注册收藏品定义，并拒绝目录尚未适配的第三方程序。
@@ -88,47 +82,4 @@ public static class EnemyCollectionEffectResolver
         return program;
     }
 
-    /// <summary>
-    /// 构造当前测试收藏品目录的唯一共享效果映射。
-    /// </summary>
-    /// <returns>按稳定程序标识索引的只读映射。</returns>
-    private static IReadOnlyDictionary<string, EnemyCollectionEffectProgram> BuildPrograms()
-    {
-        BrokenNote brokenNote = ModelDb.Card<BrokenNote>();
-        ColdRedTea coldRedTea = ModelDb.Card<ColdRedTea>();
-        Dictionary<string, EnemyCollectionEffectProgram> programs = new(StringComparer.Ordinal)
-        {
-            ["COLLECTION:BROKEN_NOTE"] = new(
-                "COLLECTION:BROKEN_NOTE",
-                [
-                    new EnemyBlockEffect(
-                        "COLLECTION:BROKEN_NOTE:BLOCK",
-                        brokenNote.DynamicVars.Block.BaseValue),
-                    new EnemySelfPowerEffect<BrokenNotePower>(
-                        "COLLECTION:BROKEN_NOTE:POWER",
-                        decimal.One)
-                ]),
-            ["COLLECTION:COLD_RED_TEA"] = new(
-                "COLLECTION:COLD_RED_TEA",
-                [
-                    new EnemyAllPlayersPowerEffect<WeakPower>(
-                        "COLLECTION:COLD_RED_TEA:WEAK",
-                        coldRedTea.DynamicVars["WeakPower"].BaseValue),
-                    new EnemyAllPlayersPowerEffect<CustomConstrictPower>(
-                        "COLLECTION:COLD_RED_TEA:CONSTRICT",
-                        coldRedTea.DynamicVars["CustomConstrictPower"].BaseValue)
-                ]),
-            ["COLLECTION:CRUMPLED_PAPER"] = new(
-                "COLLECTION:CRUMPLED_PAPER",
-                specialResolutionKind: EnemyCollectionSpecialResolutionKind.DrawAndExecuteImmediateCard),
-            ["COLLECTION:LEFTOVER_BUFFET"] = new(
-                "COLLECTION:LEFTOVER_BUFFET",
-                specialResolutionKind: EnemyCollectionSpecialResolutionKind.RecoverConsumedEntry),
-            ["COLLECTION:MIDNIGHT_COFFEE"] = new(
-                "COLLECTION:MIDNIGHT_COFFEE",
-                specialResolutionKind: EnemyCollectionSpecialResolutionKind.DrawAndExecuteImmediateCard),
-            ["COLLECTION:STAR_STONE"] = new("COLLECTION:STAR_STONE")
-        };
-        return new Dictionary<string, EnemyCollectionEffectProgram>(programs, StringComparer.Ordinal);
-    }
 }

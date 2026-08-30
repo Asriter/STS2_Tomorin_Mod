@@ -113,7 +113,7 @@ public sealed class EnemyActionMetricPlanner
     }
 
     /// <summary>
-    /// 从首回合全集或排除 LastMetric 的后续集合中等概率选择配方。
+    /// 从首回合全集或排除 LastMetric 的后续集合中按正整数权重选择配方。
     /// </summary>
     /// <param name="lastMetric">上次已提交指标；首回合为空。</param>
     /// <param name="randomSource">战斗随机源。</param>

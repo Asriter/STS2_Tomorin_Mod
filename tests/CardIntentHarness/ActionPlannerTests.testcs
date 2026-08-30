@@ -210,6 +210,61 @@ public sealed class ActionPlannerTests
     }
 
     /// <summary>
+    /// 验证真实规划器以权重桶选择首尾配方，并在排除上次指标后重算随机上界。
+    /// </summary>
+    [Fact]
+    public void WeightedRulesUseConfiguredBucketsAndRenormalizeAfterLastMetric()
+    {
+        EnemyActionRecipe gain = new(EnemyActionMetric.Gain, [null]);
+        EnemyActionRecipe attack = new(EnemyActionMetric.Attack, [null]);
+        EnemyCardPlanningRules rules = new(
+            new EnemySoftLockLimits(999m, 999m),
+            new EnemySoftLockLimits(999m, 999m),
+            maxCandidateAttempts: 1,
+            stepLimit: 256,
+            recipes:
+            [
+                new EnemyWeightedActionRecipe(gain, 1),
+                new EnemyWeightedActionRecipe(attack, 3)
+            ]);
+        EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+
+        EnemyCardCombatState firstBucketState = CreateState(
+            "WEIGHT_FIRST_BUCKET",
+            [CreateCard("WEIGHT_FIRST_BUCKET", EnemyCardTag.Attack)]);
+        RecordingRandomSource firstBucketRandom = new([0, 0]);
+
+        PreparedEnemyCardAction firstBucket = planner.Prepare(
+            firstBucketState,
+            new EnemyPlanningContext(firstBucketRandom));
+
+        Assert.Equal(EnemyActionMetric.Gain, firstBucket.Metric);
+        Assert.Equal(4, firstBucketRandom.UpperBounds[0]);
+
+        EnemyCardCombatState lastBucketState = CreateState(
+            "WEIGHT_LAST_BUCKET",
+            [CreateCard("WEIGHT_LAST_BUCKET", EnemyCardTag.Attack)]);
+        RecordingRandomSource lastBucketRandom = new([3, 0]);
+
+        PreparedEnemyCardAction lastBucket = planner.Prepare(
+            lastBucketState,
+            new EnemyPlanningContext(lastBucketRandom));
+
+        Assert.Equal(EnemyActionMetric.Attack, lastBucket.Metric);
+        Assert.Equal(4, lastBucketRandom.UpperBounds[0]);
+
+        ResetSelectedCardsToDraw(lastBucketState);
+        RecordingRandomSource renormalizedRandom = new([0, 0]);
+
+        PreparedEnemyCardAction afterAttack = planner.Prepare(
+            lastBucketState,
+            new EnemyPlanningContext(renormalizedRandom));
+
+        Assert.Equal(EnemyActionMetric.Gain, afterAttack.Metric);
+        Assert.Equal(1, renormalizedRandom.UpperBounds[0]);
+    }
+
+    /// <summary>
     /// 根据规则配方创建足以覆盖全部 Tag 槽位的牌组。
     /// </summary>
     /// <param name="rules">提供配方全集的规则对象。</param>
@@ -303,10 +358,14 @@ public sealed class ActionPlannerTests
         /// <summary>获取随机索引请求总次数。</summary>
         public int CallCount { get; private set; }
 
+        /// <summary>获取每次随机请求的排他上界。</summary>
+        public List<int> UpperBounds { get; } = [];
+
         /// <inheritdoc />
         public int NextIndex(int exclusiveUpperBound)
         {
             CallCount++;
+            UpperBounds.Add(exclusiveUpperBound);
             int value = _indices.Count > 0 ? _indices.Dequeue() : 0;
             return Math.Abs(value % exclusiveUpperBound);
         }

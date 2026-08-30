@@ -65,6 +65,18 @@ public class EnemyCardPlanningRules
             throw new ArgumentException("每个行动指标必须恰好注册一项正权重配方。", nameof(recipes));
         }
 
+        long totalWeight = 0;
+        foreach (EnemyWeightedActionRecipe recipe in copied)
+        {
+            totalWeight = checked(totalWeight + recipe.Weight);
+            if (totalWeight > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(recipes),
+                    "行动指标配方的总权重不能超过随机源可接受的 Int32 上界。");
+            }
+        }
+
         WeightedRecipes = Array.AsReadOnly(copied);
     }
 

@@ -1,4 +1,5 @@
 using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -68,5 +69,68 @@ public sealed class PlanningRulesTests
                 new EnemyWeightedActionRecipe(recipe, 1),
                 new EnemyWeightedActionRecipe(recipe, 1)
             ]));
+    }
+
+    /// <summary>
+    /// 防止无效基础配置或无法传给随机源的聚合权重进入战斗规划阶段。
+    /// </summary>
+    [Fact]
+    public void PlanningRulesRejectInvalidBoundsEmptyRecipesAndAggregateWeightOverflow()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Gain, [EnemyCardTag.Defense]);
+        EnemyWeightedActionRecipe weightedRecipe = new(recipe, 1);
+        EnemySoftLockLimits limits = new(1m, 1m);
+
+        Assert.Throws<ArgumentException>(() => new EnemyCardPlanningRules(
+            limits,
+            limits,
+            maxCandidateAttempts: 1,
+            stepLimit: 1,
+            recipes: []));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EnemyCardPlanningRules(
+            limits,
+            limits,
+            maxCandidateAttempts: 0,
+            stepLimit: 1,
+            recipes: [weightedRecipe]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EnemyCardPlanningRules(
+            limits,
+            limits,
+            maxCandidateAttempts: 1,
+            stepLimit: 0,
+            recipes: [weightedRecipe]));
+
+        ArgumentOutOfRangeException overflow = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new EnemyCardPlanningRules(
+                limits,
+                limits,
+                maxCandidateAttempts: 1,
+                stepLimit: 1,
+                recipes:
+                [
+                    new EnemyWeightedActionRecipe(recipe, int.MaxValue),
+                    new EnemyWeightedActionRecipe(
+                        new EnemyActionRecipe(EnemyActionMetric.Attack, [EnemyCardTag.Attack]),
+                        1)
+                ]));
+
+        Assert.Equal("recipes", overflow.ParamName);
+    }
+
+    /// <summary>
+    /// 防止兼容测试规则改变公开构造参数的异常参数名。
+    /// </summary>
+    [Fact]
+    public void TestRulesPreserveInitialStarStoneCountParameterName()
+    {
+        ArgumentOutOfRangeException exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new CardIntentTestRules(
+                attackLock: 1m,
+                totalScoreLock: 1m,
+                maxCandidateAttempts: 1,
+                recipes: [new EnemyActionRecipe(EnemyActionMetric.Gain, [EnemyCardTag.Defense])],
+                initialStarStoneCount: -1));
+
+        Assert.Equal("initialStarStoneCount", exception.ParamName);
     }
 }

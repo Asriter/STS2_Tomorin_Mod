@@ -44,7 +44,7 @@ public sealed class CardIntentTestRules : EnemyCardPlanningRules
         if (input.InitialStarStoneCount < 0)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(input.InitialStarStoneCount),
+                "initialStarStoneCount",
                 "初始星石数量不能为负数。 ");
         }
 

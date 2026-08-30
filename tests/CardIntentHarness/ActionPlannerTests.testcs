@@ -2,6 +2,7 @@ using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Models;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -128,27 +129,38 @@ public sealed class ActionPlannerTests
     }
 
     /// <summary>
-    /// 验证抽牌堆为空时才按需回洗，牌堆耗尽后的后续槽位保持为空。
+    /// 验证旧式 Tag、新式 Tag rule 与随机固定槽在牌数不足时都属于结构不完整。
     /// </summary>
-    [Fact]
-    public void EmptyDrawReshufflesOnDemandAndLeavesUnfillableSlotsEmpty()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void EveryFixedRecipeSlotIsMandatoryWhenDeckRunsOut(int recipeStyle)
     {
-        EnemyActionRecipe recipe = new(
-            EnemyActionMetric.Attack,
-            [EnemyCardTag.Attack, EnemyCardTag.Defense]);
+        EnemyActionRecipe recipe = recipeStyle switch
+        {
+            0 => new EnemyActionRecipe(
+                EnemyActionMetric.Attack,
+                [EnemyCardTag.Attack, EnemyCardTag.Defense]),
+            1 => new EnemyActionRecipe(
+                EnemyActionMetric.Attack,
+                [new EnemyActionSlotRule(EnemyCardTag.Attack), new EnemyActionSlotRule(EnemyCardTag.Defense)],
+                EnemyCandidateConstraints.Unrestricted),
+            2 => new EnemyActionRecipe(EnemyActionMetric.Attack, [null, null]),
+            _ => throw new ArgumentOutOfRangeException(nameof(recipeStyle))
+        };
         CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
-        BaseEnemyCard onlyCard = CreateCard("RESHUFFLE_ONLY", EnemyCardTag.Attack);
-        EnemyCardCombatState state = CreateState("RESHUFFLE_ON_DEMAND", [onlyCard]);
+        BaseEnemyCard onlyCard = CreateCard($"MANDATORY_ONLY_{recipeStyle}", EnemyCardTag.Attack);
+        EnemyCardCombatState state = CreateState($"MANDATORY_{recipeStyle}", [onlyCard]);
         state.MoveCard(state.DrawPile[0].InstanceKey, EnemyCardZone.Discard);
         EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
 
-        PreparedEnemyCardAction action = planner.Prepare(
+        Assert.Throws<EnemyCandidatePlanningException>(() => planner.Prepare(
             state,
-            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, recipe.Slots.Count * 4))));
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, recipe.Slots.Count * 8)))));
 
-        Assert.True(action.MetricCards.Count < recipe.Slots.Count);
-        Assert.Equal(onlyCard.CardId, Assert.Single(action.MetricCards).CardId);
-        Assert.Empty(state.DiscardPile);
+        Assert.Empty(state.CurrentCards);
+        Assert.Contains(state.DiscardPile, card => card.CardId == onlyCard.CardId);
     }
 
     /// <summary>
@@ -367,6 +379,151 @@ public sealed class ActionPlannerTests
     }
 
     /// <summary>
+    /// 多来源、多 request 与 Count 必须按来源/request/requirement 顺序展开；素材牌自身的 Compose request 不得劫持队列。
+    /// </summary>
+    [Fact]
+    public void ComposeMaterialBindingIsOrderedCountAwareAndIgnoresMaterialCardsAsSources()
+    {
+        BaseEnemyCard firstSource = CreateDefinedCard(
+            "ORDER_SOURCE_FIRST",
+            new StrikeTomorin(),
+            EnemyCardTag.Compose,
+            [
+                EnemyMaterialRequest.Compose(CardType.Attack, 2),
+                EnemyMaterialRequest.Compose(CardType.Skill, 1)
+            ]);
+        BaseEnemyCard secondSource = CreateDefinedCard(
+            "ORDER_SOURCE_SECOND",
+            new DefendTomorin(),
+            EnemyCardTag.Compose,
+            [EnemyMaterialRequest.Compose(CardType.Attack, 1)]);
+        BaseEnemyCard firstAttack = CreateDefinedCard(
+            "ORDER_ATTACK_MATERIAL_WITH_REQUEST",
+            new StrikeTomorin(),
+            EnemyCardTag.Compose,
+            [EnemyMaterialRequest.Compose(CardType.Skill, 1)]);
+        BaseEnemyCard secondAttack = CreateDefinedCard(
+            "ORDER_ATTACK_MATERIAL_SECOND",
+            new StrikeTomorin(),
+            EnemyCardTag.None);
+        BaseEnemyCard skill = CreateDefinedCard(
+            "ORDER_SKILL_MATERIAL",
+            new DefendTomorin(),
+            EnemyCardTag.Attack);
+        BaseEnemyCard finalAttack = CreateDefinedCard(
+            "ORDER_ATTACK_MATERIAL_FINAL",
+            new StrikeTomorin(),
+            EnemyCardTag.None);
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Compose,
+            [
+                new EnemyActionSlotRule(null, new HashSet<EnemyCardId> { firstSource.CardId }),
+                new EnemyActionSlotRule(null, new HashSet<EnemyCardId> { secondSource.CardId }),
+                new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true),
+                new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true),
+                new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true),
+                new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true)
+            ],
+            EnemyCandidateConstraints.Unrestricted);
+        EnemyCardCombatState state = CreateState(
+            "ORDERED_MATERIAL_BINDING",
+            [firstSource, secondSource, firstAttack, secondAttack, skill, finalAttack]);
+        EnemyActionMetricPlanner planner = new(CreateRules(recipe), new());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, 16))));
+
+        Assert.Equal(
+            [
+                firstSource.CardId,
+                secondSource.CardId,
+                firstAttack.CardId,
+                secondAttack.CardId,
+                skill.CardId,
+                finalAttack.CardId
+            ],
+            action.MetricCards.Select(card => card.CardId));
+    }
+
+    /// <summary>全部显式槽位已填满但 Compose request 仍有未绑定单位时，候选仍然不完整。</summary>
+    [Fact]
+    public void ComposeCandidateIsIncompleteWhenExpandedRequirementUnitsRemain()
+    {
+        BaseEnemyCard source = CreateDefinedCard(
+            "PENDING_SOURCE",
+            new StrikeTomorin(),
+            EnemyCardTag.Compose,
+            [EnemyMaterialRequest.Compose(CardType.Attack, 2)]);
+        BaseEnemyCard oneMaterial = CreateCard("PENDING_ONE_MATERIAL", EnemyCardTag.Attack);
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Compose,
+            [
+                new EnemyActionSlotRule(EnemyCardTag.Compose),
+                new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true)
+            ],
+            EnemyCandidateConstraints.Unrestricted);
+        EnemyCardCombatState state = CreateState("PENDING_MATERIAL_UNIT", [source, oneMaterial]);
+
+        Assert.Throws<EnemyCandidatePlanningException>(() => new EnemyActionMetricPlanner(CreateRules(recipe), new())
+            .Prepare(state, new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, 8)))));
+    }
+
+    /// <summary>没有此前 Compose request 的素材槽必须直接判为结构不完整。</summary>
+    [Fact]
+    public void ComposeMaterialSlotWithoutPendingRequestIsIncomplete()
+    {
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Compose,
+            [new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true)],
+            EnemyCandidateConstraints.Unrestricted);
+        EnemyCardCombatState state = CreateState(
+            "MATERIAL_WITHOUT_SOURCE",
+            [CreateCard("MATERIAL_WITHOUT_SOURCE", EnemyCardTag.Attack)]);
+
+        Assert.Throws<EnemyCandidatePlanningException>(() => new EnemyActionMetricPlanner(CreateRules(recipe), new())
+            .Prepare(state, new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, 8)))));
+    }
+
+    /// <summary>即时攻击 Compose 来源上限读取 CardModel.Type，而不是可故意不一致的软 Attack Tag。</summary>
+    [Fact]
+    public void ImmediateAttackComposeConstraintUsesCardTypeInsteadOfAttackTag()
+    {
+        BaseEnemyCard skillWithAttackTag = CreateDefinedCard(
+            "TYPE_SKILL_TAG_ATTACK",
+            new DefendTomorin(),
+            EnemyCardTag.Attack | EnemyCardTag.Compose,
+            [EnemyMaterialRequest.Compose(CardType.Attack, 1)]);
+        BaseEnemyCard attackWithoutAttackTag = CreateDefinedCard(
+            "TYPE_ATTACK_NO_ATTACK_TAG",
+            new StrikeTomorin(),
+            EnemyCardTag.Compose,
+            [EnemyMaterialRequest.Compose(CardType.Attack, 1)]);
+        BaseEnemyCard ordinaryAttackMaterial = CreateDefinedCard(
+            "TYPE_ORDINARY_ATTACK_MATERIAL",
+            new StrikeTomorin(),
+            EnemyCardTag.None);
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Compose,
+            [
+                new EnemyActionSlotRule(EnemyCardTag.Compose),
+                new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true)
+            ],
+            new EnemyCandidateConstraints(2, 0, 2));
+        EnemyCardCombatState state = CreateState(
+            "CARD_TYPE_CONSTRAINT",
+            [skillWithAttackTag, attackWithoutAttackTag, ordinaryAttackMaterial]);
+
+        PreparedEnemyCardAction action = new EnemyActionMetricPlanner(CreateRules(recipe), new()).Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource(Enumerable.Repeat(0, 8))));
+
+        Assert.Equal(skillWithAttackTag.CardId, action.MetricCards[0].CardId);
+        Assert.Equal(ordinaryAttackMaterial.CardId, action.MetricCards[1].CardId);
+        Assert.Contains(state.DrawPile, card => card.CardId == attackWithoutAttackTag.CardId);
+    }
+
+    /// <summary>
     /// 根据规则配方创建足以覆盖全部 Tag 槽位的牌组。
     /// </summary>
     /// <param name="rules">提供配方全集的规则对象。</param>
@@ -436,6 +593,21 @@ public sealed class ActionPlannerTests
             EnemyCardTag.Attack | EnemyCardTag.Compose,
             EnemyCardScoreProfile.Zero,
             materialRequests: [EnemyMaterialRequest.Compose(materialType, 1)]));
+
+    /// <summary>创建可独立控制真实 CardType、Tag 与有序素材请求的测试牌。</summary>
+    private static BaseEnemyCard CreateDefinedCard(
+        string suffix,
+        CardModel cardModel,
+        EnemyCardTag tags,
+        IEnumerable<EnemyMaterialRequest>? materialRequests = null,
+        EnemyCardEffectClass effectClasses = EnemyCardEffectClass.None) =>
+        new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PLANNER_{suffix}"),
+            cardModel,
+            tags,
+            EnemyCardScoreProfile.Zero,
+            materialRequests: materialRequests,
+            effectClasses: effectClasses));
 
     /// <summary>
     /// 把上次指标牌移回抽牌堆，同时保留 LastMetric 供不连续性验证。

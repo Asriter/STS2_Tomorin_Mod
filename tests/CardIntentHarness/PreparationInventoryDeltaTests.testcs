@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Entities.Cards;
+using System.Reflection;
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
@@ -50,6 +51,202 @@ public sealed class PreparationInventoryDeltaTests
         Assert.NotNull(fixture.State.FaultDiagnostic);
         Assert.Contains("3", exception.Message, StringComparison.Ordinal);
         Assert.Equal(1, fixture.Random.CollectionSelectionCalls);
+    }
+
+    /// <summary>
+    /// 库存通知只能在 owner 的牌区、行动、指标、阶段和 delta 已全部提交后发布；坏订阅者不得反向破坏提交。
+    /// </summary>
+    [Fact]
+    public void CompoundCommitPublishesCompleteOwnerStateAndIsolatesThrowingSubscribers()
+    {
+        PreparationFixture fixture = PreparationFixture.WithRejectedFirstAndSecondCandidates();
+        bool laterSubscriberRan = false;
+        PreparedEnemyCardAction? observedAction = null;
+        EnemyCardRuntimePhase observedPhase = EnemyCardRuntimePhase.Idle;
+        EnemyActionMetric? observedMetric = null;
+        EnemyCardInstanceKey[] observedCurrent = [];
+        EnemyCollectionInstance[] observedAvailable = [];
+        fixture.State.CollectionInventory.InventoryChanged += (_, _) =>
+        {
+            observedAction = fixture.State.PreparedAction;
+            observedPhase = fixture.State.RuntimePhase;
+            observedMetric = fixture.State.LastMetric;
+            observedCurrent = fixture.State.CurrentCards.Select(card => card.InstanceKey).ToArray();
+            observedAvailable = fixture.State.CollectionInventory.Available.ToArray();
+            throw new InvalidOperationException("expected observer failure");
+        };
+        fixture.State.CollectionInventory.InventoryChanged += (_, _) => laterSubscriberRan = true;
+
+        PreparedEnemyCardAction action = fixture.Planner.Prepare(fixture.State, fixture.Context);
+
+        Assert.Same(action, fixture.State.PreparedAction);
+        Assert.Same(action, observedAction);
+        Assert.Equal(EnemyCardRuntimePhase.Prepared, observedPhase);
+        Assert.Equal(action.Metric, observedMetric);
+        Assert.Equal(action.MetricCards.Select(card => card.InstanceKey), observedCurrent);
+        Assert.Same(
+            Assert.Single(action.PreActionInventoryDelta.AddedAvailable),
+            Assert.Single(observedAvailable));
+        Assert.True(laterSubscriberRan);
+        Assert.Single(fixture.State.CollectionInventory.LastNotificationExceptions);
+    }
+
+    /// <summary>事务入口拒绝无效库存目标时不能调用 owner commit，也不能改变库存。</summary>
+    [Fact]
+    public void InvalidInventoryTargetDoesNotInvokeOwnerCommitOrMutateInventory()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionDefinition definition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
+            CardIntentTestCollectionCatalog.StarStoneId);
+        EnemyCollectionInstance existing = inventory.Append(definition);
+        EnemyCollectionInventorySnapshot before = inventory.CaptureSnapshot();
+        EnemyCollectionInventorySnapshot invalid = new([existing], [existing], nextSequence: 1);
+        bool ownerCommitted = false;
+
+        MethodInfo transaction = typeof(EnemyCollectionInventory).GetMethod(
+            "TryCommitSnapshotAtomically",
+            BindingFlags.Instance | BindingFlags.NonPublic) ?? throw new MissingMethodException(
+            nameof(EnemyCollectionInventory),
+            "TryCommitSnapshotAtomically");
+        object?[] arguments = [invalid, (Action)(() => ownerCommitted = true), true, string.Empty];
+        bool committed = Assert.IsType<bool>(transaction.Invoke(inventory, arguments));
+        string reason = Assert.IsType<string>(arguments[3]);
+
+        Assert.False(committed);
+        Assert.False(ownerCommitted);
+        Assert.NotEmpty(reason);
+        Assert.Equal(before.Available, inventory.Available);
+        Assert.Equal(before.Consumed, inventory.Consumed);
+        Assert.Equal(before.NextSequence, inventory.NextSequence);
+    }
+
+    /// <summary>owner callback 在通知前意外抛出时，库存事务必须恢复调用前快照且不发布事件。</summary>
+    [Fact]
+    public void OwnerCommitExceptionRollsBackInventoryAndSkipsNotification()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionDefinition definition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
+            CardIntentTestCollectionCatalog.StarStoneId);
+        EnemyCollectionInventorySnapshot before = inventory.CaptureSnapshot();
+        EnemyCollectionInstance added = new(definition, before.NextSequence);
+        EnemyCollectionInventorySnapshot target = new([added], [], before.NextSequence + 1);
+        int notifications = 0;
+        inventory.InventoryChanged += (_, _) => notifications++;
+        MethodInfo transaction = typeof(EnemyCollectionInventory).GetMethod(
+            "TryCommitSnapshotAtomically",
+            BindingFlags.Instance | BindingFlags.NonPublic) ?? throw new MissingMethodException(
+            nameof(EnemyCollectionInventory),
+            "TryCommitSnapshotAtomically");
+        object?[] arguments =
+        [
+            target,
+            (Action)(() => throw new InvalidOperationException("expected owner failure")),
+            true,
+            string.Empty
+        ];
+
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() =>
+            transaction.Invoke(inventory, arguments));
+
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Equal(before.Available, inventory.Available);
+        Assert.Equal(before.Consumed, inventory.Consumed);
+        Assert.Equal(before.NextSequence, inventory.NextSequence);
+        Assert.Equal(0, notifications);
+    }
+
+    /// <summary>冻结周期必须在写诊断字段前拒绝与 live available/consumed 冲突的 delta。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PreparationDeltaConflictingWithLiveInventoryIsRejectedBeforeFreeze(bool consumeExisting)
+    {
+        string caseId = consumeExisting.ToString().ToUpperInvariant();
+        BaseEnemyCard card = CreateCard($"DELTA_CONFLICT_{caseId}", EnemyCardTag.Attack);
+        EnemyCardCombatState state = CreateState($"DELTA_CONFLICT_{caseId}", [card]);
+        EnemyCollectionDefinition definition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
+            CardIntentTestCollectionCatalog.StarStoneId);
+        EnemyCollectionInstance existing = state.CollectionInventory.Append(definition);
+        if (consumeExisting)
+        {
+            state.CollectionInventory.Consume(existing);
+        }
+
+        EnemyCollectionInventorySnapshot before = state.CollectionInventory.CaptureSnapshot();
+        int factoryCalls = 0;
+        EnemyPlanningContext context = new(
+            new PreparationRandomSource(Enumerable.Repeat(0, 8)),
+            createPreparationCycle: (_, _) =>
+            {
+                factoryCalls++;
+                EnemyCollectionInstance conflicting = new(definition, existing.Sequence);
+                return new EnemyPreparationCycle(
+                    conflicting,
+                    new EnemyPreparedPreActionInventoryDelta([conflicting]));
+            });
+        EnemyActionMetricPlanner planner = new(
+            CreateRules(new EnemyActionRecipe(EnemyActionMetric.Attack, [EnemyCardTag.Attack]), 999m, 1),
+            new());
+
+        Assert.Throws<InvalidOperationException>(() => planner.Prepare(state, context));
+
+        Assert.Equal(1, factoryCalls);
+        Assert.Null(state.FrozenPreparationCollection);
+        Assert.Null(state.FrozenPreparationDelta);
+        Assert.Equal(before.Available, state.CollectionInventory.Available);
+        Assert.Equal(before.Consumed, state.CollectionInventory.Consumed);
+        Assert.Equal(before.NextSequence, state.CollectionInventory.NextSequence);
+    }
+
+    /// <summary>候选同时包含超锁与结构不完整时必须 Fault，并在重试前拒绝而不再次选择收藏品。</summary>
+    [Fact]
+    public void MixedOverLockAndIncompleteAttemptsFaultAndCannotRestartPreparationCycle()
+    {
+        BaseEnemyCard overLock = new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId("STS2_TOMORIN_MOD:PREPARATION_MIXED_OVER_LOCK"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: 11m)));
+        EnemyCardCombatState state = CreateState("MIXED_FAILURE", [overLock]);
+        EnemyActionRecipe incomplete = new(
+            EnemyActionMetric.Gain,
+            [new EnemyActionSlotRule(
+                EnemyCardTag.Defense,
+                new HashSet<EnemyCardId> { new("STS2_TOMORIN_MOD:PREPARATION_MIXED_MISSING") })],
+            EnemyCandidateConstraints.Unrestricted);
+        EnemyCardPlanningRules rules = new(
+            new EnemySoftLockLimits(10m, 999m),
+            new EnemySoftLockLimits(10m, 999m),
+            maxCandidateAttempts: 2,
+            stepLimit: 256,
+            [
+                new EnemyWeightedActionRecipe(incomplete, 1),
+                new EnemyWeightedActionRecipe(new EnemyActionRecipe(EnemyActionMetric.Attack, [null]), 1)
+            ]);
+        PreparationRandomSource random = new([1, 0, 0]);
+        int factoryCalls = 0;
+        EnemyPlanningContext context = new(
+            random,
+            createPreparationCycle: (owner, _) =>
+            {
+                factoryCalls++;
+                EnemyCollectionDefinition definition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
+                    CardIntentTestCollectionCatalog.StarStoneId);
+                EnemyCollectionInstance added = new(definition, owner.NextCollectionSequence);
+                return new EnemyPreparationCycle(added, new EnemyPreparedPreActionInventoryDelta([added]));
+            });
+        EnemyActionMetricPlanner planner = new(rules, new());
+
+        EnemyCandidatePlanningException exception = Assert.Throws<EnemyCandidatePlanningException>(() =>
+            planner.Prepare(state, context));
+        Assert.Contains("超锁", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("不完整", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(EnemyCardRuntimePhase.Faulted, state.RuntimePhase);
+        Assert.Empty(state.CollectionInventory.Available);
+        Assert.Equal(1, factoryCalls);
+
+        Assert.Throws<InvalidOperationException>(() => planner.Prepare(state, context));
+        Assert.Equal(1, factoryCalls);
     }
 
     /// <summary>

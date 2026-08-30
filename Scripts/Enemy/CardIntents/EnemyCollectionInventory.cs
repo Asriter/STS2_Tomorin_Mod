@@ -44,6 +44,7 @@ public sealed class EnemyCollectionInventory
     private readonly List<EnemyCollectionInstance> _consumed = [];
     private readonly ReadOnlyCollection<EnemyCollectionInstance> _availableView;
     private readonly ReadOnlyCollection<EnemyCollectionInstance> _consumedView;
+    private IReadOnlyList<Exception> _lastNotificationExceptions = Array.Empty<Exception>();
 
     /// <summary>
     /// 创建空收藏品库存。
@@ -56,6 +57,11 @@ public sealed class EnemyCollectionInventory
 
     /// <summary>在每次成功库存写入后发布一次确定性变更通知。</summary>
     public event EventHandler? InventoryChanged;
+
+    /// <summary>
+    /// 获取最近一次库存通知中被隔离的订阅者异常；订阅者失败不会回滚已提交的权威状态。
+    /// </summary>
+    public IReadOnlyList<Exception> LastNotificationExceptions => _lastNotificationExceptions;
 
     /// <summary>获取按队列顺序排列的只读可用收藏品。</summary>
     public IReadOnlyList<EnemyCollectionInstance> Available => _availableView;
@@ -225,6 +231,46 @@ public sealed class EnemyCollectionInventory
         TryApplySnapshot(snapshot, out reason, notify: true);
 
     /// <summary>
+    /// 先完整验证库存目标，再在同一同步调用中提交库存与 owner；全部权威字段完成后才安全通知。
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="commitOwner"/> 必须只执行调用方已预验证、不会抛出的字段交换。若它仍抛出，
+    /// 库存会回滚到调用前快照且不会通知；库存观察者异常则逐个隔离并记录，不从本方法传播。
+    /// </remarks>
+    internal bool TryCommitSnapshotAtomically(
+        EnemyCollectionInventorySnapshot? snapshot,
+        Action commitOwner,
+        bool notify,
+        out string reason)
+    {
+        ArgumentNullException.ThrowIfNull(commitOwner);
+        reason = string.Empty;
+        if (!TryValidateSnapshot(snapshot, out reason))
+        {
+            return false;
+        }
+
+        EnemyCollectionInventorySnapshot before = CaptureSnapshot();
+        ApplyValidatedSnapshot(snapshot!);
+        try
+        {
+            commitOwner();
+        }
+        catch
+        {
+            ApplyValidatedSnapshot(before);
+            throw;
+        }
+
+        if (notify)
+        {
+            RaiseInventoryChanged();
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// 全量验证后一次性应用库存快照，并允许事务克隆抑制通知。
     /// </summary>
     /// <param name="snapshot">待验证并应用的冻结快照。</param>
@@ -236,23 +282,7 @@ public sealed class EnemyCollectionInventory
         out string reason,
         bool notify)
     {
-        reason = string.Empty;
-        if (!TryValidateSnapshot(snapshot, out reason))
-        {
-            return false;
-        }
-
-        _available.Clear();
-        _available.AddRange(snapshot!.Available);
-        _consumed.Clear();
-        _consumed.AddRange(snapshot.Consumed);
-        NextSequence = snapshot.NextSequence;
-        if (notify)
-        {
-            RaiseInventoryChanged();
-        }
-
-        return true;
+        return TryCommitSnapshotAtomically(snapshot, static () => { }, notify, out reason);
     }
 
     /// <summary>
@@ -309,6 +339,16 @@ public sealed class EnemyCollectionInventory
         return true;
     }
 
+    /// <summary>只应用已经通过完整结构校验的快照，不发布通知。</summary>
+    private void ApplyValidatedSnapshot(EnemyCollectionInventorySnapshot snapshot)
+    {
+        _available.Clear();
+        _available.AddRange(snapshot.Available);
+        _consumed.Clear();
+        _consumed.AddRange(snapshot.Consumed);
+        NextSequence = snapshot.NextSequence;
+    }
+
     /// <summary>
     /// 按稳定实例标识查找区域中的权威索引。
     /// </summary>
@@ -326,5 +366,28 @@ public sealed class EnemyCollectionInventory
     /// <summary>
     /// 在成功写入后按标准事件模式发布一次库存变更通知。
     /// </summary>
-    private void RaiseInventoryChanged() => InventoryChanged?.Invoke(this, EventArgs.Empty);
+    private void RaiseInventoryChanged()
+    {
+        EventHandler? handlers = InventoryChanged;
+        if (handlers is null)
+        {
+            _lastNotificationExceptions = Array.Empty<Exception>();
+            return;
+        }
+
+        List<Exception> failures = [];
+        foreach (EventHandler handler in handlers.GetInvocationList().Cast<EventHandler>())
+        {
+            try
+            {
+                handler(this, EventArgs.Empty);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
+            }
+        }
+
+        _lastNotificationExceptions = Array.AsReadOnly(failures.ToArray());
+    }
 }

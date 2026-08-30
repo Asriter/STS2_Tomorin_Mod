@@ -1,3 +1,5 @@
+using MegaCrit.Sts2.Core.Entities.Cards;
+
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
 /// <summary>
@@ -72,6 +74,11 @@ public sealed class EnemyActionMetricPlanner
             throw new InvalidOperationException("只有 Idle 且不存在冻结行动的状态才能准备新行动。");
         }
 
+        if (state.FrozenPreparationCollection is not null || state.FrozenPreparationDelta is not null)
+        {
+            throw new InvalidOperationException("当前状态已经冻结准备周期，不能再次调用准备工厂。");
+        }
+
         if (state.CurrentCards.Count > 0)
         {
             throw new InvalidOperationException("准备新行动前当前指标牌区必须为空。");
@@ -80,7 +87,8 @@ public sealed class EnemyActionMetricPlanner
         EnemyPreparationCycle preparationCycle = context.CreatePreparationCycle(state, context.RandomSource) ??
                                                   throw new InvalidOperationException("准备周期工厂返回了空对象。");
         state.StorePreparationCycle(preparationCycle);
-        List<string> incompleteDiagnostics = [];
+        List<string> attemptDiagnostics = [];
+        bool encounteredIncomplete = false;
 
         for (int attempt = 1; attempt <= _rules.MaxCandidateAttempts; attempt++)
         {
@@ -89,7 +97,9 @@ public sealed class EnemyActionMetricPlanner
             RecipeFillResult fill = FillRecipe(candidate, recipe, context.RandomSource);
             if (!fill.IsComplete)
             {
-                incompleteDiagnostics.Add($"第 {attempt} 次候选 {recipe.Metric}：{fill.Diagnostic}");
+                encounteredIncomplete = true;
+                attemptDiagnostics.Add(
+                    $"第 {attempt} 次候选 {recipe.Metric} 结构不完整：{fill.Diagnostic}");
                 continue;
             }
 
@@ -100,6 +110,8 @@ public sealed class EnemyActionMetricPlanner
             bool isFinalAttempt = attempt == _rules.MaxCandidateAttempts;
             if (overLock && !isFinalAttempt)
             {
+                attemptDiagnostics.Add(
+                    $"第 {attempt} 次候选 {recipe.Metric} 超锁：Attack={score.Attack}, Total={score.Total}。");
                 continue;
             }
 
@@ -132,10 +144,10 @@ public sealed class EnemyActionMetricPlanner
             return action;
         }
 
-        if (incompleteDiagnostics.Count == _rules.MaxCandidateAttempts)
+        if (encounteredIncomplete)
         {
             string faultDiagnostic =
-                $"{_rules.MaxCandidateAttempts} 次候选均未形成可提交的完整配方。{string.Join(" ", incompleteDiagnostics)}";
+                $"候选上限内存在结构不完整且没有行动提交。{string.Join(" ", attemptDiagnostics)}";
             state.MarkFault(faultDiagnostic);
             throw new EnemyCandidatePlanningException(faultDiagnostic);
         }
@@ -191,33 +203,38 @@ public sealed class EnemyActionMetricPlanner
     {
         List<BaseEnemyCard> selected = new(recipe.Slots.Count);
         List<string> diagnostics = [];
+        ComposeMaterialBindingState materialBindings = new(recipe.EnforceComposeMaterialBindings);
         for (int slotIndex = 0; slotIndex < recipe.Slots.Count; slotIndex++)
         {
             EnemyActionSlotRule slot = recipe.Slots[slotIndex];
-            bool requiresHardQualification = RequiresHardQualification(slot, recipe.Constraints);
+            CardType? requiredMaterialType = null;
+            if (slot.MustMatchSelectedComposeMaterial &&
+                !materialBindings.TryPeek(out requiredMaterialType))
+            {
+                diagnostics.Add($"槽位 {slotIndex} 没有待绑定的 Compose request 单位。");
+                continue;
+            }
+
             EnsureDrawAvailable(candidate, randomSource);
             if (candidate.DrawPile.Count == 0)
             {
-                if (requiresHardQualification)
-                {
-                    diagnostics.Add($"槽位 {slotIndex} 无剩余牌满足硬资格。");
-                }
-
+                diagnostics.Add($"槽位 {slotIndex} 无剩余牌，固定槽位不可省略。");
                 continue;
             }
 
             int[] hardEligibleIndices = candidate.DrawPile
                 .Select((card, index) => (card, index))
-                .Where(pair => IsHardEligible(pair.card, slot, selected, recipe.Constraints))
+                .Where(pair => IsHardEligible(
+                    pair.card,
+                    slot,
+                    selected,
+                    recipe.Constraints,
+                    requiredMaterialType))
                 .Select(pair => pair.index)
                 .ToArray();
             if (hardEligibleIndices.Length == 0)
             {
-                if (requiresHardQualification)
-                {
-                    diagnostics.Add($"槽位 {slotIndex} 没有满足定义、素材与候选约束的牌。");
-                }
-
+                diagnostics.Add($"槽位 {slotIndex} 没有满足定义、素材与候选约束的牌。");
                 continue;
             }
 
@@ -233,6 +250,19 @@ public sealed class EnemyActionMetricPlanner
             candidate.DrawPile.RemoveAt(chosenIndex);
             candidate.CurrentCards.Add(chosen);
             selected.Add(chosen);
+            if (slot.MustMatchSelectedComposeMaterial)
+            {
+                materialBindings.Consume();
+            }
+            else
+            {
+                materialBindings.RegisterSource(chosen);
+            }
+        }
+
+        if (materialBindings.HasPending)
+        {
+            diagnostics.Add($"候选结束时仍有 {materialBindings.PendingCount} 个 Compose request 单位未绑定。");
         }
 
         return new RecipeFillResult(
@@ -248,46 +278,20 @@ public sealed class EnemyActionMetricPlanner
         BaseEnemyCard card,
         EnemyActionSlotRule slot,
         IReadOnlyList<BaseEnemyCard> selected,
-        EnemyCandidateConstraints constraints)
+        EnemyCandidateConstraints constraints,
+        CardType? requiredMaterialType)
     {
         if (slot.AllowedDefinitionIds is not null && !slot.AllowedDefinitionIds.Contains(card.CardId))
         {
             return false;
         }
 
-        if (slot.MustMatchSelectedComposeMaterial && !MatchesSelectedComposeMaterial(card, selected))
+        if (slot.MustMatchSelectedComposeMaterial && card.CardModel.Type != requiredMaterialType)
         {
             return false;
         }
 
         return IsWithinConstraints(selected.Append(card), constraints);
-    }
-
-    /// <summary>
-    /// 旧 Tag-only 配方保持牌堆耗尽时部分提交；只有新增硬谓词或上限缺失才使候选结构不完整。
-    /// </summary>
-    private static bool RequiresHardQualification(
-        EnemyActionSlotRule slot,
-        EnemyCandidateConstraints constraints) =>
-        slot.AllowedDefinitionIds is not null ||
-        slot.MustMatchSelectedComposeMaterial ||
-        constraints.MaxComposeSources != int.MaxValue ||
-        constraints.MaxImmediateAttackComposeSources != int.MaxValue ||
-        constraints.MaxComposeSourcesProducingImmediateAttack != int.MaxValue;
-
-    /// <summary>
-    /// 只读取此前已选 Compose 来源的真实请求；没有来源或请求时素材槽结构不完整。
-    /// </summary>
-    private static bool MatchesSelectedComposeMaterial(
-        BaseEnemyCard card,
-        IReadOnlyList<BaseEnemyCard> selected)
-    {
-        EnemyMaterialRequest? request = selected
-            .Reverse()
-            .SelectMany(source => source.Definition.MaterialRequests.Reverse())
-            .FirstOrDefault(candidate => candidate.PaymentKind == EnemyMaterialPaymentKind.Compose);
-        return request is not null && request.Requirements.Any(requirement =>
-            requirement.CardType == card.CardModel.Type);
     }
 
     /// <summary>验证加入一张牌后的 Compose 结构计数没有超过阶段配方上限。</summary>
@@ -299,7 +303,7 @@ public sealed class EnemyActionMetricPlanner
         int composeSources = snapshot.Count(IsComposeSource);
         int immediateAttackComposeSources = snapshot.Count(card =>
             IsComposeSource(card) &&
-            (card.Definition.Tags & EnemyCardTag.Attack) != EnemyCardTag.None);
+            card.CardModel.Type == CardType.Attack);
         int composeSourcesProducingImmediateAttack = snapshot.Count(card =>
             IsComposeSource(card) &&
             (card.EffectClasses & EnemyCardEffectClass.ImmediateAttackProducer) != EnemyCardEffectClass.None);
@@ -310,6 +314,61 @@ public sealed class EnemyActionMetricPlanner
 
     private static bool IsComposeSource(BaseEnemyCard card) =>
         card.Definition.MaterialRequests.Any(request => request.PaymentKind == EnemyMaterialPaymentKind.Compose);
+
+    /// <summary>按来源、request、requirement 与 Count 顺序保存尚未绑定的 Compose 素材单位。</summary>
+    private sealed class ComposeMaterialBindingState
+    {
+        private readonly bool _enabled;
+        private readonly Queue<CardType> _pending = new();
+
+        public ComposeMaterialBindingState(bool enabled)
+        {
+            _enabled = enabled;
+        }
+
+        public bool HasPending => _pending.Count > 0;
+        public int PendingCount => _pending.Count;
+
+        public bool TryPeek(out CardType? cardType)
+        {
+            if (_pending.TryPeek(out CardType required))
+            {
+                cardType = required;
+                return true;
+            }
+
+            cardType = null;
+            return false;
+        }
+
+        public void Consume() => _pending.Dequeue();
+
+        public void RegisterSource(BaseEnemyCard source)
+        {
+            if (!_enabled)
+            {
+                return;
+            }
+
+            foreach (EnemyMaterialRequest request in source.Definition.MaterialRequests)
+            {
+                if (request.PaymentKind != EnemyMaterialPaymentKind.Compose)
+                {
+                    continue;
+                }
+
+                foreach (EnemyMaterialRequirement requirement in request.Requirements)
+                {
+                    CardType required = requirement.CardType ?? throw new InvalidOperationException(
+                        "Compose request 的需求必须具有确定 CardType。");
+                    for (int count = 0; count < requirement.Count; count++)
+                    {
+                        _pending.Enqueue(required);
+                    }
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// 仅当抽牌堆为空时把弃牌堆回洗；非空抽牌堆绝不为匹配标签提前回洗。

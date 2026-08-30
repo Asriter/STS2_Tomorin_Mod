@@ -349,6 +349,8 @@ public sealed class EnemyCardCombatState
         if (RuntimePhase != EnemyCardRuntimePhase.Faulted)
         {
             RuntimePhase = EnemyCardRuntimePhase.Idle;
+            FrozenPreparationCollection = null;
+            FrozenPreparationDelta = null;
         }
     }
 
@@ -377,6 +379,8 @@ public sealed class EnemyCardCombatState
 
         PreparedAction = null;
         RuntimePhase = EnemyCardRuntimePhase.Idle;
+        FrozenPreparationCollection = null;
+        FrozenPreparationDelta = null;
     }
 
     /// <summary>
@@ -405,12 +409,20 @@ public sealed class EnemyCardCombatState
             throw new InvalidOperationException("只有 Idle 且不存在冻结行动时才能开始准备周期。");
         }
 
+        if (FrozenPreparationCollection is not null || FrozenPreparationDelta is not null)
+        {
+            throw new InvalidOperationException("当前状态已经冻结准备周期，不能覆盖或再次推进收藏品随机源。");
+        }
+
         if (cycle.FrozenPreparationCollection is not null &&
             !cycle.Delta.AddedAvailable.Any(instance =>
                 ReferenceEquals(instance, cycle.FrozenPreparationCollection)))
         {
             throw new ArgumentException("冻结准备收藏品必须由同一准备周期增量携带。", nameof(cycle));
         }
+
+        // 在覆盖任何 frozen 诊断前，先以 live available/consumed/next-sequence 完整验证 delta。
+        _ = CreateInventoryWithDelta(cycle.Delta);
 
         FrozenPreparationCollection = cycle.FrozenPreparationCollection;
         FrozenPreparationDelta = cycle.Delta;
@@ -465,24 +477,49 @@ public sealed class EnemyCardCombatState
             throw new InvalidOperationException("冻结行动必须提交当前准备周期的同一库存增量对象。");
         }
 
-        EnemyCollectionInventorySnapshot? inventorySnapshot = action.PreActionInventoryDelta.AddedAvailable.Count == 0
-            ? null
-            : CreateInventoryWithDelta(action.PreActionInventoryDelta).CaptureSnapshot();
-
-        _drawPile.Clear();
-        _drawPile.AddRange(snapshot.DrawPile);
-        _currentCards.Clear();
-        _currentCards.AddRange(snapshot.CurrentCards);
-        _discardPile.Clear();
-        _discardPile.AddRange(snapshot.DiscardPile);
-        PreparedAction = action;
-        LastMetric = action.Metric;
-        RuntimePhase = EnemyCardRuntimePhase.Prepared;
-        AssertUniqueOwnership();
-        if (inventorySnapshot is not null &&
-            !CollectionInventory.TryApplySnapshot(inventorySnapshot, out string reason))
+        ValidatePreparedCommit(snapshot, action);
+        EnemyCollectionInventorySnapshot inventorySnapshot =
+            CreateInventoryWithDelta(action.PreActionInventoryDelta).CaptureSnapshot();
+        bool committed = CollectionInventory.TryCommitSnapshotAtomically(
+            inventorySnapshot,
+            () =>
+            {
+                ReplaceZone(_drawPile, snapshot.DrawPile);
+                ReplaceZone(_currentCards, snapshot.CurrentCards);
+                ReplaceZone(_discardPile, snapshot.DiscardPile);
+                PreparedAction = action;
+                LastMetric = action.Metric;
+                RuntimePhase = EnemyCardRuntimePhase.Prepared;
+            },
+            notify: action.PreActionInventoryDelta.AddedAvailable.Count > 0,
+            out string reason);
+        if (!committed)
         {
-            throw new InvalidOperationException($"已验证的准备库存增量提交失败：{reason}");
+            throw new InvalidOperationException($"准备库存增量事务预验证失败：{reason}");
+        }
+    }
+
+    /// <summary>在 compound transaction 之前验证候选五区唯一性及行动/Current 的一致性。</summary>
+    private void ValidatePreparedCommit(
+        EnemyCardPlanningStateSnapshot snapshot,
+        PreparedEnemyCardAction action)
+    {
+        BaseEnemyCard[] all = snapshot.DrawPile
+            .Concat(snapshot.CurrentCards)
+            .Concat(_retainedCards)
+            .Concat(snapshot.DiscardPile)
+            .Concat(_exhaustPile)
+            .ToArray();
+        if (all.Any(card => card is null) ||
+            all.Distinct(ReferenceEqualityComparer.Instance).Count() != all.Length ||
+            all.Select(card => card.InstanceKey).Distinct().Count() != all.Length)
+        {
+            throw new InvalidOperationException("准备候选五牌区违反唯一实例所有权不变量。");
+        }
+
+        if (!snapshot.CurrentCards.SequenceEqual(action.MetricCards, ReferenceEqualityComparer.Instance))
+        {
+            throw new InvalidOperationException("准备候选 Current 区与冻结行动指标牌顺序不一致。");
         }
     }
 

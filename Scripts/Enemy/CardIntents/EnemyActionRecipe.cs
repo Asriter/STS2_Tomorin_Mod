@@ -87,7 +87,8 @@ public sealed class EnemyActionRecipe
             metric,
             (slots ?? throw new ArgumentNullException(nameof(slots)))
                 .Select(tag => new EnemyActionSlotRule(tag)),
-            EnemyCandidateConstraints.Unrestricted)
+            EnemyCandidateConstraints.Unrestricted,
+            enforceComposeMaterialBindings: false)
     {
     }
 
@@ -96,6 +97,15 @@ public sealed class EnemyActionRecipe
         EnemyActionMetric metric,
         IEnumerable<EnemyActionSlotRule> slots,
         EnemyCandidateConstraints constraints)
+        : this(metric, slots, constraints, enforceComposeMaterialBindings: true)
+    {
+    }
+
+    private EnemyActionRecipe(
+        EnemyActionMetric metric,
+        IEnumerable<EnemyActionSlotRule> slots,
+        EnemyCandidateConstraints constraints,
+        bool enforceComposeMaterialBindings)
     {
         ArgumentNullException.ThrowIfNull(slots);
         EnemyActionSlotRule[] copied = slots.ToArray();
@@ -112,11 +122,17 @@ public sealed class EnemyActionRecipe
         Metric = metric;
         Slots = Array.AsReadOnly(copied);
         Constraints = constraints ?? throw new ArgumentNullException(nameof(constraints));
+        EnforceComposeMaterialBindings = enforceComposeMaterialBindings;
     }
 
     public EnemyActionMetric Metric { get; }
     public IReadOnlyList<EnemyActionSlotRule> Slots { get; }
     public EnemyCandidateConstraints Constraints { get; }
+
+    /// <summary>
+    /// 新式正式配方登记并完整绑定 Compose request；旧 Tag 构造器只保留开发目录兼容。
+    /// </summary>
+    internal bool EnforceComposeMaterialBindings { get; }
 
     internal static bool IsSingleTag(EnemyCardTag tag)
     {

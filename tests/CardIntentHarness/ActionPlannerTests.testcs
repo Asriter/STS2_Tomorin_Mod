@@ -1,6 +1,7 @@
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -277,6 +278,95 @@ public sealed class ActionPlannerTests
     }
 
     /// <summary>
+    /// 验证 Compose 数量约束同时过滤正常 Tag 命中与无 Tag 命中时的随机兜底。
+    /// </summary>
+    [Theory]
+    [InlineData(EnemyCardTag.Attack)]
+    [InlineData(EnemyCardTag.Defense)]
+    public void ComposeConstraintAppliesToMatchedAndFallbackCandidates(EnemyCardTag requiredTag)
+    {
+        BaseEnemyCard composeAttack = CreateComposeCard("CONSTRAINT_COMPOSE", CardType.Attack);
+        BaseEnemyCard ordinaryAttack = CreateCard("CONSTRAINT_ORDINARY", EnemyCardTag.Attack);
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Pressure,
+            [new EnemyActionSlotRule(requiredTag)],
+            new EnemyCandidateConstraints(
+                MaxComposeSources: 0,
+                MaxImmediateAttackComposeSources: 0,
+                MaxComposeSourcesProducingImmediateAttack: 0));
+        EnemyCardCombatState state = CreateState(
+            $"CONSTRAINT_{requiredTag.ToString().ToUpperInvariant()}",
+            [composeAttack, ordinaryAttack]);
+        EnemyActionMetricPlanner planner = new(
+            CreateRules(recipe),
+            new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource([0, 0])));
+
+        Assert.Equal(ordinaryAttack.CardId, Assert.Single(action.MetricCards).CardId);
+    }
+
+    /// <summary>
+    /// 验证 DefinitionId 谓词在 Tag 匹配失败后的随机兜底中仍然是硬资格条件。
+    /// </summary>
+    [Fact]
+    public void AllowedDefinitionIdsRemainMandatoryForRandomFallback()
+    {
+        BaseEnemyCard disallowed = CreateCard("ALLOWED_DISALLOWED", EnemyCardTag.Attack);
+        BaseEnemyCard allowed = CreateCard("ALLOWED_ONLY", EnemyCardTag.Attack);
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Growth,
+            [new EnemyActionSlotRule(
+                EnemyCardTag.Defense,
+                new HashSet<EnemyCardId> { allowed.CardId })],
+            new EnemyCandidateConstraints(int.MaxValue, int.MaxValue, int.MaxValue));
+        EnemyCardCombatState state = CreateState("ALLOWED_FALLBACK", [disallowed, allowed]);
+        EnemyActionMetricPlanner planner = new(CreateRules(recipe), new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource([0, 0])));
+
+        Assert.Equal(allowed.CardId, Assert.Single(action.MetricCards).CardId);
+    }
+
+    /// <summary>
+    /// 验证“对应素材”槽直接读取此前已选 Compose 来源的请求，而不是复用一个近似 Tag。
+    /// </summary>
+    [Fact]
+    public void ComposeMaterialSlotUsesTheSelectedSourcesMaterialRequest()
+    {
+        BaseEnemyCard composeSource = CreateComposeCard("MATERIAL_SOURCE", CardType.Attack);
+        BaseEnemyCard wrongSkill = new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId("STS2_TOMORIN_MOD:PLANNER_MATERIAL_WRONG_SKILL"),
+            new DefendTomorin(),
+            EnemyCardTag.Gain,
+            EnemyCardScoreProfile.Zero));
+        BaseEnemyCard attackMaterial = CreateCard("MATERIAL_ATTACK", EnemyCardTag.Attack);
+        EnemyActionRecipe recipe = new(
+            EnemyActionMetric.Compose,
+            [
+                new EnemyActionSlotRule(EnemyCardTag.Compose),
+                new EnemyActionSlotRule(null, MustMatchSelectedComposeMaterial: true)
+            ],
+            new EnemyCandidateConstraints(1, 1, 1));
+        EnemyCardCombatState state = CreateState(
+            "MATERIAL_REQUEST",
+            [composeSource, wrongSkill, attackMaterial]);
+        EnemyActionMetricPlanner planner = new(CreateRules(recipe), new EnemyCardScoreCalculator());
+
+        PreparedEnemyCardAction action = planner.Prepare(
+            state,
+            new EnemyPlanningContext(new RecordingRandomSource([0, 0, 0])));
+
+        Assert.Equal(
+            [composeSource.CardId, attackMaterial.CardId],
+            action.MetricCards.Select(card => card.CardId));
+    }
+
+    /// <summary>
     /// 根据规则配方创建足以覆盖全部 Tag 槽位的牌组。
     /// </summary>
     /// <param name="rules">提供配方全集的规则对象。</param>
@@ -284,8 +374,21 @@ public sealed class ActionPlannerTests
     private static IReadOnlyList<BaseEnemyCard> CreateCardsForRecipes(CardIntentTestRules rules) =>
         rules.Recipes.Values
             .SelectMany(recipe => recipe.Slots)
-            .Select((tag, index) => CreateCard($"METRIC_CARD_{index}", tag ?? EnemyCardTag.Ability))
+            .Select((slot, index) => CreateCard(
+                $"METRIC_CARD_{index}",
+                slot.RequiredTag ?? EnemyCardTag.Ability))
             .ToArray();
+
+    /// <summary>
+    /// 创建单配方、无软锁干扰的通用规划规则。
+    /// </summary>
+    private static EnemyCardPlanningRules CreateRules(EnemyActionRecipe recipe) =>
+        new(
+            new EnemySoftLockLimits(999m, 999m),
+            new EnemySoftLockLimits(999m, 999m),
+            maxCandidateAttempts: 1,
+            stepLimit: 256,
+            [new EnemyWeightedActionRecipe(recipe, 1)]);
 
     /// <summary>
     /// 创建并注册新的战斗级状态，并由注册表分配模板槽位身份。
@@ -322,6 +425,17 @@ public sealed class ActionPlannerTests
             new StrikeTomorin(),
             tags,
             scoreProfile ?? EnemyCardScoreProfile.Zero));
+
+    /// <summary>
+    /// 创建具有一项真实 Compose 素材请求的来源牌。
+    /// </summary>
+    private static BaseEnemyCard CreateComposeCard(string suffix, CardType materialType) =>
+        new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PLANNER_{suffix}"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack | EnemyCardTag.Compose,
+            EnemyCardScoreProfile.Zero,
+            materialRequests: [EnemyMaterialRequest.Compose(materialType, 1)]));
 
     /// <summary>
     /// 把上次指标牌移回抽牌堆，同时保留 LastMetric 供不连续性验证。

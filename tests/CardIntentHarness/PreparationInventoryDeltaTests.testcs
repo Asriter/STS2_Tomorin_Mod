@@ -1,0 +1,195 @@
+using MegaCrit.Sts2.Core.Entities.Cards;
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证一次准备周期只冻结一份收藏品增量，并把它与最终行动原子提交。
+/// </summary>
+public sealed class PreparationInventoryDeltaTests
+{
+    /// <summary>
+    /// 前两个候选被软锁拒绝时仍共享同一冻结收藏品，第三个候选只能提交一次增量。
+    /// </summary>
+    [Fact]
+    public void ThreeCandidateAttemptsShareOneFrozenCollectionAndCommitItOnce()
+    {
+        PreparationFixture fixture = PreparationFixture.WithRejectedFirstAndSecondCandidates();
+
+        PreparedEnemyCardAction action = fixture.Planner.Prepare(fixture.State, fixture.Context);
+
+        Assert.Equal(3, action.SoftLockDiagnostic.CandidateAttemptCount);
+        Assert.Null(Assert.Single(action.Sources).TruncationAttemptIndex);
+        EnemyCollectionInstance added = Assert.Single(action.PreActionInventoryDelta.AddedAvailable);
+        Assert.Same(added, Assert.Single(
+            fixture.State.CollectionQueue,
+            instance => instance.CollectionInstanceId == added.CollectionInstanceId));
+        Assert.Equal(1, fixture.Random.CollectionSelectionCalls);
+        Assert.Same(added, fixture.State.FrozenPreparationCollection);
+        Assert.Same(action.PreActionInventoryDelta, fixture.State.FrozenPreparationDelta);
+    }
+
+    /// <summary>
+    /// 所有候选都无法填满配方时进入故障诊断，但冻结增量不能提前进入权威库存。
+    /// </summary>
+    [Fact]
+    public void FailedPreparationKeepsFrozenDiagnosticButDoesNotMutateInventory()
+    {
+        PreparationFixture fixture = PreparationFixture.WithAllIncompleteCandidates();
+        int before = fixture.State.CollectionQueue.Count;
+
+        EnemyCandidatePlanningException exception = Assert.Throws<EnemyCandidatePlanningException>(() =>
+            fixture.Planner.Prepare(fixture.State, fixture.Context));
+
+        Assert.Equal(before, fixture.State.CollectionQueue.Count);
+        Assert.NotNull(fixture.State.FrozenPreparationDelta);
+        Assert.NotNull(fixture.State.FrozenPreparationCollection);
+        Assert.NotNull(fixture.State.FaultDiagnostic);
+        Assert.Contains("3", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, fixture.Random.CollectionSelectionCalls);
+    }
+
+    /// <summary>
+    /// 封装具有确定性牌堆、随机源和准备周期工厂的完整规划输入。
+    /// </summary>
+    private sealed class PreparationFixture
+    {
+        private PreparationFixture(
+            EnemyCardCombatState state,
+            EnemyActionMetricPlanner planner,
+            PreparationRandomSource random)
+        {
+            State = state;
+            Planner = planner;
+            Random = random;
+            Context = new EnemyPlanningContext(
+                random,
+                createPreparationCycle: CreatePreparationCycle);
+        }
+
+        public EnemyCardCombatState State { get; }
+        public EnemyActionMetricPlanner Planner { get; }
+        public PreparationRandomSource Random { get; }
+        public EnemyPlanningContext Context { get; }
+
+        public static PreparationFixture WithRejectedFirstAndSecondCandidates()
+        {
+            const decimal attackLock = 10m;
+            BaseEnemyCard first = CreateComposeCard("DELTA_REJECT_1", attackLock + 2m);
+            BaseEnemyCard second = CreateComposeCard("DELTA_REJECT_2", attackLock + 1m);
+            BaseEnemyCard third = CreateComposeCard("DELTA_ACCEPT", attackLock);
+            EnemyCardCombatState state = CreateState("DELTA_THREE_ATTEMPTS", [first, second, third]);
+            EnemyCardPlanningRules rules = CreateRules(
+                new EnemyActionRecipe(EnemyActionMetric.ComposeTest, [EnemyCardTag.Compose]),
+                attackLock,
+                maxCandidateAttempts: 3);
+            PreparationRandomSource random = new([0, 0, 0, 1, 0, 2]);
+            return new PreparationFixture(state, new EnemyActionMetricPlanner(rules, new()), random);
+        }
+
+        public static PreparationFixture WithAllIncompleteCandidates()
+        {
+            BaseEnemyCard onlyCard = CreateCard("DELTA_INCOMPLETE", EnemyCardTag.Attack);
+            EnemyCardCombatState state = CreateState("DELTA_ALL_INCOMPLETE", [onlyCard]);
+            EnemyActionRecipe recipe = new(
+                EnemyActionMetric.Attack,
+                [new EnemyActionSlotRule(
+                    EnemyCardTag.Attack,
+                    new HashSet<EnemyCardId>
+                    {
+                        new("STS2_TOMORIN_MOD:PREPARATION_REQUIRED_BUT_MISSING")
+                    })],
+                EnemyCandidateConstraints.Unrestricted);
+            PreparationRandomSource random = new(Enumerable.Repeat(0, 16));
+            return new PreparationFixture(
+                state,
+                new EnemyActionMetricPlanner(CreateRules(recipe, 999m, 3), new()),
+                random);
+        }
+
+        private EnemyPreparationCycle CreatePreparationCycle(
+            EnemyCardCombatState state,
+            IEnemyCardRandomSource randomSource)
+        {
+            Assert.Same(Random, randomSource);
+            Random.RecordCollectionSelection();
+            EnemyCollectionDefinition definition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
+                CardIntentTestCollectionCatalog.StarStoneId);
+            EnemyCollectionInstance instance = new(definition, state.NextCollectionSequence);
+            EnemyPreparedPreActionInventoryDelta delta = new([instance]);
+            return new EnemyPreparationCycle(instance, delta);
+        }
+    }
+
+    private static EnemyCardPlanningRules CreateRules(
+        EnemyActionRecipe recipe,
+        decimal attackLock,
+        int maxCandidateAttempts) =>
+        new(
+            new EnemySoftLockLimits(attackLock, 999m),
+            new EnemySoftLockLimits(attackLock, 999m),
+            maxCandidateAttempts,
+            stepLimit: 256,
+            [new EnemyWeightedActionRecipe(recipe, 1)]);
+
+    private static EnemyCardCombatState CreateState(string scope, IReadOnlyList<BaseEnemyCard> cards)
+    {
+        EnemyCardDeckId deckId = new($"STS2_TOMORIN_MOD:PREPARATION_{scope}_DECK");
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                deckId,
+                cards.Select(card => (Func<BaseEnemyCard>)(() => new HarnessEnemyCard(card.Definition))));
+        }
+
+        return EnemyCardDeckRegistry.CreateCombatState(deckId);
+    }
+
+    private static BaseEnemyCard CreateComposeCard(string suffix, decimal attack) =>
+        new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PREPARATION_{suffix}"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack | EnemyCardTag.Compose,
+            new EnemyCardScoreProfile(attack: attack),
+            materialRequests: [EnemyMaterialRequest.Compose(CardType.Status, 1)]));
+
+    private static BaseEnemyCard CreateCard(string suffix, EnemyCardTag tags) =>
+        new HarnessEnemyCard(new EnemyCardDefinition(
+            new EnemyCardId($"STS2_TOMORIN_MOD:PREPARATION_{suffix}"),
+            new StrikeTomorin(),
+            tags,
+            EnemyCardScoreProfile.Zero));
+
+    private sealed class HarnessEnemyCard : BaseEnemyCard
+    {
+        public HarnessEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+
+    /// <summary>
+    /// 区分普通规划随机请求与准备周期收藏品选择次数。
+    /// </summary>
+    private sealed class PreparationRandomSource : IEnemyCardRandomSource
+    {
+        private readonly Queue<int> _indices;
+
+        public PreparationRandomSource(IEnumerable<int> indices)
+        {
+            _indices = new Queue<int>(indices);
+        }
+
+        public int CollectionSelectionCalls { get; private set; }
+
+        public int NextIndex(int exclusiveUpperBound)
+        {
+            int value = _indices.Count > 0 ? _indices.Dequeue() : 0;
+            return Math.Abs(value % exclusiveUpperBound);
+        }
+
+        public void RecordCollectionSelection() => CollectionSelectionCalls++;
+    }
+}

@@ -12,5 +12,20 @@ public enum EnemyActionMetric
     Attack,
 
     /// <summary>收藏品、防御与作词组合。</summary>
-    ComposeTest
+    ComposeTest,
+
+    /// <summary>阶段化防御与资源积累。</summary>
+    Fortify,
+
+    /// <summary>阶段化攻击压力。</summary>
+    Pressure,
+
+    /// <summary>阶段化作词组合。</summary>
+    Compose,
+
+    /// <summary>高密度攻击组合。</summary>
+    Burst,
+
+    /// <summary>资源转化与成长组合。</summary>
+    Growth
 }

@@ -1,6 +1,57 @@
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
 /// <summary>
+/// 保存准备行动公开前必须追加到可用区的冻结收藏品实例。
+/// </summary>
+public sealed record EnemyPreparedPreActionInventoryDelta
+{
+    public EnemyPreparedPreActionInventoryDelta(IReadOnlyList<EnemyCollectionInstance> addedAvailable)
+    {
+        ArgumentNullException.ThrowIfNull(addedAvailable);
+        EnemyCollectionInstance[] copied = addedAvailable.ToArray();
+        if (copied.Any(instance => instance is null) ||
+            copied.Select(instance => instance.CollectionInstanceId)
+                .Distinct(StringComparer.Ordinal).Count() != copied.Length)
+        {
+            throw new ArgumentException("准备库存增量不能包含空值或重复收藏品实例。", nameof(addedAvailable));
+        }
+
+        AddedAvailable = Array.AsReadOnly(copied);
+    }
+
+    public static EnemyPreparedPreActionInventoryDelta Empty { get; } = new([]);
+
+    public IReadOnlyList<EnemyCollectionInstance> AddedAvailable { get; }
+}
+
+/// <summary>
+/// 保存一次候选循环共享的收藏品选择与对应库存增量。
+/// </summary>
+public sealed class EnemyPreparationCycle
+{
+    public EnemyPreparationCycle(
+        EnemyCollectionInstance? frozenPreparationCollection,
+        EnemyPreparedPreActionInventoryDelta delta)
+    {
+        FrozenPreparationCollection = frozenPreparationCollection;
+        Delta = delta ?? throw new ArgumentNullException(nameof(delta));
+    }
+
+    public EnemyCollectionInstance? FrozenPreparationCollection { get; }
+    public EnemyPreparedPreActionInventoryDelta Delta { get; }
+}
+
+/// <summary>
+/// 表示候选循环在上限内始终无法构造完整配方的确定性结构故障。
+/// </summary>
+public sealed class EnemyCandidatePlanningException : InvalidOperationException
+{
+    public EnemyCandidatePlanningException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// 冻结单张来源牌的最大尝试次数、成功递归单元和截断边界。
 /// </summary>
 public sealed class PreparedEnemyCardSource
@@ -139,12 +190,14 @@ public sealed class PreparedEnemyCardAction
     /// <param name="metricCards">按槽位顺序冻结的指标实例。</param>
     /// <param name="sources">按深度优先来源顺序冻结的逐来源计划。</param>
     /// <param name="softLockDiagnostic">准备时评分与候选诊断。</param>
+    /// <param name="preActionInventoryDelta">与行动原子提交的准备前库存增量。</param>
     public PreparedEnemyCardAction(
         EnemyActionMetric metric,
         IEnumerable<BaseEnemyCard> retainedPrefix,
         IEnumerable<BaseEnemyCard> metricCards,
         IEnumerable<PreparedEnemyCardSource> sources,
-        EnemySoftLockDiagnostic softLockDiagnostic)
+        EnemySoftLockDiagnostic softLockDiagnostic,
+        EnemyPreparedPreActionInventoryDelta? preActionInventoryDelta = null)
     {
         ArgumentNullException.ThrowIfNull(retainedPrefix);
         ArgumentNullException.ThrowIfNull(metricCards);
@@ -154,6 +207,7 @@ public sealed class PreparedEnemyCardAction
         MetricCards = Array.AsReadOnly(metricCards.ToArray());
         Sources = Array.AsReadOnly(sources.ToArray());
         SoftLockDiagnostic = softLockDiagnostic ?? throw new ArgumentNullException(nameof(softLockDiagnostic));
+        PreActionInventoryDelta = preActionInventoryDelta ?? EnemyPreparedPreActionInventoryDelta.Empty;
         BaseEnemyCard[] ordered = RetainedPrefix.Concat(MetricCards).ToArray();
         if (ordered.Select(card => card.InstanceKey).Distinct().Count() != ordered.Length)
         {
@@ -180,6 +234,9 @@ public sealed class PreparedEnemyCardAction
 
     /// <summary>获取准备时固定且不会随实时投影改变的软锁诊断。</summary>
     public EnemySoftLockDiagnostic SoftLockDiagnostic { get; }
+
+    /// <summary>获取与本行动一起提交且只追加一次的准备前库存增量。</summary>
+    public EnemyPreparedPreActionInventoryDelta PreActionInventoryDelta { get; }
 
     /// <summary>获取兼容候选调用方的当前冻结行动自身。</summary>
     public PreparedEnemyCardAction Candidate => this;

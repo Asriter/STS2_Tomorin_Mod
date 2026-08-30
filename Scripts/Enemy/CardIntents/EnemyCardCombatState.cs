@@ -152,6 +152,12 @@ public sealed class EnemyCardCombatState
     /// <summary>获取结构故障诊断；正常素材不足不会写入。</summary>
     public string? FaultDiagnostic { get; private set; }
 
+    /// <summary>获取当前准备周期只选择一次的冻结收藏品。</summary>
+    public EnemyCollectionInstance? FrozenPreparationCollection { get; private set; }
+
+    /// <summary>获取当前准备周期共享的同一库存增量。</summary>
+    public EnemyPreparedPreActionInventoryDelta? FrozenPreparationDelta { get; private set; }
+
     /// <summary>获取当前使用的内容阶段。</summary>
     public EnemyCardPhase ActivePhase { get; private set; }
 
@@ -239,6 +245,8 @@ public sealed class EnemyCardCombatState
         candidate.PreparedAction = null;
         candidate.RuntimePhase = EnemyCardRuntimePhase.Idle;
         candidate.FaultDiagnostic = null;
+        candidate.FrozenPreparationCollection = null;
+        candidate.FrozenPreparationDelta = null;
         candidate.ActivePhase = nextPhase.Phase;
         candidate.PendingPhase = EnemyCardPhase.None;
         candidate.PhaseRevision = checked(PhaseRevision + 1);
@@ -289,6 +297,8 @@ public sealed class EnemyCardCombatState
         PreparedAction = source.PreparedAction;
         RuntimePhase = source.RuntimePhase;
         FaultDiagnostic = source.FaultDiagnostic;
+        FrozenPreparationCollection = source.FrozenPreparationCollection;
+        FrozenPreparationDelta = source.FrozenPreparationDelta;
         ActivePhase = source.ActivePhase;
         PendingPhase = source.PendingPhase;
         PhaseRevision = source.PhaseRevision;
@@ -385,6 +395,29 @@ public sealed class EnemyCardCombatState
     }
 
     /// <summary>
+    /// 在候选循环开始前记录唯一准备周期；这里只冻结诊断，不写入权威库存。
+    /// </summary>
+    internal void StorePreparationCycle(EnemyPreparationCycle cycle)
+    {
+        ArgumentNullException.ThrowIfNull(cycle);
+        if (PreparedAction is not null || RuntimePhase != EnemyCardRuntimePhase.Idle)
+        {
+            throw new InvalidOperationException("只有 Idle 且不存在冻结行动时才能开始准备周期。");
+        }
+
+        if (cycle.FrozenPreparationCollection is not null &&
+            !cycle.Delta.AddedAvailable.Any(instance =>
+                ReferenceEquals(instance, cycle.FrozenPreparationCollection)))
+        {
+            throw new ArgumentException("冻结准备收藏品必须由同一准备周期增量携带。", nameof(cycle));
+        }
+
+        FrozenPreparationCollection = cycle.FrozenPreparationCollection;
+        FrozenPreparationDelta = cycle.Delta;
+        FaultDiagnostic = null;
+    }
+
+    /// <summary>
     /// 从相同权威牌区创建候选事务副本。
     /// </summary>
     /// <returns>列表可变但卡牌实例引用保持一致的规划快照。</returns>
@@ -396,16 +429,20 @@ public sealed class EnemyCardCombatState
     /// </summary>
     /// <param name="snapshot">已经完成配方抽取的候选牌区副本。</param>
     /// <returns>后续素材、即时和回收选择均不会写回权威状态的独立事务。</returns>
-    internal EnemyPreparedPlanningState CreatePreparedPlanningState(EnemyCardPlanningStateSnapshot snapshot)
+    internal EnemyPreparedPlanningState CreatePreparedPlanningState(
+        EnemyCardPlanningStateSnapshot snapshot,
+        EnemyPreparedPreActionInventoryDelta preActionInventoryDelta)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(preActionInventoryDelta);
+        EnemyCollectionInventory planningInventory = CreateInventoryWithDelta(preActionInventoryDelta);
         return new EnemyPreparedPlanningState(
             snapshot.DrawPile,
             snapshot.CurrentCards,
             _retainedCards,
             snapshot.DiscardPile,
             _exhaustPile,
-            CollectionInventory,
+            planningInventory,
             NextGeneratedCardSequence);
     }
 
@@ -423,6 +460,15 @@ public sealed class EnemyCardCombatState
             throw new InvalidOperationException("已有冻结行动时不能再次提交候选。");
         }
 
+        if (!ReferenceEquals(FrozenPreparationDelta, action.PreActionInventoryDelta))
+        {
+            throw new InvalidOperationException("冻结行动必须提交当前准备周期的同一库存增量对象。");
+        }
+
+        EnemyCollectionInventorySnapshot? inventorySnapshot = action.PreActionInventoryDelta.AddedAvailable.Count == 0
+            ? null
+            : CreateInventoryWithDelta(action.PreActionInventoryDelta).CaptureSnapshot();
+
         _drawPile.Clear();
         _drawPile.AddRange(snapshot.DrawPile);
         _currentCards.Clear();
@@ -433,6 +479,43 @@ public sealed class EnemyCardCombatState
         LastMetric = action.Metric;
         RuntimePhase = EnemyCardRuntimePhase.Prepared;
         AssertUniqueOwnership();
+        if (inventorySnapshot is not null &&
+            !CollectionInventory.TryApplySnapshot(inventorySnapshot, out string reason))
+        {
+            throw new InvalidOperationException($"已验证的准备库存增量提交失败：{reason}");
+        }
+    }
+
+    /// <summary>
+    /// 在独立库存克隆上验证并追加冻结增量，供候选解析和最终提交复用。
+    /// </summary>
+    private EnemyCollectionInventory CreateInventoryWithDelta(
+        EnemyPreparedPreActionInventoryDelta delta)
+    {
+        ArgumentNullException.ThrowIfNull(delta);
+        EnemyCollectionInventorySnapshot current = CollectionInventory.CaptureSnapshot();
+        List<EnemyCollectionInstance> available = current.Available.ToList();
+        long nextSequence = current.NextSequence;
+        foreach (EnemyCollectionInstance instance in delta.AddedAvailable)
+        {
+            if (instance.Sequence != nextSequence)
+            {
+                throw new InvalidOperationException(
+                    $"准备收藏品实例 {instance.CollectionInstanceId} 的序号必须等于下一权威序号 {nextSequence}。");
+            }
+
+            available.Add(instance);
+            nextSequence = checked(nextSequence + 1);
+        }
+
+        EnemyCollectionInventory clone = CollectionInventory.CreateTransactionalClone();
+        EnemyCollectionInventorySnapshot updated = new(available, current.Consumed, nextSequence);
+        if (!clone.TryApplySnapshot(updated, out string reason))
+        {
+            throw new InvalidOperationException($"准备库存增量无效：{reason}");
+        }
+
+        return clone;
     }
 
     /// <summary>

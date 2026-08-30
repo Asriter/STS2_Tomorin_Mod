@@ -480,6 +480,7 @@ public sealed class EnemyCardCombatState
         ValidatePreparedCommit(snapshot, action);
         EnemyCollectionInventorySnapshot inventorySnapshot =
             CreateInventoryWithDelta(action.PreActionInventoryDelta).CaptureSnapshot();
+        PreparedOwnerStateSnapshot ownerBefore = CapturePreparedOwnerState();
         bool committed = CollectionInventory.TryCommitSnapshotAtomically(
             inventorySnapshot,
             () =>
@@ -491,12 +492,34 @@ public sealed class EnemyCardCombatState
                 LastMetric = action.Metric;
                 RuntimePhase = EnemyCardRuntimePhase.Prepared;
             },
+            rollbackOwner: () => RestorePreparedOwnerState(ownerBefore),
             notify: action.PreActionInventoryDelta.AddedAvailable.Count > 0,
             out string reason);
         if (!committed)
         {
             throw new InvalidOperationException($"准备库存增量事务预验证失败：{reason}");
         }
+    }
+
+    /// <summary>捕获 CommitPreparedAction 会修改的全部 owner 字段及其完整顺序。</summary>
+    private PreparedOwnerStateSnapshot CapturePreparedOwnerState() =>
+        new(
+            _drawPile,
+            _currentCards,
+            _discardPile,
+            PreparedAction,
+            LastMetric,
+            RuntimePhase);
+
+    /// <summary>在 compound commit callback 失败时恢复全部 owner 字段，不触发通知。</summary>
+    private void RestorePreparedOwnerState(PreparedOwnerStateSnapshot before)
+    {
+        ReplaceZone(_drawPile, before.DrawPile);
+        ReplaceZone(_currentCards, before.CurrentCards);
+        ReplaceZone(_discardPile, before.DiscardPile);
+        PreparedAction = before.PreparedAction;
+        LastMetric = before.LastMetric;
+        RuntimePhase = before.RuntimePhase;
     }
 
     /// <summary>在 compound transaction 之前验证候选五区唯一性及行动/Current 的一致性。</summary>
@@ -730,6 +753,33 @@ public sealed class EnemyCardCombatState
         {
             throw new InvalidOperationException("敌人卡牌五牌区违反唯一实例所有权不变量。");
         }
+    }
+
+    /// <summary>冻结 CommitPreparedAction owner 侧的完整 before-state，供异常 rollback 使用。</summary>
+    private sealed class PreparedOwnerStateSnapshot
+    {
+        public PreparedOwnerStateSnapshot(
+            IEnumerable<BaseEnemyCard> drawPile,
+            IEnumerable<BaseEnemyCard> currentCards,
+            IEnumerable<BaseEnemyCard> discardPile,
+            PreparedEnemyCardAction? preparedAction,
+            EnemyActionMetric? lastMetric,
+            EnemyCardRuntimePhase runtimePhase)
+        {
+            DrawPile = Array.AsReadOnly(drawPile.ToArray());
+            CurrentCards = Array.AsReadOnly(currentCards.ToArray());
+            DiscardPile = Array.AsReadOnly(discardPile.ToArray());
+            PreparedAction = preparedAction;
+            LastMetric = lastMetric;
+            RuntimePhase = runtimePhase;
+        }
+
+        public IReadOnlyList<BaseEnemyCard> DrawPile { get; }
+        public IReadOnlyList<BaseEnemyCard> CurrentCards { get; }
+        public IReadOnlyList<BaseEnemyCard> DiscardPile { get; }
+        public PreparedEnemyCardAction? PreparedAction { get; }
+        public EnemyActionMetric? LastMetric { get; }
+        public EnemyCardRuntimePhase RuntimePhase { get; }
     }
 }
 

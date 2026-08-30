@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.ExceptionServices;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
@@ -234,16 +235,19 @@ public sealed class EnemyCollectionInventory
     /// 先完整验证库存目标，再在同一同步调用中提交库存与 owner；全部权威字段完成后才安全通知。
     /// </summary>
     /// <remarks>
-    /// <paramref name="commitOwner"/> 必须只执行调用方已预验证、不会抛出的字段交换。若它仍抛出，
-    /// 库存会回滚到调用前快照且不会通知；库存观察者异常则逐个隔离并记录，不从本方法传播。
+    /// <paramref name="commitOwner"/> 抛出时先调用 <paramref name="rollbackOwner"/> 恢复 owner，
+    /// 再恢复调用前库存且不通知。任一 rollback 失败会与原 commit 异常聚合，不能静默声称回滚成功。
+    /// 库存观察者异常仍逐个隔离并记录，不从本方法传播。
     /// </remarks>
     internal bool TryCommitSnapshotAtomically(
         EnemyCollectionInventorySnapshot? snapshot,
         Action commitOwner,
+        Action rollbackOwner,
         bool notify,
         out string reason)
     {
         ArgumentNullException.ThrowIfNull(commitOwner);
+        ArgumentNullException.ThrowIfNull(rollbackOwner);
         reason = string.Empty;
         if (!TryValidateSnapshot(snapshot, out reason))
         {
@@ -256,9 +260,35 @@ public sealed class EnemyCollectionInventory
         {
             commitOwner();
         }
-        catch
+        catch (Exception commitException)
         {
-            ApplyValidatedSnapshot(before);
+            List<Exception> rollbackFailures = [];
+            try
+            {
+                rollbackOwner();
+            }
+            catch (Exception ownerRollbackException)
+            {
+                rollbackFailures.Add(ownerRollbackException);
+            }
+
+            try
+            {
+                ApplyValidatedSnapshot(before);
+            }
+            catch (Exception inventoryRollbackException)
+            {
+                rollbackFailures.Add(inventoryRollbackException);
+            }
+
+            if (rollbackFailures.Count > 0)
+            {
+                throw new AggregateException(
+                    "Compound commit 失败，且 owner 或 inventory rollback 未完整成功。",
+                    new[] { commitException }.Concat(rollbackFailures));
+            }
+
+            ExceptionDispatchInfo.Capture(commitException).Throw();
             throw;
         }
 
@@ -282,7 +312,12 @@ public sealed class EnemyCollectionInventory
         out string reason,
         bool notify)
     {
-        return TryCommitSnapshotAtomically(snapshot, static () => { }, notify, out reason);
+        return TryCommitSnapshotAtomically(
+            snapshot,
+            static () => { },
+            static () => { },
+            notify,
+            out reason);
     }
 
     /// <summary>

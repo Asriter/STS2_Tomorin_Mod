@@ -108,9 +108,16 @@ public sealed class PreparationInventoryDeltaTests
             BindingFlags.Instance | BindingFlags.NonPublic) ?? throw new MissingMethodException(
             nameof(EnemyCollectionInventory),
             "TryCommitSnapshotAtomically");
-        object?[] arguments = [invalid, (Action)(() => ownerCommitted = true), true, string.Empty];
+        object?[] arguments =
+        [
+            invalid,
+            (Action)(() => ownerCommitted = true),
+            (Action)(() => throw new InvalidOperationException("rollback must not run")),
+            true,
+            string.Empty
+        ];
         bool committed = Assert.IsType<bool>(transaction.Invoke(inventory, arguments));
-        string reason = Assert.IsType<string>(arguments[3]);
+        string reason = Assert.IsType<string>(arguments[4]);
 
         Assert.False(committed);
         Assert.False(ownerCommitted);
@@ -120,9 +127,82 @@ public sealed class PreparationInventoryDeltaTests
         Assert.Equal(before.NextSequence, inventory.NextSequence);
     }
 
-    /// <summary>owner callback 在通知前意外抛出时，库存事务必须恢复调用前快照且不发布事件。</summary>
+    /// <summary>owner 已部分交换后抛出时，事务必须恢复 owner 全字段与库存，且不发布事件。</summary>
     [Fact]
     public void OwnerCommitExceptionRollsBackInventoryAndSkipsNotification()
+    {
+        EnemyCollectionInventory inventory = new();
+        EnemyCollectionDefinition definition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
+            CardIntentTestCollectionCatalog.StarStoneId);
+        EnemyCollectionInventorySnapshot before = inventory.CaptureSnapshot();
+        EnemyCollectionInstance added = new(definition, before.NextSequence);
+        EnemyCollectionInventorySnapshot target = new([added], [], before.NextSequence + 1);
+        List<string> draw = ["DRAW_0", "DRAW_1"];
+        List<string> current = ["CURRENT_0"];
+        List<string> discard = ["DISCARD_0", "DISCARD_1"];
+        string[] beforeDraw = draw.ToArray();
+        string[] beforeCurrent = current.ToArray();
+        string[] beforeDiscard = discard.ToArray();
+        object? preparedAction = null;
+        EnemyActionMetric? lastMetric = EnemyActionMetric.Gain;
+        EnemyCardRuntimePhase runtimePhase = EnemyCardRuntimePhase.Idle;
+        int notifications = 0;
+        inventory.InventoryChanged += (_, _) => notifications++;
+        MethodInfo transaction = typeof(EnemyCollectionInventory).GetMethod(
+            "TryCommitSnapshotAtomically",
+            BindingFlags.Instance | BindingFlags.NonPublic) ?? throw new MissingMethodException(
+            nameof(EnemyCollectionInventory),
+            "TryCommitSnapshotAtomically");
+        object?[] arguments =
+        [
+            target,
+            (Action)(() =>
+            {
+                draw.Clear();
+                draw.Add("AFTER_DRAW");
+                current.Clear();
+                current.Add("AFTER_CURRENT");
+                discard.Clear();
+                preparedAction = new object();
+                lastMetric = EnemyActionMetric.Burst;
+                runtimePhase = EnemyCardRuntimePhase.Prepared;
+                throw new InvalidOperationException("expected owner failure");
+            }),
+            (Action)(() =>
+            {
+                draw.Clear();
+                draw.AddRange(beforeDraw);
+                current.Clear();
+                current.AddRange(beforeCurrent);
+                discard.Clear();
+                discard.AddRange(beforeDiscard);
+                preparedAction = null;
+                lastMetric = EnemyActionMetric.Gain;
+                runtimePhase = EnemyCardRuntimePhase.Idle;
+            }),
+            true,
+            string.Empty
+        ];
+
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() =>
+            transaction.Invoke(inventory, arguments));
+
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Equal(beforeDraw, draw);
+        Assert.Equal(beforeCurrent, current);
+        Assert.Equal(beforeDiscard, discard);
+        Assert.Null(preparedAction);
+        Assert.Equal(EnemyActionMetric.Gain, lastMetric);
+        Assert.Equal(EnemyCardRuntimePhase.Idle, runtimePhase);
+        Assert.Equal(before.Available, inventory.Available);
+        Assert.Equal(before.Consumed, inventory.Consumed);
+        Assert.Equal(before.NextSequence, inventory.NextSequence);
+        Assert.Equal(0, notifications);
+    }
+
+    /// <summary>owner rollback 自身失败时必须保留原 commit 异常并聚合 rollback 诊断，inventory 仍回滚且不通知。</summary>
+    [Fact]
+    public void OwnerRollbackFailureAggregatesOriginalErrorAndStillRollsBackInventory()
     {
         EnemyCollectionInventory inventory = new();
         EnemyCollectionDefinition definition = CardIntentTestCollectionCatalog.Catalog.GetRequired(
@@ -140,15 +220,20 @@ public sealed class PreparationInventoryDeltaTests
         object?[] arguments =
         [
             target,
-            (Action)(() => throw new InvalidOperationException("expected owner failure")),
+            (Action)(() => throw new InvalidOperationException("original commit failure")),
+            (Action)(() => throw new ApplicationException("owner rollback failure")),
             true,
             string.Empty
         ];
 
-        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() =>
+        TargetInvocationException wrapper = Assert.Throws<TargetInvocationException>(() =>
             transaction.Invoke(inventory, arguments));
+        AggregateException aggregate = Assert.IsType<AggregateException>(wrapper.InnerException);
 
-        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Collection(
+            aggregate.InnerExceptions,
+            original => Assert.Equal("original commit failure", original.Message),
+            rollback => Assert.Equal("owner rollback failure", rollback.Message));
         Assert.Equal(before.Available, inventory.Available);
         Assert.Equal(before.Consumed, inventory.Consumed);
         Assert.Equal(before.NextSequence, inventory.NextSequence);

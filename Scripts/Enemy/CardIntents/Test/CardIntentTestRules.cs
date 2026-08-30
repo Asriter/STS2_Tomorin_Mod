@@ -5,7 +5,7 @@ namespace STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 /// <summary>
 /// 集中保存测试敌人行动指标配方、双软锁与候选次数上限。
 /// </summary>
-public sealed class CardIntentTestRules
+public sealed class CardIntentTestRules : EnemyCardPlanningRules
 {
     /// <summary>
     /// 创建一组不可变测试敌人规划规则。
@@ -23,45 +23,36 @@ public sealed class CardIntentTestRules
         IEnumerable<EnemyActionRecipe> recipes,
         int stepLimit = 256,
         int initialStarStoneCount = 5)
+        : this(new TestRuleInput(
+            attackLock,
+            totalScoreLock,
+            maxCandidateAttempts,
+            CopyRecipes(recipes),
+            stepLimit,
+            initialStarStoneCount))
     {
-        if (attackLock < decimal.Zero)
+    }
+
+    private CardIntentTestRules(TestRuleInput input)
+        : base(
+            CreateLimits(input.AttackLock, input.TotalScoreLock),
+            CreateLimits(input.AttackLock, input.TotalScoreLock),
+            input.MaxCandidateAttempts,
+            input.StepLimit,
+            input.Recipes.Select(recipe => new EnemyWeightedActionRecipe(recipe, 1)))
+    {
+        if (input.InitialStarStoneCount < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(attackLock), "攻击软锁不能为负数。");
+            throw new ArgumentOutOfRangeException(
+                nameof(input.InitialStarStoneCount),
+                "初始星石数量不能为负数。 ");
         }
 
-        if (totalScoreLock < decimal.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(totalScoreLock), "总评分软锁不能为负数。");
-        }
-
-        if (maxCandidateAttempts < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxCandidateAttempts), "候选评估上限必须大于零。");
-        }
-
-        if (stepLimit < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(stepLimit), "有限步骤上限必须大于零。 ");
-        }
-
-        if (initialStarStoneCount < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(initialStarStoneCount), "初始星石数量不能为负数。 ");
-        }
-
-        ArgumentNullException.ThrowIfNull(recipes);
-        Dictionary<EnemyActionMetric, EnemyActionRecipe> indexed = recipes.ToDictionary(recipe => recipe.Metric);
-        if (indexed.Count == 0)
-        {
-            throw new ArgumentException("规划规则必须至少包含一种行动指标。", nameof(recipes));
-        }
-
-        AttackLock = attackLock;
-        TotalScoreLock = totalScoreLock;
-        MaxCandidateAttempts = maxCandidateAttempts;
-        StepLimit = stepLimit;
-        InitialStarStoneCount = initialStarStoneCount;
-        Recipes = new ReadOnlyDictionary<EnemyActionMetric, EnemyActionRecipe>(indexed);
+        AttackLock = input.AttackLock;
+        TotalScoreLock = input.TotalScoreLock;
+        InitialStarStoneCount = input.InitialStarStoneCount;
+        Recipes = new ReadOnlyDictionary<EnemyActionMetric, EnemyActionRecipe>(
+            input.Recipes.ToDictionary(recipe => recipe.Metric));
     }
 
     /// <summary>获取设计确认的测试敌人默认规则。</summary>
@@ -88,12 +79,6 @@ public sealed class CardIntentTestRules
     /// <summary>获取总评分软锁。</summary>
     public decimal TotalScoreLock { get; }
 
-    /// <summary>获取候选评估上限。</summary>
-    public int MaxCandidateAttempts { get; }
-
-    /// <summary>获取准备模拟与实际执行共享的有限步骤上限。</summary>
-    public int StepLimit { get; }
-
     /// <summary>获取新战斗初始化时追加的星石数量。</summary>
     public int InitialStarStoneCount { get; }
 
@@ -114,4 +99,33 @@ public sealed class CardIntentTestRules
             Default.MaxCandidateAttempts,
             [recipe]);
     }
+
+    private static EnemySoftLockLimits CreateLimits(decimal attackLock, decimal totalScoreLock)
+    {
+        if (attackLock < decimal.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(attackLock), "攻击软锁不能为负数。");
+        }
+
+        if (totalScoreLock < decimal.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalScoreLock), "总评分软锁不能为负数。");
+        }
+
+        return new EnemySoftLockLimits(attackLock, totalScoreLock);
+    }
+
+    private static EnemyActionRecipe[] CopyRecipes(IEnumerable<EnemyActionRecipe> recipes)
+    {
+        ArgumentNullException.ThrowIfNull(recipes);
+        return recipes.ToArray();
+    }
+
+    private sealed record TestRuleInput(
+        decimal AttackLock,
+        decimal TotalScoreLock,
+        int MaxCandidateAttempts,
+        EnemyActionRecipe[] Recipes,
+        int StepLimit,
+        int InitialStarStoneCount);
 }

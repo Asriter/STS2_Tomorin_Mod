@@ -1,0 +1,72 @@
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证通用规划规则和来源牌静态评分契约。
+/// </summary>
+public sealed class PlanningRulesTests
+{
+    /// <summary>
+    /// 防止心之壁参数自赋值，使静态心之壁收益静默变为零。
+    /// </summary>
+    [Fact]
+    public void HeartWallIsStoredAndContributesItsConfiguredWeight()
+    {
+        EnemyCardScoreProfile profile = new(atField: 5m);
+
+        EnemyCardScore score = new EnemyCardScoreCalculator().CalculateProfiles([profile]);
+
+        Assert.Equal(15m, score.Total);
+        Assert.NotEqual(decimal.Zero, score.Total);
+    }
+
+    /// <summary>
+    /// 防止静态公式遗漏任一种来源牌贡献，或错误改变攻击分量。
+    /// </summary>
+    [Fact]
+    public void StaticScoreUsesEveryConfiguredContribution()
+    {
+        EnemyCardScoreProfile profile = new(
+            attack: 10m,
+            block: 20m,
+            buffPowerStacks: 5m,
+            strength: 2m,
+            dexterity: 3m,
+            atField: 4m,
+            vulnerable: 6m,
+            otherDebuff: 7m,
+            normalCollection: 8m,
+            starStone: 9m,
+            abilityHint: 10m,
+            deferredTokenHint: 11m);
+
+        EnemyCardScore score = new EnemyCardScoreCalculator().CalculateProfiles([profile]);
+
+        Assert.Equal(10m, score.Attack);
+        Assert.Equal(239.5m, score.Total);
+    }
+
+    /// <summary>
+    /// 防止无效权重或重复行动指标进入通用规划规则。
+    /// </summary>
+    [Fact]
+    public void WeightedRecipesRejectDuplicateMetricsAndNonPositiveWeights()
+    {
+        EnemyActionRecipe recipe = new(EnemyActionMetric.Gain, [EnemyCardTag.Defense]);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new EnemyWeightedActionRecipe(recipe, weight: 0));
+        Assert.Throws<ArgumentException>(() => new EnemyCardPlanningRules(
+            new EnemySoftLockLimits(1m, 1m),
+            new EnemySoftLockLimits(1m, 1m),
+            maxCandidateAttempts: 3,
+            stepLimit: 256,
+            recipes:
+            [
+                new EnemyWeightedActionRecipe(recipe, 1),
+                new EnemyWeightedActionRecipe(recipe, 1)
+            ]));
+    }
+}

@@ -201,10 +201,16 @@ public sealed class EnemyCardDefinition
             ",",
             ScoreProfile.Attack.ToString(CultureInfo.InvariantCulture),
             ScoreProfile.Block.ToString(CultureInfo.InvariantCulture),
-            ScoreProfile.BuffPowerStacks.ToString(CultureInfo.InvariantCulture),
+            ScoreProfile.OtherPersistentPower.ToString(CultureInfo.InvariantCulture),
             ScoreProfile.Strength.ToString(CultureInfo.InvariantCulture),
             ScoreProfile.Dexterity.ToString(CultureInfo.InvariantCulture),
-            ScoreProfile.atField.ToString(CultureInfo.InvariantCulture));
+            ScoreProfile.AtField.ToString(CultureInfo.InvariantCulture),
+            ScoreProfile.Vulnerable.ToString(CultureInfo.InvariantCulture),
+            ScoreProfile.OtherDebuff.ToString(CultureInfo.InvariantCulture),
+            ScoreProfile.NormalCollection.ToString(CultureInfo.InvariantCulture),
+            ScoreProfile.StarStone.ToString(CultureInfo.InvariantCulture),
+            ScoreProfile.AbilityHint.ToString(CultureInfo.InvariantCulture),
+            ScoreProfile.DeferredTokenHint.ToString(CultureInfo.InvariantCulture));
         string materials = string.Join("\u001f", MaterialRequestProgramIds);
         string effects = string.Join("\u001f", EffectProgramIds);
         return string.Join(

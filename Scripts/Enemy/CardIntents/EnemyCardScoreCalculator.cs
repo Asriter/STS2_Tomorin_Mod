@@ -68,15 +68,35 @@ public sealed class EnemyCardScoreCalculator
     {
         ArgumentNullException.ThrowIfNull(cards);
         ArgumentNullException.ThrowIfNull(context);
+        return CalculateProfiles(cards.Select(context.Project));
+    }
+
+    /// <summary>
+    /// 计算一组来源牌静态档案的攻击分量和完整静态总分。
+    /// </summary>
+    /// <param name="profiles">每张来源牌本体一次执行的不可变评分档案。</param>
+    /// <returns>可用于第一层软锁判断的不可变评分。</returns>
+    public EnemyCardScore CalculateProfiles(IEnumerable<EnemyCardScoreProfile> profiles)
+    {
+        ArgumentNullException.ThrowIfNull(profiles);
         decimal attack = decimal.Zero;
         decimal total = decimal.Zero;
-        foreach (BaseEnemyCard card in cards)
+        foreach (EnemyCardScoreProfile profile in profiles)
         {
-            EnemyCardScoreProfile profile = context.Project(card);
+            ArgumentNullException.ThrowIfNull(profile);
             attack += profile.Attack;
-            total += profile.Attack + profile.Block +
-                     profile.BuffPowerStacks * 5m +
-                     (profile.Strength + profile.Dexterity + profile.atField) * 2m;
+            total += profile.Attack +
+                     profile.Block * EnemyCardScoreWeights.Block +
+                     profile.Strength * EnemyCardScoreWeights.Strength +
+                     profile.Dexterity * EnemyCardScoreWeights.Dexterity +
+                     profile.AtField * EnemyCardScoreWeights.HeartWall +
+                     profile.OtherPersistentPower * EnemyCardScoreWeights.OtherPersistentPower +
+                     profile.Vulnerable * EnemyCardScoreWeights.Vulnerable +
+                     profile.OtherDebuff * EnemyCardScoreWeights.OtherDebuff +
+                     profile.NormalCollection * EnemyCardScoreWeights.NormalCollection +
+                     profile.StarStone * EnemyCardScoreWeights.StarStone +
+                     profile.AbilityHint +
+                     profile.DeferredTokenHint * EnemyCardScoreWeights.DeferredTokenHint;
         }
 
         return new EnemyCardScore(attack, total);

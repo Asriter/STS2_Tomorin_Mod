@@ -22,7 +22,7 @@ public sealed class CardIntentMoveState : MoveState
     private readonly Func<Type, decimal, Task>? _targetPowerExecutor;
     private readonly Func<IReadOnlyList<string>, Task>? _collectionPowerExecutor;
     private readonly ICombatState? _combatStateOverride;
-    private readonly CardIntentTestRules _rules;
+    private readonly EnemyCardPlanningRules _rules;
     private readonly EnemyActionMetricPlanner _planner;
     private readonly EnemyCardExecutionEngine _executionEngine;
     private readonly EnemyActionProjectionService _projectionService = new();
@@ -46,7 +46,7 @@ public sealed class CardIntentMoveState : MoveState
         Func<Type, decimal, Task>? targetPowerExecutor,
         Func<IReadOnlyList<string>, Task>? collectionPowerExecutor,
         ICombatState? combatStateOverride,
-        CardIntentTestRules rules,
+        EnemyCardPlanningRules rules,
         EnemyCardExecutionEngine? executionEngine)
         : base(stateId, runtime.ExecuteCardsAsync, runtime.Intent)
     {
@@ -118,7 +118,7 @@ public sealed class CardIntentMoveState : MoveState
         Func<Type, decimal, Task>? targetPowerExecutor = null,
         Func<IReadOnlyList<string>, Task>? collectionPowerExecutor = null,
         ICombatState? combatStateOverride = null,
-        CardIntentTestRules? rules = null,
+        EnemyCardPlanningRules? rules = null,
         EnemyCardExecutionEngine? executionEngine = null)
     {
         CardIntentMoveRuntime runtime = new();
@@ -411,11 +411,11 @@ public sealed class CardIntentMoveState : MoveState
     private EnemyCardCombatState CreateFreshCombatState()
     {
         EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(DeckId);
-        if (DeckId == CardIntentTestDeck.DeckId)
+        if (DeckId == CardIntentTestDeck.DeckId && _rules is CardIntentTestRules testRules)
         {
             EnemyCollectionDefinition starStone = CardIntentTestCollectionCatalog.Catalog.GetRequired(
                 CardIntentTestCollectionCatalog.StarStoneId);
-            for (int index = 0; index < _rules.InitialStarStoneCount; index++)
+            for (int index = 0; index < testRules.InitialStarStoneCount; index++)
             {
                 state.CollectionInventory.Append(starStone);
             }

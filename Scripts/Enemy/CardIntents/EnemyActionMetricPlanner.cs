@@ -1,5 +1,3 @@
-using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
-
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
 /// <summary>
@@ -32,7 +30,7 @@ public sealed class EnemyPlanningContext
 /// </summary>
 public sealed class EnemyActionMetricPlanner
 {
-    private readonly CardIntentTestRules _rules;
+    private readonly EnemyCardPlanningRules _rules;
     private readonly EnemyCardScoreCalculator _scoreCalculator;
     private readonly EnemyPreparedResolutionPlanner _resolutionPlanner = new();
 
@@ -42,7 +40,7 @@ public sealed class EnemyActionMetricPlanner
     /// <param name="rules">不可变指标与软锁规则。</param>
     /// <param name="scoreCalculator">一次本体直接贡献评分器。</param>
     public EnemyActionMetricPlanner(
-        CardIntentTestRules rules,
+        EnemyCardPlanningRules rules,
         EnemyCardScoreCalculator scoreCalculator)
     {
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
@@ -77,7 +75,8 @@ public sealed class EnemyActionMetricPlanner
             EnemyActionRecipe recipe = SelectRecipe(state.LastMetric, context.RandomSource);
             IReadOnlyList<BaseEnemyCard> selected = FillRecipe(candidate, recipe, context.RandomSource);
             EnemyCardScore score = _scoreCalculator.Calculate(selected, context.ScoreContext);
-            bool overLock = score.Attack > _rules.AttackLock || score.Total > _rules.TotalScoreLock;
+            bool overLock = score.Attack > _rules.StaticLocks.Attack ||
+                            score.Total > _rules.StaticLocks.Total;
             bool isFinalAttempt = attempt == _rules.MaxCandidateAttempts;
             if (overLock && !isFinalAttempt)
             {
@@ -95,8 +94,8 @@ public sealed class EnemyActionMetricPlanner
                 .ToArray();
             EnemySoftLockDiagnostic diagnostic = new(
                 score,
-                _rules.AttackLock,
-                _rules.TotalScoreLock,
+                _rules.StaticLocks.Attack,
+                _rules.StaticLocks.Total,
                 attempt,
                 attempt - 1,
                 overLock && isFinalAttempt);
@@ -123,16 +122,28 @@ public sealed class EnemyActionMetricPlanner
         EnemyActionMetric? lastMetric,
         IEnemyCardRandomSource randomSource)
     {
-        EnemyActionRecipe[] available = _rules.Recipes.Values
-            .Where(recipe => lastMetric is null || recipe.Metric != lastMetric.Value)
-            .OrderBy(recipe => recipe.Metric)
+        EnemyWeightedActionRecipe[] available = _rules.WeightedRecipes
+            .Where(weightedRecipe =>
+                lastMetric is null || weightedRecipe.Recipe.Metric != lastMetric.Value)
+            .OrderBy(weightedRecipe => weightedRecipe.Recipe.Metric)
             .ToArray();
         if (available.Length == 0)
         {
             throw new InvalidOperationException("后续回合排除 LastMetric 后没有可选行动指标。");
         }
 
-        return available[randomSource.NextIndex(available.Length)];
+        int selectedWeight = randomSource.NextIndex(checked(available.Sum(recipe => recipe.Weight)));
+        foreach (EnemyWeightedActionRecipe weightedRecipe in available)
+        {
+            if (selectedWeight < weightedRecipe.Weight)
+            {
+                return weightedRecipe.Recipe;
+            }
+
+            selectedWeight -= weightedRecipe.Weight;
+        }
+
+        throw new InvalidOperationException("加权行动指标选择未能解析有效配方。");
     }
 
     /// <summary>

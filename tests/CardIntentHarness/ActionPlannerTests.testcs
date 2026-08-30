@@ -195,7 +195,8 @@ public sealed class ActionPlannerTests
         BaseEnemyCard scoreOnly = CreateCard(
             "TOTAL_LOCK_ONLY",
             EnemyCardTag.Defense,
-            new EnemyCardScoreProfile(block: rules.TotalScoreLock + decimal.One));
+            new EnemyCardScoreProfile(
+                block: (rules.TotalScoreLock + decimal.One) / EnemyCardScoreWeights.Block));
         EnemyCardCombatState state = CreateState("TOTAL_LOCK_ONLY", [scoreOnly]);
         EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
 

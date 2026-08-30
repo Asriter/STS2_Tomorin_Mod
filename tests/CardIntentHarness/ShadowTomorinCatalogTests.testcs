@@ -1,4 +1,5 @@
 using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Powers;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -181,6 +182,209 @@ public sealed class ShadowTomorinCatalogTests
         BaseEnemyCard generated = Assert.Single(transaction.DiscardPile, card => card.CardId == expectedTokenId);
         Assert.Same(ShadowTomorinCardCatalog.Get("HITOSHIZUKU_TOKEN").CardModel, generated.CardModel);
         Assert.Equal(EnemyCardPhase.Phase2, generated.SourcePhase);
+    }
+
+    [Fact]
+    public void DeterministicSeedMatrixRespectsPhaseLocksMetricsAndComposeConstraints()
+    {
+        ShadowTomorinDeck.EnsureRegistered();
+        foreach (EnemyCardPhase phase in new[]
+                 {
+                     EnemyCardPhase.Phase1,
+                     EnemyCardPhase.Phase2,
+                     EnemyCardPhase.Phase3
+                 })
+        {
+            EnemyCardPlanningRules rules = ShadowTomorinRules.ForPhase(phase);
+            HashSet<EnemyActionMetric> observedMetrics = [];
+            foreach (int seed in Enumerable.Range(0, 256))
+            {
+                SeededIndexSelector selector = new(seed, phase);
+                EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+                EnemyCardCombatState firstState = CreatePhaseState(phase, selector);
+                PreparedEnemyCardAction first = PrepareWithSeedContext(
+                    firstState,
+                    planner,
+                    selector,
+                    phase,
+                    seed,
+                    actionOrdinal: 1);
+                ValidateAction(first, rules, phase);
+                observedMetrics.Add(first.Metric);
+
+                EnemyCardCombatState secondState = CreatePhaseState(phase, selector);
+                typeof(EnemyCardCombatState).GetProperty(nameof(EnemyCardCombatState.LastMetric))!
+                    .SetValue(secondState, first.Metric);
+                PreparedEnemyCardAction second = PrepareWithSeedContext(
+                    secondState,
+                    planner,
+                    selector,
+                    phase,
+                    seed,
+                    actionOrdinal: 2);
+                ValidateAction(second, rules, phase);
+                observedMetrics.Add(second.Metric);
+                Assert.NotEqual(first.Metric, second.Metric);
+            }
+
+            EnemyActionMetric[] eligibleMetrics = rules.WeightedRecipes
+                .Select(weighted => weighted.Recipe.Metric)
+                .Distinct()
+                .ToArray();
+            Assert.All(eligibleMetrics, metric => Assert.Contains(metric, observedMetrics));
+        }
+    }
+
+    private static EnemyCardCombatState CreatePhaseState(
+        EnemyCardPhase phase,
+        SeededIndexSelector selector)
+    {
+        EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(ShadowTomorinDeck.DeckId);
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(ShadowTomorinDeck.DeckId);
+        for (int phaseValue = (int)EnemyCardPhase.Phase2;
+             phaseValue <= (int)phase;
+             phaseValue++)
+        {
+            EnemyCardPhase nextPhase = (EnemyCardPhase)phaseValue;
+            state.RequestPhase(nextPhase);
+            state.ApplyPhaseTransition(state.BuildPhaseTransitionCandidate(
+                directory.GetPhase(nextPhase),
+                new EnemyCardRandomSource(selector.NextIndex)));
+        }
+
+        return state;
+    }
+
+    private static PreparedEnemyCardAction Prepare(
+        EnemyCardCombatState state,
+        EnemyActionMetricPlanner planner,
+        SeededIndexSelector selector,
+        EnemyCardPhase phase) =>
+        planner.Prepare(
+            state,
+            new EnemyPlanningContext(
+                new EnemyCardRandomSource(selector.NextIndex),
+                createProjectionInput: (authoritativeState, action, initialState, stepLimit) =>
+                    CreateSeedMatrixProjectionInput(
+                        authoritativeState,
+                        action,
+                        initialState,
+                        stepLimit,
+                        phase)));
+
+    private static PreparedEnemyCardAction PrepareWithSeedContext(
+        EnemyCardCombatState state,
+        EnemyActionMetricPlanner planner,
+        SeededIndexSelector selector,
+        EnemyCardPhase phase,
+        int seed,
+        int actionOrdinal)
+    {
+        try
+        {
+            return Prepare(state, planner, selector, phase);
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"Phase={phase}, Seed={seed}, Action={actionOrdinal}: {exception.Message}",
+                exception);
+        }
+    }
+
+    private static EnemyActionProjectionInput CreateSeedMatrixProjectionInput(
+        EnemyCardCombatState state,
+        PreparedEnemyCardAction action,
+        EnemyProjectionInitialState initialState,
+        int stepLimit,
+        EnemyCardPhase phase)
+    {
+        Dictionary<string, decimal> enemyPowers = new(initialState.EnemyPowers, StringComparer.Ordinal);
+        if (phase == EnemyCardPhase.Phase3)
+        {
+            // Phase 3 is entered after the resource-building phase; keep the fresh-state
+            // matrix legal for WantToBeingHuman while retaining the real migrated card zones.
+            string heartWallId = typeof(AtFieldPower).FullName ?? typeof(AtFieldPower).Name;
+            enemyPowers[heartWallId] = 4m;
+        }
+
+        EnemyProjectionInitialState accruedState = new(
+            initialState.ActivePhase,
+            initialState.EnemyBlock,
+            enemyPowers,
+            initialState.TargetPowers,
+            initialState.Cards,
+            initialState.AvailableCollections,
+            initialState.ConsumedCollections);
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(state.DeckId);
+        int initialTemplateCount = directory.GetPhase(action.Phase).InitialSourceInstanceCount;
+        return new EnemyActionProjectionInput(
+            [new EnemySimulationTarget("SEED_MATRIX_TARGET", decimal.One, decimal.One)],
+            stepLimit,
+            initialState: accruedState,
+            contentDirectory: directory,
+            riskContext: new EnemyActionRiskContext(action.Phase, initialTemplateCount, directory));
+    }
+
+    private static void ValidateAction(
+        PreparedEnemyCardAction action,
+        EnemyCardPlanningRules rules,
+        EnemyCardPhase phase)
+    {
+        EnemySoftLockDiagnostic diagnostic = action.SoftLockDiagnostic;
+        Assert.True(diagnostic.ProjectionIsComplete);
+        if (diagnostic.CommitMode == EnemyCandidateCommitMode.WithinLocks)
+        {
+            EnemySoftLockLimits limits = ShadowTomorinBalance.FullLocks(phase);
+            Assert.True(diagnostic.FullScore.AttackRisk <= limits.Attack);
+            Assert.True(diagnostic.FullScore.TotalRisk <= limits.Total);
+        }
+        else
+        {
+            Assert.Equal(EnemyCandidateCommitMode.ForcedOverLock, diagnostic.CommitMode);
+        }
+
+        EnemyCandidateConstraints constraints = rules.WeightedRecipes
+            .Single(weighted => weighted.Recipe.Metric == action.Metric)
+            .Recipe
+            .Constraints;
+        BaseEnemyCard[] composeSources = action.Sources
+            .Select(source => source.SourceCard)
+            .Where(card => card.Definition.Tags.HasFlag(EnemyCardTag.Compose))
+            .ToArray();
+        Assert.True(composeSources.Length <= constraints.MaxComposeSources);
+        int immediateAttackComposeSources = composeSources.Count(card =>
+            card.Definition.TokenTiming == EnemyCardTokenTiming.Immediate &&
+            card.Definition.ComposeResultCardId is EnemyCardId resultId &&
+            ShadowTomorinCardCatalog.AllDefinitions[resultId].Tags.HasFlag(EnemyCardTag.Attack));
+        Assert.True(immediateAttackComposeSources <= constraints.MaxImmediateAttackComposeSources);
+        Assert.True(immediateAttackComposeSources <= constraints.MaxComposeSourcesProducingImmediateAttack);
+        if (composeSources.Length > 1)
+        {
+            Assert.Contains(composeSources, card =>
+                card.Definition.TokenTiming == EnemyCardTokenTiming.RetainedNextTurn);
+        }
+    }
+
+    private sealed class SeededIndexSelector
+    {
+        private ulong _state;
+
+        public SeededIndexSelector(int seed, EnemyCardPhase phase)
+        {
+            _state = unchecked((ulong)(seed + 1) * 0x9E3779B97F4A7C15UL) ^ (ulong)phase;
+        }
+
+        public int NextIndex(int count)
+        {
+            if (count <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(count));
+            }
+
+            _state = unchecked(_state * 6364136223846793005UL + 1442695040888963407UL);
+            return (int)((_state >> 32) % (uint)count);
+        }
     }
 
     private static void AssertPhaseCounts(

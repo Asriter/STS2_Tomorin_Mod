@@ -210,10 +210,10 @@ public sealed class ActionPlannerTests
     }
 
     /// <summary>
-    /// 验证真实规划器以权重桶选择首尾配方，并在排除上次指标后重算随机上界。
+    /// 验证真实规划器先按 Metric 排序，再以半开权重桶选择，并在排除上次指标后重算随机上界。
     /// </summary>
     [Fact]
-    public void WeightedRulesUseConfiguredBucketsAndRenormalizeAfterLastMetric()
+    public void WeightedRulesSortRecipesUseHalfOpenBucketsAndRenormalizeAfterLastMetric()
     {
         EnemyActionRecipe gain = new(EnemyActionMetric.Gain, [null]);
         EnemyActionRecipe attack = new(EnemyActionMetric.Attack, [null]);
@@ -224,22 +224,34 @@ public sealed class ActionPlannerTests
             stepLimit: 256,
             recipes:
             [
-                new EnemyWeightedActionRecipe(gain, 1),
-                new EnemyWeightedActionRecipe(attack, 3)
+                new EnemyWeightedActionRecipe(attack, 3),
+                new EnemyWeightedActionRecipe(gain, 1)
             ]);
         EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
 
-        EnemyCardCombatState firstBucketState = CreateState(
-            "WEIGHT_FIRST_BUCKET",
-            [CreateCard("WEIGHT_FIRST_BUCKET", EnemyCardTag.Attack)]);
-        RecordingRandomSource firstBucketRandom = new([0, 0]);
+        EnemyCardCombatState zeroBucketState = CreateState(
+            "WEIGHT_ZERO_BUCKET",
+            [CreateCard("WEIGHT_ZERO_BUCKET", EnemyCardTag.Attack)]);
+        RecordingRandomSource zeroBucketRandom = new([0, 0]);
 
-        PreparedEnemyCardAction firstBucket = planner.Prepare(
-            firstBucketState,
-            new EnemyPlanningContext(firstBucketRandom));
+        PreparedEnemyCardAction zeroBucket = planner.Prepare(
+            zeroBucketState,
+            new EnemyPlanningContext(zeroBucketRandom));
 
-        Assert.Equal(EnemyActionMetric.Gain, firstBucket.Metric);
-        Assert.Equal(4, firstBucketRandom.UpperBounds[0]);
+        Assert.Equal(EnemyActionMetric.Gain, zeroBucket.Metric);
+        Assert.Equal(4, zeroBucketRandom.UpperBounds[0]);
+
+        EnemyCardCombatState oneBucketState = CreateState(
+            "WEIGHT_ONE_BUCKET",
+            [CreateCard("WEIGHT_ONE_BUCKET", EnemyCardTag.Attack)]);
+        RecordingRandomSource oneBucketRandom = new([1, 0]);
+
+        PreparedEnemyCardAction oneBucket = planner.Prepare(
+            oneBucketState,
+            new EnemyPlanningContext(oneBucketRandom));
+
+        Assert.Equal(EnemyActionMetric.Attack, oneBucket.Metric);
+        Assert.Equal(4, oneBucketRandom.UpperBounds[0]);
 
         EnemyCardCombatState lastBucketState = CreateState(
             "WEIGHT_LAST_BUCKET",

@@ -7,6 +7,8 @@ namespace STS2_Tomorin_Mod.Powers;
 /// </summary>
 public sealed class CardIntentSorrowfulRainPower : BasePowerModel
 {
+    public const decimal HeartWallPerStack = 3m;
+
     /// <inheritdoc />
     public override PowerType Type => PowerType.Buff;
 

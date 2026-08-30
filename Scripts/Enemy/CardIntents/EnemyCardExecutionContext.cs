@@ -22,6 +22,10 @@ public sealed class EnemyCardExecutionContext
     private readonly Func<Type, decimal, Task>? _enemyPowerExecutor;
     private readonly Func<Type, decimal, Task>? _targetPowerExecutor;
     private readonly Func<IReadOnlyList<string>, Task>? _collectionPowerExecutor;
+    private readonly Dictionary<Type, decimal> _knownEnemyPowers;
+    private readonly Dictionary<Type, decimal> _transientAbilities = [];
+    private IEnemyAbilityHookDispatcher? _abilityHooks;
+    private bool _dispatchingBlockGain;
 
     /// <summary>
     /// 创建敌人卡牌执行上下文。
@@ -52,7 +56,8 @@ public sealed class EnemyCardExecutionContext
         Func<decimal, int, Task>? attackAllExecutor = null,
         Func<Type, decimal, Task>? enemyPowerExecutor = null,
         Func<Type, decimal, Task>? targetPowerExecutor = null,
-        Func<IReadOnlyList<string>, Task>? collectionPowerExecutor = null)
+        Func<IReadOnlyList<string>, Task>? collectionPowerExecutor = null,
+        IReadOnlyDictionary<Type, decimal>? initialEnemyPowers = null)
     {
         Owner = owner ?? throw new ArgumentNullException(nameof(owner));
         State = state ?? throw new ArgumentNullException(nameof(state));
@@ -67,6 +72,12 @@ public sealed class EnemyCardExecutionContext
         _enemyPowerExecutor = enemyPowerExecutor;
         _targetPowerExecutor = targetPowerExecutor;
         _collectionPowerExecutor = collectionPowerExecutor;
+        _knownEnemyPowers = [];
+        foreach ((Type type, decimal amount) in initialEnemyPowers ??
+                 new Dictionary<Type, decimal>())
+        {
+            _knownEnemyPowers[type] = amount;
+        }
     }
 
     /// <summary>获取正在执行牌的怪物模型。</summary>
@@ -91,6 +102,52 @@ public sealed class EnemyCardExecutionContext
     /// 获取战斗流程是否要求立即停止后续卡牌命令。
     /// </summary>
     public bool ShouldStop => CancellationToken.IsCancellationRequested || _shouldStopExecution();
+
+    /// <summary>为本次完整行动接入能力钩子；重复接入同一实例是幂等的。</summary>
+    public void UseAbilityHooks(IEnemyAbilityHookDispatcher abilityHooks)
+    {
+        ArgumentNullException.ThrowIfNull(abilityHooks);
+        if (_abilityHooks is not null && !ReferenceEquals(_abilityHooks, abilityHooks))
+        {
+            throw new InvalidOperationException("同一执行上下文不能切换能力钩子分发器。");
+        }
+
+        _abilityHooks = abilityHooks;
+    }
+
+    /// <summary>读取本次行动已知的敌人 Power 层数。</summary>
+    public decimal GetEnemyPowerAmount<TPower>() where TPower : PowerModel
+    {
+        if (_knownEnemyPowers.TryGetValue(typeof(TPower), out decimal known))
+        {
+            return known;
+        }
+
+        try
+        {
+            return Owner.Creature.Powers.OfType<TPower>().Sum(power => (decimal)power.Amount);
+        }
+        catch (InvalidOperationException)
+        {
+            return decimal.Zero;
+        }
+    }
+
+    /// <summary>激活只在当前完整行动内存在的能力层数，不写入战斗 Power 列表。</summary>
+    public void AddTransientAbility<TPower>(decimal amount) where TPower : PowerModel
+    {
+        if (amount <= decimal.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount));
+        }
+
+        _transientAbilities[typeof(TPower)] = checked(
+            _transientAbilities.GetValueOrDefault(typeof(TPower)) + amount);
+    }
+
+    /// <summary>读取当前完整行动内的临时能力层数。</summary>
+    public decimal GetTransientAbilityAmount<TPower>() where TPower : PowerModel =>
+        _transientAbilities.GetValueOrDefault(typeof(TPower));
 
     /// <summary>在真实执行单元进入时设置当前实际卡牌实例。</summary>
     internal void PushExecutingCard(EnemyCardInstanceKey key)
@@ -193,10 +250,24 @@ public sealed class EnemyCardExecutionContext
         if (_defendExecutor is not null)
         {
             await _defendExecutor(amount);
-            return;
+        }
+        else
+        {
+            await CreatureCmd.GainBlock(Owner.Creature, amount, ValueProp.Move, null);
         }
 
-        await CreatureCmd.GainBlock(Owner.Creature, amount, ValueProp.Move, null);
+        if (amount > decimal.Zero && _abilityHooks is not null && !_dispatchingBlockGain)
+        {
+            _dispatchingBlockGain = true;
+            try
+            {
+                await _abilityHooks.AfterBlockGainAsync(this, amount);
+            }
+            finally
+            {
+                _dispatchingBlockGain = false;
+            }
+        }
     }
 
     /// <summary>
@@ -209,13 +280,100 @@ public sealed class EnemyCardExecutionContext
         where TPower : PowerModel, new()
     {
         CancellationToken.ThrowIfCancellationRequested();
+        decimal previous = GetEnemyPowerAmount<TPower>();
         if (_enemyPowerExecutor is not null)
         {
             await _enemyPowerExecutor(typeof(TPower), amount);
+        }
+        else
+        {
+            await PowerCmd.Apply<TPower>(ChoiceContext, Owner.Creature, amount, Owner.Creature, null);
+        }
+
+        _knownEnemyPowers[typeof(TPower)] = Math.Max(
+            decimal.Zero,
+            previous + amount);
+    }
+
+    /// <summary>修改一个已知敌人 Power；负增量使用原版 ModifyAmount，测试 seam 接收同一增量。</summary>
+    public async Task ModifyEnemyPowerAsync<TPower>(decimal delta)
+        where TPower : PowerModel, new()
+    {
+        CancellationToken.ThrowIfCancellationRequested();
+        if (delta == decimal.Zero)
+        {
             return;
         }
 
-        await PowerCmd.Apply<TPower>(ChoiceContext, Owner.Creature, amount, Owner.Creature, null);
+        decimal previous = GetEnemyPowerAmount<TPower>();
+        if (_enemyPowerExecutor is not null)
+        {
+            await _enemyPowerExecutor(typeof(TPower), delta);
+        }
+        else if (Owner.Creature.Powers.OfType<TPower>().FirstOrDefault() is TPower existing)
+        {
+            await PowerCmd.ModifyAmount(ChoiceContext, existing, delta, Owner.Creature, null);
+        }
+        else if (delta > decimal.Zero)
+        {
+            await PowerCmd.Apply<TPower>(ChoiceContext, Owner.Creature, delta, Owner.Creature, null);
+        }
+
+        _knownEnemyPowers[typeof(TPower)] = Math.Max(
+            decimal.Zero,
+            previous + delta);
+    }
+
+    /// <summary>按 Available 权威顺序消费至多指定数量的收藏品，并同步可见队列。</summary>
+    public async Task<int> ConsumeAvailableCollectionsAsync(int maximumCount)
+    {
+        if (maximumCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        }
+
+        EnemyCollectionInventory inventory = State.CombatState.CollectionInventory;
+        EnemyCollectionInstance[] selected = inventory.Available.Take(maximumCount).ToArray();
+        foreach (EnemyCollectionInstance item in selected)
+        {
+            inventory.Consume(item);
+        }
+
+        if (selected.Length > 0)
+        {
+            await SynchronizeCollectionPowerAsync(
+                inventory.Available.Select(item => item.Definition.CollectionId).ToArray());
+        }
+
+        return selected.Length;
+    }
+
+    /// <summary>消费当前牌区首张非 Compose 来源牌；当前执行实例永远排除。</summary>
+    public bool TryConsumeFirstNonComposeSource()
+    {
+        EnemyCardInstanceKey executing = GetCurrentEffectiveCardState().ExecutingCardInstanceKey;
+        BaseEnemyCard? selected = State.CombatState.CurrentCards.FirstOrDefault(card =>
+            card.InstanceKey != executing &&
+            !card.Definition.Tags.HasFlag(EnemyCardTag.Compose) &&
+            card.Definition.MaterialRequests.All(request =>
+                request.PaymentKind != EnemyMaterialPaymentKind.Compose));
+        if (selected is null)
+        {
+            return false;
+        }
+
+        State.CombatState.MoveCard(selected.InstanceKey, EnemyCardZone.Exhaust);
+        return true;
+    }
+
+    public bool HasNonComposeSource()
+    {
+        EnemyCardInstanceKey executing = GetCurrentEffectiveCardState().ExecutingCardInstanceKey;
+        return State.CombatState.CurrentCards.Any(card =>
+            card.InstanceKey != executing &&
+            !card.Definition.Tags.HasFlag(EnemyCardTag.Compose) &&
+            card.Definition.MaterialRequests.All(request =>
+                request.PaymentKind != EnemyMaterialPaymentKind.Compose));
     }
 
     /// <summary>

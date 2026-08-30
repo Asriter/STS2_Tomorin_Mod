@@ -2,57 +2,171 @@ using STS2_Tomorin_Mod.Powers;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
-/// <summary>
-/// 定义每个成功执行单元和作词成功后的敌人能力钩子，允许领域测试替换为无副作用实现。
-/// </summary>
-public interface IEnemyAbilityHookDispatcher
+/// <summary>影灯敌人牌系统支持的稳定能力身份。</summary>
+public enum ShadowAbilityId
 {
-    /// <summary>在一次作词成功后执行能力钩子。</summary>
-    Task AfterComposeAsync(EnemyCardExecutionContext context);
-
-    /// <summary>在任意执行单元成功后执行能力钩子。</summary>
-    Task AfterSuccessfulUnitAsync(EnemyCardExecutionContext context);
+    SorrowfulRain,
+    Adayume,
+    HeartBeat,
+    DuckAndCover,
+    NameOfTear,
+    UnwantedSixth
 }
 
-/// <summary>
-/// 以固定顺序分发测试敌人的悲伤之雨与过堕幻能力钩子。
-/// </summary>
+/// <summary>定义真实执行与纯模拟必须成对实现的敌人能力钩子。</summary>
+public interface IEnemyAbilityHookDispatcher
+{
+    Task BeforePreparationAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+    void SimulateBeforePreparation(EnemyCardSimulationContext context) { }
+    Task AfterComposeAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+    void SimulateAfterCompose(EnemyCardSimulationContext context) { }
+    Task AfterSuccessfulUnitAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+    void SimulateAfterSuccessfulUnit(EnemyCardSimulationContext context) { }
+    Task AfterBlockGainAsync(EnemyCardExecutionContext context, decimal gainedBlock) => Task.CompletedTask;
+    void SimulateAfterBlockGain(EnemyCardSimulationContext context, decimal gainedBlock) { }
+    Task AfterNormalLifecycleExhaustAsync(EnemyCardExecutionContext context, BaseEnemyCard card) =>
+        Task.CompletedTask;
+    void SimulateAfterNormalLifecycleExhaust(EnemyCardSimulationContext context, EnemyCardInstanceKey cardKey) { }
+}
+
+/// <summary>以稳定顺序分发影灯六类能力，并保持真实与模拟增量一致。</summary>
 public sealed class EnemyAbilityHookDispatcher : IEnemyAbilityHookDispatcher
 {
-    /// <summary>
-    /// 在一次作词成功后根据悲伤之雨层数获得对应心之壁。
-    /// </summary>
-    /// <param name="context">真实敌人牌执行上下文。</param>
-    /// <returns>能力触发完成任务。</returns>
-    public async Task AfterComposeAsync(EnemyCardExecutionContext context)
+    public async Task BeforePreparationAsync(EnemyCardExecutionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        CardIntentSorrowfulRainPower? rain = context.Owner.Creature.Powers
-            .OfType<CardIntentSorrowfulRainPower>()
-            .FirstOrDefault();
-        if (rain is not null && rain.Amount > decimal.Zero)
-        {
-            await context.ApplyEnemyPowerAsync<AtFieldPower>(rain.Amount);
-        }
-    }
-
-    /// <summary>
-    /// 在普通、重放、即时或受控灵感执行单元成功后触发一次过堕幻。
-    /// </summary>
-    /// <param name="context">真实敌人牌执行上下文。</param>
-    /// <returns>能力触发完成任务。</returns>
-    public async Task AfterSuccessfulUnitAsync(EnemyCardExecutionContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        CardIntentAdayumePower? adayume = context.Owner.Creature.Powers
-            .OfType<CardIntentAdayumePower>()
-            .FirstOrDefault();
-        if (adayume is null || adayume.Amount <= decimal.Zero)
+        if (context.GetEnemyPowerAmount<DuckAndCoverPower>() <= decimal.Zero)
         {
             return;
         }
 
-        await context.ExecuteDefendAsync(adayume.Amount);
-        await context.ApplyEnemyPowerAsync<AtFieldPower>(adayume.Amount);
+        decimal heartWall = context.GetEnemyPowerAmount<AtFieldPower>();
+        if (heartWall > decimal.Zero)
+        {
+            await context.ExecuteDefendAsync(heartWall);
+        }
     }
+
+    public void SimulateBeforePreparation(EnemyCardSimulationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.GetEnemyPowerAmount<DuckAndCoverPower>() > decimal.Zero)
+        {
+            decimal heartWall = context.GetEnemyPowerAmount<AtFieldPower>();
+            if (heartWall > decimal.Zero)
+            {
+                context.AddEnemyBlock(heartWall);
+            }
+        }
+    }
+
+    public async Task AfterComposeAsync(EnemyCardExecutionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        decimal stacks = context.GetEnemyPowerAmount<CardIntentSorrowfulRainPower>();
+        if (stacks > decimal.Zero)
+        {
+            await context.ApplyEnemyPowerAsync<AtFieldPower>(
+                stacks * CardIntentSorrowfulRainPower.HeartWallPerStack);
+        }
+    }
+
+    public void SimulateAfterCompose(EnemyCardSimulationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        decimal stacks = context.GetEnemyPowerAmount<CardIntentSorrowfulRainPower>();
+        if (stacks > decimal.Zero)
+        {
+            context.AddEnemyPower(
+                StablePowerId<AtFieldPower>(),
+                stacks * CardIntentSorrowfulRainPower.HeartWallPerStack);
+        }
+    }
+
+    public async Task AfterSuccessfulUnitAsync(EnemyCardExecutionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        decimal stacks = context.GetEnemyPowerAmount<CardIntentAdayumePower>();
+        if (stacks <= decimal.Zero)
+        {
+            return;
+        }
+
+        decimal amount = stacks * CardIntentAdayumePower.BlockAndHeartWallPerStack;
+        await context.ExecuteDefendAsync(amount);
+        await context.ApplyEnemyPowerAsync<AtFieldPower>(amount);
+    }
+
+    public void SimulateAfterSuccessfulUnit(EnemyCardSimulationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        decimal stacks = context.GetEnemyPowerAmount<CardIntentAdayumePower>();
+        if (stacks <= decimal.Zero)
+        {
+            return;
+        }
+
+        decimal amount = stacks * CardIntentAdayumePower.BlockAndHeartWallPerStack;
+        context.AddEnemyBlock(amount);
+        context.AddEnemyPower(StablePowerId<AtFieldPower>(), amount);
+    }
+
+    public async Task AfterBlockGainAsync(EnemyCardExecutionContext context, decimal gainedBlock)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (gainedBlock <= decimal.Zero)
+        {
+            return;
+        }
+
+        decimal stacks = context.GetTransientAbilityAmount<CardIntentUnwantedSixthPower>();
+        if (stacks > decimal.Zero)
+        {
+            await context.ApplyEnemyPowerAsync<AtFieldPower>(
+                stacks * CardIntentUnwantedSixthPower.HeartWallPerBlockGrant);
+        }
+    }
+
+    public void SimulateAfterBlockGain(EnemyCardSimulationContext context, decimal gainedBlock)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (gainedBlock <= decimal.Zero)
+        {
+            return;
+        }
+
+        decimal stacks = context.GetTransientAbilityAmount<CardIntentUnwantedSixthPower>();
+        if (stacks > decimal.Zero)
+        {
+            context.AddEnemyPower(
+                StablePowerId<AtFieldPower>(),
+                stacks * CardIntentUnwantedSixthPower.HeartWallPerBlockGrant);
+        }
+    }
+
+    public async Task AfterNormalLifecycleExhaustAsync(EnemyCardExecutionContext context, BaseEnemyCard card)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(card);
+        decimal stacks = context.GetEnemyPowerAmount<CardIntentHeartBeatPower>();
+        if (stacks > decimal.Zero)
+        {
+            await context.ExecuteDefendAsync(stacks * CardIntentHeartBeatPower.BlockPerExhaust);
+        }
+    }
+
+    public void SimulateAfterNormalLifecycleExhaust(
+        EnemyCardSimulationContext context,
+        EnemyCardInstanceKey cardKey)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(cardKey);
+        decimal stacks = context.GetEnemyPowerAmount<CardIntentHeartBeatPower>();
+        if (stacks > decimal.Zero)
+        {
+            context.AddEnemyBlock(stacks * CardIntentHeartBeatPower.BlockPerExhaust);
+        }
+    }
+
+    internal static string StablePowerId<TPower>() => typeof(TPower).FullName ?? typeof(TPower).Name;
 }

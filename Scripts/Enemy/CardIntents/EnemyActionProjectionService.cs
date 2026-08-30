@@ -64,8 +64,14 @@ public sealed class EnemyActionProjectionInput
 /// </summary>
 public sealed class EnemyActionProjectionService
 {
+    private readonly IEnemyAbilityHookDispatcher _abilityHooks;
     private string? _cachedFingerprint;
     private LiveActionProjection? _cachedProjection;
+
+    public EnemyActionProjectionService(IEnemyAbilityHookDispatcher? abilityHooks = null)
+    {
+        _abilityHooks = abilityHooks ?? new EnemyAbilityHookDispatcher();
+    }
 
     /// <summary>
     /// 根据冻结计划和当前纯数据修正重新计算或复用逐执行牌投影。
@@ -91,7 +97,8 @@ public sealed class EnemyActionProjectionService
             action.EffectiveCardStates,
             input.InitialState,
             input.ContentDirectory,
-            input.HasInitialState);
+            input.HasInitialState,
+            _abilityHooks);
         foreach (string unknown in input.UnknownModifierIds)
         {
             simulation.MarkIncomplete($"未知第三方数值修改器未执行：{unknown}");
@@ -200,6 +207,10 @@ public sealed class EnemyActionProjectionService
                     definition.Effects,
                     simulation,
                     contentDirectory);
+                if (!simulation.IsStepLimitReached)
+                {
+                    simulation.NotifyAfterSuccessfulUnit();
+                }
             }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
@@ -277,6 +288,11 @@ public sealed class EnemyActionProjectionService
                         ownerUnit.RootSourceKey,
                         simulation,
                         contentDirectory);
+
+                    if (!simulation.IsStepLimitReached)
+                    {
+                        simulation.NotifyAfterCompose();
+                    }
 
                     break;
                 case PreparedImmediateCardStep immediate:

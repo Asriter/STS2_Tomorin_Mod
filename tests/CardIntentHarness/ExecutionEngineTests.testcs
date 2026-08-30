@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using STS2_Tomorin_Mod.Powers;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -14,6 +15,109 @@ namespace CardIntentHarness;
 /// </summary>
 public sealed class ExecutionEngineTests
 {
+    [Theory]
+    [InlineData(ShadowAbilityId.SorrowfulRain)]
+    [InlineData(ShadowAbilityId.Adayume)]
+    [InlineData(ShadowAbilityId.HeartBeat)]
+    [InlineData(ShadowAbilityId.DuckAndCover)]
+    [InlineData(ShadowAbilityId.NameOfTear)]
+    [InlineData(ShadowAbilityId.UnwantedSixth)]
+    public async Task RealAndSimulatedAbilityHooksProduceEquivalentDeltas(ShadowAbilityId ability)
+    {
+        string abilityId = ability.ToString().ToUpperInvariant();
+        EnemyCardDefinition definition = new(
+            new EnemyCardId($"STS2_TOMORIN_MOD:ABILITY_PARITY_{abilityId}"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack,
+            EnemyCardScoreProfile.Zero);
+        ExecutionFixture fixture = CreateFixture($"ABILITY_PARITY_{abilityId}", definition);
+        Dictionary<Type, decimal> initial = ability switch
+        {
+            ShadowAbilityId.SorrowfulRain => new() { [typeof(CardIntentSorrowfulRainPower)] = 1m },
+            ShadowAbilityId.Adayume => new() { [typeof(CardIntentAdayumePower)] = 1m },
+            ShadowAbilityId.HeartBeat => new() { [typeof(CardIntentHeartBeatPower)] = 1m },
+            ShadowAbilityId.DuckAndCover => new()
+            {
+                [typeof(DuckAndCoverPower)] = 1m,
+                [typeof(AtFieldPower)] = 4m
+            },
+            ShadowAbilityId.NameOfTear => new() { [typeof(NameOfTearPower)] = 1m },
+            _ => []
+        };
+        decimal realBlock = decimal.Zero;
+        decimal realHeartWall = decimal.Zero;
+        EnemyAbilityHookDispatcher dispatcher = new();
+        EnemyCardExecutionContext execution = new(
+            fixture.Owner,
+            fixture.State,
+            new ThrowingPlayerChoiceContext(),
+            [],
+            DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
+            defendExecutor: amount =>
+            {
+                realBlock += amount;
+                return Task.CompletedTask;
+            },
+            enemyPowerExecutor: (type, amount) =>
+            {
+                if (type == typeof(AtFieldPower))
+                {
+                    realHeartWall += amount;
+                }
+
+                return Task.CompletedTask;
+            },
+            initialEnemyPowers: initial);
+        execution.UseAbilityHooks(dispatcher);
+        Dictionary<string, decimal> initialProjectionPowers = initial.ToDictionary(
+            item => item.Key.FullName ?? item.Key.Name,
+            item => item.Value,
+            StringComparer.Ordinal);
+        EnemyCardSimulationContext simulation = new(
+            [],
+            stepLimit: 32,
+            initialState: new EnemyProjectionInitialState(enemyPowers: initialProjectionPowers),
+            abilityHooks: dispatcher);
+
+        switch (ability)
+        {
+            case ShadowAbilityId.SorrowfulRain:
+                await dispatcher.AfterComposeAsync(execution);
+                dispatcher.SimulateAfterCompose(simulation);
+                break;
+            case ShadowAbilityId.Adayume:
+                await dispatcher.AfterSuccessfulUnitAsync(execution);
+                dispatcher.SimulateAfterSuccessfulUnit(simulation);
+                break;
+            case ShadowAbilityId.HeartBeat:
+                BaseEnemyCard card = Assert.Single(fixture.State.CombatState.DrawPile);
+                await dispatcher.AfterNormalLifecycleExhaustAsync(execution, card);
+                dispatcher.SimulateAfterNormalLifecycleExhaust(simulation, card.InstanceKey);
+                break;
+            case ShadowAbilityId.DuckAndCover:
+                await dispatcher.BeforePreparationAsync(execution);
+                dispatcher.SimulateBeforePreparation(simulation);
+                break;
+            case ShadowAbilityId.UnwantedSixth:
+                execution.AddTransientAbility<CardIntentUnwantedSixthPower>(1m);
+                simulation.AddTransientAbility<CardIntentUnwantedSixthPower>(1m);
+                await execution.ExecuteDefendAsync(2m);
+                simulation.AddEnemyBlock(2m);
+                break;
+            case ShadowAbilityId.NameOfTear:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(ability));
+        }
+
+        EnemyProjectionEndState simulated = simulation.BuildProjection().EndState;
+        decimal initialHeartWall = initial.GetValueOrDefault(typeof(AtFieldPower));
+        Assert.Equal(realBlock, simulated.EnemyBlock);
+        Assert.Equal(
+            realHeartWall,
+            simulated.GetEnemyPower(typeof(AtFieldPower).FullName!) - initialHeartWall);
+    }
+
     /// <summary>
     /// 验证前置显式程序先执行即时子牌，且真实权威栈在子牌期间阻止阶段迁移。
     /// </summary>
@@ -310,6 +414,79 @@ public sealed class ExecutionEngineTests
         Assert.Equal(
             frozenCollectionResults,
             fixture.State.CombatState.CollectionQueue.Select(item => item.CollectionInstanceId).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task ShadowCollectionGeneratorFreezesWeightedDistinctResultsBeforeExecution()
+    {
+        EnemyCollectionDefinition[] pool = CardIntentTestCollectionCatalog.Catalog.Definitions.Take(2).ToArray();
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:EXECUTION_SHADOW_FROZEN_COLLECTIONS"),
+            new WhyPlayHaruhikage(),
+            EnemyCardTag.CollectionGenerator,
+            EnemyCardScoreProfile.Zero,
+            effects:
+            [
+                ShadowTomorinEffects.GenerateFrozenCollections(
+                    "SHADOW:FROZEN_COLLECTIONS",
+                    [(pool[0], 1), (pool[1], 1)],
+                    count: 2)
+            ]);
+        int randomCalls = 0;
+        ExecutionFixture fixture = CreateFixture(
+            "SHADOW_FROZEN_COLLECTIONS",
+            definition,
+            randomIndexSelector: _ =>
+            {
+                randomCalls++;
+                return 0;
+            });
+        PrepareWithoutGodotLogging(fixture);
+        int callsAfterPreparation = randomCalls;
+        PreparedGeneratedCollectionStep[] frozen = fixture.State.CombatState.PreparedAction!.Sources
+            .SelectMany(source => source.Units)
+            .SelectMany(unit => unit.OrderedSteps)
+            .OfType<PreparedGeneratedCollectionStep>()
+            .ToArray();
+
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.Equal(2, frozen.Length);
+        Assert.Equal(2, frozen.Select(item => item.CollectionId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(callsAfterPreparation, randomCalls);
+        Assert.Equal(frozen.Select(item => item.CollectionId),
+            fixture.State.CombatState.CollectionQueue.Select(item => item.Definition.CollectionId));
+    }
+
+    [Fact]
+    public void ShadowFormPreparationReservesOneWeightedCollectionWithoutMutatingAvailable()
+    {
+        EnemyCardDefinition definition = CreateDefinition(
+            "SHADOW_FORM_PREPARATION",
+            decimal.Zero,
+            decimal.Zero,
+            EnemyCardLifecycle.Discard);
+        ExecutionFixture fixture = CreateFixture("SHADOW_FORM_PREPARATION", definition);
+        EnemyCollectionDefinition[] pool = CardIntentTestCollectionCatalog.Catalog.Definitions.Take(2).ToArray();
+        int randomCalls = 0;
+
+        EnemyPreparationCycle cycle = new ShadowTomoriFormPower().CreatePreparationCycle(
+            fixture.State.CombatState,
+            new EnemyCardRandomSource(bound =>
+            {
+                randomCalls++;
+                Assert.Equal(3, bound);
+                return 2;
+            }),
+            [(pool[0], 1), (pool[1], 2)]);
+
+        Assert.Equal(1, randomCalls);
+        Assert.Empty(fixture.State.CombatState.CollectionQueue);
+        Assert.NotNull(cycle.FrozenPreparationCollection);
+        Assert.Equal(pool[1].CollectionId, cycle.FrozenPreparationCollection!.Definition.CollectionId);
+        Assert.Equal(fixture.State.CombatState.CollectionInventory.NextSequence,
+            cycle.FrozenPreparationCollection.Sequence);
+        Assert.Same(cycle.FrozenPreparationCollection, Assert.Single(cycle.Delta.AddedAvailable));
     }
 
     /// <summary>验证执行阶段结构故障会输出上下文、完整异常及内部异常，而不是静默进入 Faulted。</summary>

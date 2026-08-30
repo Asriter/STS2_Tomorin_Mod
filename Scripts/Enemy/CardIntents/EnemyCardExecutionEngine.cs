@@ -47,6 +47,7 @@ public sealed class EnemyCardExecutionEngine
         PreparedEnemyCardAction action = state.PreparedAction ??
             throw new InvalidOperationException("权威状态没有可执行的冻结行动。 ");
         ExecutionSession session = new(stepLimit, eventSink);
+        context.UseAbilityHooks(_abilityHooks);
         state.BeginExecution();
         try
         {
@@ -87,11 +88,12 @@ public sealed class EnemyCardExecutionEngine
                     }
                 }
 
-                ApplySourceLifecycle(
+                await ApplySourceLifecycleAsync(
                     state,
                     source.SourceCard,
                     successful: source.Units.Count > 0,
-                    immediateFailure: false);
+                    immediateFailure: false,
+                    context);
             }
 
             state.CompleteExecution();
@@ -244,8 +246,17 @@ public sealed class EnemyCardExecutionEngine
                         $"收藏品生成序号预期 {generatedCollection.ExpectedSequence}，实际 {state.CollectionInventory.NextSequence}。 ");
                 }
 
-                EnemyCollectionDefinition definition =
-                    Test.CardIntentTestCollectionCatalog.Catalog.GetRequired(generatedCollection.CollectionId);
+                EnemyCollectionCatalog registeredCatalog = EnemyCardDeckRegistry
+                    .GetContentDirectory(state.DeckId)
+                    .CollectionCatalog;
+                EnemyCollectionDefinition definition = registeredCatalog.Definitions.Any(item =>
+                        string.Equals(
+                            item.CollectionId,
+                            generatedCollection.CollectionId,
+                            StringComparison.Ordinal))
+                    ? registeredCatalog.GetRequired(generatedCollection.CollectionId)
+                    : Test.CardIntentTestCollectionCatalog.Catalog.GetRequired(
+                        generatedCollection.CollectionId);
                 EnemyCollectionInstance generated = state.CollectionInventory.Append(definition);
                 session.Publish(
                     EnemyCardResolutionEventType.CollectionGenerated,
@@ -354,7 +365,12 @@ public sealed class EnemyCardExecutionEngine
                 context,
                 session);
 
-            ApplySourceLifecycle(state, generated, successful: true, immediateFailure: true);
+            await ApplySourceLifecycleAsync(
+                state,
+                generated,
+                successful: true,
+                immediateFailure: true,
+                context);
         }
     }
 
@@ -391,7 +407,12 @@ public sealed class EnemyCardExecutionEngine
             context,
             session);
 
-        ApplySourceLifecycle(state, selected, successful: true, immediateFailure: true);
+        await ApplySourceLifecycleAsync(
+            state,
+            selected,
+            successful: true,
+            immediateFailure: true,
+            context);
     }
 
     /// <summary>
@@ -431,7 +452,12 @@ public sealed class EnemyCardExecutionEngine
             context,
             session);
 
-        ApplySourceLifecycle(state, card, successful: true, immediateFailure: true);
+        await ApplySourceLifecycleAsync(
+            state,
+            card,
+            successful: true,
+            immediateFailure: true,
+            context);
     }
 
     /// <summary>
@@ -467,11 +493,12 @@ public sealed class EnemyCardExecutionEngine
     /// <param name="source">待结束生命周期的来源实例。</param>
     /// <param name="successful">是否至少完成一个成功单元。</param>
     /// <param name="immediateFailure">即时来源失败时是否强制弃置。</param>
-    private static void ApplySourceLifecycle(
+    private async Task ApplySourceLifecycleAsync(
         EnemyCardCombatState state,
         BaseEnemyCard source,
         bool successful,
-        bool immediateFailure)
+        bool immediateFailure,
+        EnemyCardExecutionContext context)
     {
         if (!IsInSourceZone(state, source.InstanceKey))
         {
@@ -486,6 +513,10 @@ public sealed class EnemyCardExecutionEngine
                 ? EnemyCardZone.Discard
                 : EnemyCardZone.Retained;
         state.MoveCard(source.InstanceKey, destination);
+        if (destination == EnemyCardZone.Exhaust)
+        {
+            await _abilityHooks.AfterNormalLifecycleExhaustAsync(context, source);
+        }
     }
 
     /// <summary>

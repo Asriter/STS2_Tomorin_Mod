@@ -1,3 +1,5 @@
+using MegaCrit.Sts2.Core.Models;
+
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
 /// <summary>
@@ -26,9 +28,12 @@ public sealed class EnemyCardSimulationContext
     private readonly List<EnemyCollectionInstance> _endAvailableCollections;
     private readonly List<EnemyCollectionInstance> _endConsumedCollections;
     private readonly bool _strictStructuralState;
+    private readonly Dictionary<Type, decimal> _transientAbilities = [];
+    private readonly IEnemyAbilityHookDispatcher _abilityHooks;
     private decimal _endEnemyBlock;
     private UnitAccumulator? _current;
     private bool _stepLimitReached;
+    private bool _dispatchingBlockGain;
 
     /// <summary>
     /// 创建模拟上下文。
@@ -41,7 +46,8 @@ public sealed class EnemyCardSimulationContext
         IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState>? effectiveCardStates = null,
         EnemyProjectionInitialState? initialState = null,
         EnemyCardContentDirectory? contentDirectory = null,
-        bool strictStructuralState = false)
+        bool strictStructuralState = false,
+        IEnemyAbilityHookDispatcher? abilityHooks = null)
     {
         _targets = Array.AsReadOnly((targets ?? throw new ArgumentNullException(nameof(targets))).ToArray());
         if (_targets.Any(target => string.IsNullOrWhiteSpace(target.TargetId)))
@@ -65,6 +71,7 @@ public sealed class EnemyCardSimulationContext
         initialState ??= new EnemyProjectionInitialState();
         _contentDirectory = contentDirectory;
         _strictStructuralState = strictStructuralState;
+        _abilityHooks = abilityHooks ?? new EnemyAbilityHookDispatcher();
         _activePhase = initialState.ActivePhase;
         _endEnemyBlock = initialState.EnemyBlock;
         _endEnemyPowers = new Dictionary<string, decimal>(initialState.EnemyPowers, StringComparer.Ordinal);
@@ -93,6 +100,26 @@ public sealed class EnemyCardSimulationContext
 
     /// <summary>获取投影是否仍然完整。</summary>
     public bool IsComplete { get; private set; } = true;
+
+    /// <summary>读取投影终态中的敌人 Power 层数。</summary>
+    public decimal GetEnemyPowerAmount<TPower>() where TPower : PowerModel =>
+        _endEnemyPowers.GetValueOrDefault(typeof(TPower).FullName ?? typeof(TPower).Name);
+
+    /// <summary>激活只在当前完整行动内存在的模拟能力层数。</summary>
+    public void AddTransientAbility<TPower>(decimal amount) where TPower : PowerModel
+    {
+        if (amount <= decimal.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount));
+        }
+
+        _transientAbilities[typeof(TPower)] = checked(
+            _transientAbilities.GetValueOrDefault(typeof(TPower)) + amount);
+    }
+
+    /// <summary>读取当前完整行动内的临时模拟能力层数。</summary>
+    public decimal GetTransientAbilityAmount<TPower>() where TPower : PowerModel =>
+        _transientAbilities.GetValueOrDefault(typeof(TPower));
 
     /// <summary>读取当前实际执行实例的冻结有效牌状态。</summary>
     public EnemyFrozenEffectiveCardState GetCurrentEffectiveCardState(bool requireFrozenX = false)
@@ -189,8 +216,23 @@ public sealed class EnemyCardSimulationContext
             return;
         }
 
-        RequireCurrentUnit().EnemyBlock += amount;
+        if (_current is not null)
+        {
+            _current.EnemyBlock += amount;
+        }
         _endEnemyBlock = Math.Max(decimal.Zero, _endEnemyBlock + amount);
+        if (amount > decimal.Zero && !_dispatchingBlockGain)
+        {
+            _dispatchingBlockGain = true;
+            try
+            {
+                _abilityHooks.SimulateAfterBlockGain(this, amount);
+            }
+            finally
+            {
+                _dispatchingBlockGain = false;
+            }
+        }
     }
 
     /// <summary>
@@ -205,9 +247,18 @@ public sealed class EnemyCardSimulationContext
             return;
         }
 
-        AddDelta(RequireCurrentUnit().EnemyPowers, powerId, amount);
+        if (_current is not null)
+        {
+            AddDelta(_current.EnemyPowers, powerId, amount);
+        }
         AddDelta(_endEnemyPowers, powerId, amount);
     }
+
+    /// <summary>在一个成功作词步骤完全结束后模拟能力钩子。</summary>
+    public void NotifyAfterCompose() => _abilityHooks.SimulateAfterCompose(this);
+
+    /// <summary>在一个本体或 Replay 单元成功结束后模拟能力钩子。</summary>
+    public void NotifyAfterSuccessfulUnit() => _abilityHooks.SimulateAfterSuccessfulUnit(this);
 
     /// <summary>
     /// 向全部模拟目标累计一个负面 Power 的层数变化。
@@ -251,6 +302,63 @@ public sealed class EnemyCardSimulationContext
 
         RequireCurrentUnit().CollectionDeltas.Add(projection);
         ApplyCollectionDelta(projection);
+    }
+
+    /// <summary>按投影 Available 顺序消费至多指定数量的收藏品。</summary>
+    public int ConsumeAvailableCollections(int maximumCount)
+    {
+        if (maximumCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        }
+
+        EnemyCollectionInstance[] selected = _endAvailableCollections.Take(maximumCount).ToArray();
+        foreach (EnemyCollectionInstance item in selected)
+        {
+            AddCollectionDelta(new EnemyCollectionProjection(
+                item.CollectionInstanceId,
+                item.Definition.CollectionId,
+                EnemyCollectionProjectionKind.Consumed));
+        }
+
+        return selected.Length;
+    }
+
+    /// <summary>判断并消费投影当前牌区首张非 Compose 来源牌。</summary>
+    public bool TryConsumeFirstNonComposeSource()
+    {
+        EnemyProjectedCardZoneState? selected = FindFirstNonComposeSource();
+        if (selected is null)
+        {
+            if (_contentDirectory is null)
+            {
+                MarkIncomplete("消费非 Compose 来源需要完整内容目录。");
+            }
+
+            return false;
+        }
+
+        MoveProjectedCard(selected.InstanceKey, EnemyCardZone.Exhaust);
+        return true;
+    }
+
+    public bool HasNonComposeSource() => FindFirstNonComposeSource() is not null;
+
+    private EnemyProjectedCardZoneState? FindFirstNonComposeSource()
+    {
+        EnemyCardInstanceKey executing = GetCurrentEffectiveCardState().ExecutingCardInstanceKey;
+        return _endCards.Values.FirstOrDefault(card =>
+        {
+            if (card.Zone != EnemyCardZone.Current || card.InstanceKey == executing || _contentDirectory is null)
+            {
+                return false;
+            }
+
+            EnemyCardDefinition definition = _contentDirectory.CreateDefinition(card.CardId).Definition;
+            return !definition.Tags.HasFlag(EnemyCardTag.Compose) &&
+                   definition.MaterialRequests.All(request =>
+                       request.PaymentKind != EnemyMaterialPaymentKind.Compose);
+        });
     }
 
     /// <summary>从候选库存中的冻结实例解析收藏品定义，避免投影重新依赖或选择其他目录项。</summary>
@@ -334,6 +442,10 @@ public sealed class EnemyCardSimulationContext
                 ? EnemyCardZone.Discard
                 : EnemyCardZone.Retained;
         _endCards[instanceKey] = card with { Zone = destination };
+        if (destination == EnemyCardZone.Exhaust)
+        {
+            _abilityHooks.SimulateAfterNormalLifecycleExhaust(this, instanceKey);
+        }
     }
 
     /// <summary>

@@ -709,7 +709,17 @@ public sealed class EnemyPreparedResolutionPlanner
         }
 
         List<EnemyCollectionDefinition> definitions = [];
-        if (source.CardModel is WhyPlayHaruhikage)
+        IEnemyFrozenCollectionGenerationEffect[] generators = source.Definition.Effects
+            .OfType<IEnemyFrozenCollectionGenerationEffect>()
+            .ToArray();
+        if (generators.Length > 0)
+        {
+            foreach (IEnemyFrozenCollectionGenerationEffect generator in generators)
+            {
+                definitions.AddRange(generator.FreezeCollections(state, random));
+            }
+        }
+        else if (source.CardModel is WhyPlayHaruhikage)
         {
             List<EnemyCollectionDefinition> pool = CardIntentTestCollectionCatalog.Catalog.Definitions.ToList();
             for (int index = 0; index < Math.Min(2, pool.Count); index++)

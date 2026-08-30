@@ -2,6 +2,7 @@ using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 using MegaCrit.Sts2.Core.Models.Powers;
+using STS2_Tomorin_Mod.Powers;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -11,6 +12,75 @@ namespace CardIntentHarness;
 /// </summary>
 public sealed class LiveProjectionTests
 {
+    [Fact]
+    public void ProjectionDispatchesSuccessfulUnitAndNormalExhaustHooks()
+    {
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:PROJECTION_ABILITY_HOOKS"),
+            new StrikeTomorin(),
+            EnemyCardTag.None,
+            EnemyCardScoreProfile.Zero,
+            lifecycle: EnemyCardLifecycle.Exhaust);
+        EnemyCardCombatState state = CreateState("ABILITY_HOOKS", definition);
+        BaseEnemyCard card = MoveOnlyCardToCurrent(state);
+        PreparedEnemyCardAction action = CreateAction(card, CreateDirectUnit(card));
+        Dictionary<string, decimal> powers = new(StringComparer.Ordinal)
+        {
+            [typeof(CardIntentAdayumePower).FullName!] = 1m,
+            [typeof(CardIntentHeartBeatPower).FullName!] = 1m
+        };
+        EnemyActionProjectionInput input = new(
+            [],
+            stepLimit: 16,
+            initialState: EnemyProjectionInitialState.FromCombatState(
+                state,
+                enemyPowers: powers));
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        Assert.True(projection.IsComplete);
+        Assert.Equal(3m, projection.EndState.EnemyBlock);
+        Assert.Equal(1m, projection.EndState.GetEnemyPower(typeof(AtFieldPower).FullName!));
+        Assert.Equal(
+            EnemyCardZone.Exhaust,
+            Assert.Single(projection.EndState.Cards, item => item.InstanceKey == card.InstanceKey).Zone);
+    }
+
+    [Fact]
+    public void ShadowEffectsProjectOrderedBlockReactionAndDynamicHeartWallDamage()
+    {
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:PROJECTION_SHADOW_EFFECT_ORDER"),
+            new TomorinPunch(),
+            EnemyCardTag.Attack | EnemyCardTag.Defense | EnemyCardTag.Gain,
+            EnemyCardScoreProfile.Zero,
+            effects:
+            [
+                ShadowTomorinEffects.ActivateUnwantedSixth("SHADOW:ACTIVATE_SIXTH"),
+                new EnemyBlockEffect("SHADOW:BLOCK", 5m),
+                ShadowTomorinEffects.DynamicHeartWallAttackAll("SHADOW:DYNAMIC_ATTACK")
+            ]);
+        EnemyCardCombatState state = CreateState("SHADOW_EFFECT_ORDER", definition);
+        BaseEnemyCard card = MoveOnlyCardToCurrent(state);
+        PreparedEnemyCardAction action = CreateAction(card, CreateDirectUnit(card));
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", decimal.One, decimal.One)],
+            stepLimit: 16,
+            initialState: EnemyProjectionInitialState.FromCombatState(
+                state,
+                enemyPowers: new Dictionary<string, decimal>
+                {
+                    [typeof(AtFieldPower).FullName!] = 4m
+                }));
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        Assert.True(projection.IsComplete);
+        Assert.Equal(5m, projection.EndState.EnemyBlock);
+        Assert.Equal(5m, projection.EndState.GetEnemyPower(typeof(AtFieldPower).FullName!));
+        Assert.Equal(24m, projection.Units.Single().Targets.Single().DamageHits.Single().BaseDamage);
+    }
+
     [Fact]
     public void ProjectionCarriesExistingStockAndAppliesSourceLifecycleToEndState()
     {

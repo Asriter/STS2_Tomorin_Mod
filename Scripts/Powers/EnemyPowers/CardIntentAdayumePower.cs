@@ -7,6 +7,8 @@ namespace STS2_Tomorin_Mod.Powers;
 /// </summary>
 public sealed class CardIntentAdayumePower : BasePowerModel
 {
+    public const decimal BlockAndHeartWallPerStack = 1m;
+
     /// <inheritdoc />
     public override PowerType Type => PowerType.Buff;
 

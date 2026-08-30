@@ -45,6 +45,42 @@ public sealed class FrozenResolutionPlanTests
             step => Assert.IsType<PreparedDirectEffectsStep>(step));
     }
 
+    [Fact]
+    public void ImmediateChildAndParentSharePreCompletionNThenCountSeparately()
+    {
+        CardIntentTestDeck.EnsureRegistered();
+        EnemyCardCombatState combat = EnemyCardDeckRegistry.CreateCombatState(CardIntentTestDeck.DeckId);
+        BaseEnemyCard source = combat.DrawPile.First(card =>
+            card.CardId.Value.EndsWith("_HITOSHIZUKU", StringComparison.Ordinal));
+        BaseEnemyCard material = combat.DrawPile.First(card =>
+            card.CardId.Value.EndsWith("_ATTACK", StringComparison.Ordinal));
+        EnemyPreparedPlanningState transaction = new(
+            drawPile: [],
+            currentCards: [source, material],
+            retainedCards: [],
+            discardPile: [],
+            exhaustPile: [],
+            new EnemyCollectionInventory(),
+            nextGeneratedCardSequence: 0);
+        EnemyEffectiveCardLedger ledger = new();
+
+        PreparedEnemyCardSource planned = new EnemyPreparedResolutionPlanner().PlanSource(
+            source,
+            maximumAttempts: 1,
+            transaction,
+            new EnemyCardRandomSource(_ => 0),
+            stepLimit: 64,
+            ledger);
+
+        PreparedComposeResultStep compose = Assert.IsType<PreparedComposeResultStep>(
+            Assert.Single(planned.Units).OrderedSteps.Single(step => step is PreparedComposeResultStep));
+        EnemyCardInstanceKey childKey = compose.ImmediateChild!.ExecutingCardKey;
+        Assert.Equal(ledger.States[source.InstanceKey].FrozenN, ledger.States[childKey].FrozenN);
+        Assert.True(ledger.States[childKey].WasCounted);
+        Assert.True(ledger.States[source.InstanceKey].WasCounted);
+        Assert.Equal(2, ledger.CompletedEffectiveCardCount);
+    }
+
     /// <summary>
     /// 防止失败条件在素材预留或牌区移动之后才检查，从而留下空单元或错误消费。
     /// </summary>

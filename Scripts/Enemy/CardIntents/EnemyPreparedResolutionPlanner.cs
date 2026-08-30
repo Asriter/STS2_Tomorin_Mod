@@ -221,7 +221,8 @@ public sealed class EnemyPreparedResolutionPlanner
         int maximumAttempts,
         EnemyPreparedPlanningState transaction,
         IEnemyCardRandomSource random,
-        int stepLimit)
+        int stepLimit,
+        EnemyEffectiveCardLedger? effectiveCardLedger = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(transaction);
@@ -236,7 +237,7 @@ public sealed class EnemyPreparedResolutionPlanner
             throw new ArgumentOutOfRangeException(nameof(stepLimit));
         }
 
-        PlanningSession session = new(stepLimit);
+        PlanningSession session = new(stepLimit, effectiveCardLedger ?? new EnemyEffectiveCardLedger());
         if (!transaction.IsInSourceZone(source.InstanceKey))
         {
             return new PreparedEnemyCardSource(source, maximumAttempts, [], truncationAttemptIndex: 0);
@@ -264,6 +265,7 @@ public sealed class EnemyPreparedResolutionPlanner
             units.Add(unit!);
         }
 
+        session.EffectiveCardLedger.Complete(source.InstanceKey, units.Count > 0);
         ApplySourceLifecycle(transaction, source, units.Count > 0, immediateFailure: false);
         return new PreparedEnemyCardSource(source, maximumAttempts, units, truncation);
     }
@@ -295,6 +297,25 @@ public sealed class EnemyPreparedResolutionPlanner
         session.Enter(source.InstanceKey);
         try
         {
+            if (!session.EffectiveCardLedger.States.ContainsKey(source.InstanceKey))
+            {
+                EnemyFrozenXAttackAllEffect[] frozenXEffects = source.Definition.Effects
+                    .OfType<EnemyFrozenXAttackAllEffect>()
+                    .ToArray();
+                int[] multipliers = frozenXEffects
+                    .Select(effect => effect.ResolveMultiplier(state))
+                    .Distinct()
+                    .ToArray();
+                if (multipliers.Length > 1)
+                {
+                    throw new InvalidOperationException($"执行牌 {source.InstanceKey} 的 X 效果冻结倍率不一致。");
+                }
+
+                session.EffectiveCardLedger.Begin(
+                    source.InstanceKey,
+                    isX: frozenXEffects.Length > 0,
+                    multiplier: multipliers.SingleOrDefault(1));
+            }
             if (!source.Definition.PlayCondition.CanPlan(state, source))
             {
                 unit = null;
@@ -448,6 +469,8 @@ public sealed class EnemyPreparedResolutionPlanner
                     throw new InvalidOperationException(
                         $"受控灵感子单元不应在准备时失败：{failure}。 ");
                 }
+
+                session.EffectiveCardLedger.Complete(cardKey, anyUnitSucceeded: true);
             }
 
             return new PreparedConsumedCardStep(cardKey, child);
@@ -654,6 +677,7 @@ public sealed class EnemyPreparedResolutionPlanner
             throw new InvalidOperationException($"即时牌 {card.InstanceKey} 在准备阶段首个单元素材不足，不能冻结半成品计划。 ");
         }
 
+        session.EffectiveCardLedger.Complete(card.InstanceKey, anyUnitSucceeded: true);
         return children.AsReadOnly();
     }
 
@@ -832,10 +856,14 @@ public sealed class EnemyPreparedResolutionPlanner
         /// 创建具有正步骤上限的规划会话。
         /// </summary>
         /// <param name="stepLimit">总步骤上限。</param>
-        public PlanningSession(int stepLimit)
+        public PlanningSession(int stepLimit, EnemyEffectiveCardLedger effectiveCardLedger)
         {
             _stepLimit = stepLimit;
+            EffectiveCardLedger = effectiveCardLedger ?? throw new ArgumentNullException(nameof(effectiveCardLedger));
         }
+
+        /// <summary>获取整个候选共享的逐实例有效牌账本。</summary>
+        public EnemyEffectiveCardLedger EffectiveCardLedger { get; }
 
         /// <summary>
         /// 进入一个递归卡牌单元并拒绝活动路径循环。

@@ -14,6 +14,7 @@ namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 /// </summary>
 public sealed class EnemyCardExecutionContext
 {
+    private readonly Stack<EnemyCardInstanceKey> _executingCardStack = new();
     private readonly Func<bool> _shouldStopExecution;
     private readonly Func<decimal, Task>? _attackExecutor;
     private readonly Func<decimal, Task>? _defendExecutor;
@@ -90,6 +91,45 @@ public sealed class EnemyCardExecutionContext
     /// 获取战斗流程是否要求立即停止后续卡牌命令。
     /// </summary>
     public bool ShouldStop => CancellationToken.IsCancellationRequested || _shouldStopExecution();
+
+    /// <summary>在真实执行单元进入时设置当前实际卡牌实例。</summary>
+    internal void PushExecutingCard(EnemyCardInstanceKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        _executingCardStack.Push(key);
+    }
+
+    /// <summary>按严格 LIFO 顺序退出真实执行单元。</summary>
+    internal void PopExecutingCard(EnemyCardInstanceKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        if (!_executingCardStack.TryPeek(out EnemyCardInstanceKey? current) || current != key)
+        {
+            throw new InvalidOperationException("真实执行卡牌上下文必须严格按 LIFO 退出。");
+        }
+
+        _executingCardStack.Pop();
+    }
+
+    /// <summary>读取当前真正执行实例的冻结有效牌状态。</summary>
+    public EnemyFrozenEffectiveCardState GetCurrentEffectiveCardState(bool requireFrozenX = false)
+    {
+        if (!_executingCardStack.TryPeek(out EnemyCardInstanceKey? key))
+        {
+            throw new InvalidOperationException("当前没有正在执行的敌人卡牌单元。");
+        }
+
+        PreparedEnemyCardAction action = State.CombatState.PreparedAction ??
+                                         throw new InvalidOperationException("当前没有冻结行动。");
+        if (!action.EffectiveCardStates.TryGetValue(key, out EnemyFrozenEffectiveCardState? frozen) ||
+            frozen.ExecutingCardInstanceKey != key ||
+            requireFrozenX && frozen.FrozenX is null)
+        {
+            throw new InvalidOperationException($"执行牌 {key} 缺少完整的冻结有效牌元数据。");
+        }
+
+        return frozen;
+    }
 
     /// <summary>
     /// 执行一次具有怪物来源及 <see cref="ValueProp.Move"/> 语义的基础攻击。

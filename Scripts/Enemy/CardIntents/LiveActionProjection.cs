@@ -79,11 +79,22 @@ public sealed class LiveActionProjection
     public LiveActionProjection(
         IEnumerable<EnemyCardReplayProjection> units,
         bool isComplete,
-        IEnumerable<string>? diagnostics = null)
+        IEnumerable<string>? diagnostics = null,
+        IEnumerable<EnemyFrozenEffectiveCardState>? effectiveCardStates = null)
     {
         Units = Array.AsReadOnly((units ?? throw new ArgumentNullException(nameof(units))).ToArray());
         IsComplete = isComplete;
         Diagnostics = Array.AsReadOnly((diagnostics ?? []).ToArray());
+        EnemyFrozenEffectiveCardState[] states = (effectiveCardStates ?? []).ToArray();
+        if (states.Any(state => state is null) ||
+            states.Select(state => state.ExecutingCardInstanceKey).Distinct().Count() != states.Length)
+        {
+            throw new ArgumentException("投影有效牌元数据不能包含空值或重复实例键。", nameof(effectiveCardStates));
+        }
+
+        EffectiveCardStates = new System.Collections.ObjectModel.ReadOnlyDictionary<
+            EnemyCardInstanceKey,
+            EnemyFrozenEffectiveCardState>(states.ToDictionary(state => state.ExecutingCardInstanceKey));
     }
 
     /// <summary>获取按深度优先执行顺序排列的逐牌逐重放结果。</summary>
@@ -94,4 +105,7 @@ public sealed class LiveActionProjection
 
     /// <summary>获取投影不完整、未知修改器或有限步骤截断的诊断集合。</summary>
     public IReadOnlyList<string> Diagnostics { get; }
+
+    /// <summary>获取与冻结行动共享的逐实际实例 N/X 元数据。</summary>
+    public IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> EffectiveCardStates { get; }
 }

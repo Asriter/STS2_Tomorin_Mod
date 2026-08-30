@@ -47,6 +47,73 @@ public sealed class EnemyAttackAllEffect : IEnemyCardEffectNode
 }
 
 /// <summary>
+/// 使用冻结有效牌元数据决定命中次数的全体 X 攻击。
+/// </summary>
+public sealed class EnemyFrozenXAttackAllEffect : IEnemyCardEffectNode
+{
+    public EnemyFrozenXAttackAllEffect(
+        string programId,
+        decimal damage,
+        int doubleAtDistinctExhaustDefinitionCount = 0)
+    {
+        if (string.IsNullOrWhiteSpace(programId))
+        {
+            throw new ArgumentException("X 攻击效果必须具有稳定程序标识。", nameof(programId));
+        }
+
+        if (damage < decimal.Zero || doubleAtDistinctExhaustDefinitionCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(damage));
+        }
+
+        ProgramId = programId;
+        Damage = damage;
+        DoubleAtDistinctExhaustDefinitionCount = doubleAtDistinctExhaustDefinitionCount;
+    }
+
+    /// <inheritdoc />
+    public string ProgramId { get; }
+
+    /// <summary>获取每次命中的规范基础伤害。</summary>
+    public decimal Damage { get; }
+
+    /// <summary>获取触发两倍次数所需的不同消耗牌定义数；零表示不翻倍。</summary>
+    public int DoubleAtDistinctExhaustDefinitionCount { get; }
+
+    /// <summary>在冻结 X 之前从候选事务只读解析倍率。</summary>
+    public int ResolveMultiplier(EnemyPreparedPlanningState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (DoubleAtDistinctExhaustDefinitionCount == 0)
+        {
+            return 1;
+        }
+
+        int distinctDefinitions = state.ExhaustPile
+            .Select(card => card.CardId)
+            .Distinct()
+            .Count();
+        return distinctDefinitions >= DoubleAtDistinctExhaustDefinitionCount ? 2 : 1;
+    }
+
+    /// <inheritdoc />
+    public void Simulate(EnemyCardSimulationContext context)
+    {
+        EnemyFrozenEffectiveCardState frozen = context.GetCurrentEffectiveCardState(requireFrozenX: true);
+        context.AddDamageToAll(Damage, frozen.FrozenX!.Value);
+    }
+
+    /// <inheritdoc />
+    public Task ExecuteAsync(EnemyCardExecutionContext context)
+    {
+        EnemyFrozenEffectiveCardState frozen = context.GetCurrentEffectiveCardState(requireFrozenX: true);
+        return frozen.FrozenX!.Value == 0
+            ? Task.CompletedTask
+            : context.ExecuteAttackAllAsync(Damage, frozen.FrozenX.Value);
+    }
+}
+
+/// <summary>
 /// 使敌人自身获得格挡的共享效果节点。
 /// </summary>
 public sealed class EnemyBlockEffect : IEnemyCardEffectNode

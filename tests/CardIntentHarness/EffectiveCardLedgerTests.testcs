@@ -1,0 +1,130 @@
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>验证敌人牌行动中逐实例有效牌计数、X 冻结和 Replay 复用。</summary>
+public sealed class EffectiveCardLedgerTests
+{
+    [Fact]
+    public void ReplayReusesFrozenXAndCountsTheActualCardOnce()
+    {
+        EnemyEffectiveCardLedger ledger = new(initialCount: 2);
+        EnemyCardInstanceKey key = new("X_TOKEN");
+        EnemyFrozenEffectiveCardState frozen = ledger.Begin(key, isX: true, multiplier: 2);
+
+        ledger.Complete(key, anyUnitSucceeded: true);
+        EnemyFrozenEffectiveCardState replayFrozen = ledger.Begin(key, isX: true, multiplier: 1);
+        ledger.Complete(key, anyUnitSucceeded: true);
+
+        Assert.Equal(Math.Max(0, 6 - frozen.FrozenN) * frozen.Multiplier, frozen.FrozenX);
+        Assert.Equal(frozen.FrozenN, replayFrozen.FrozenN);
+        Assert.Equal(frozen.FrozenX, replayFrozen.FrozenX);
+        Assert.Equal(frozen.Multiplier, replayFrozen.Multiplier);
+        Assert.Equal(3, ledger.CompletedEffectiveCardCount);
+        Assert.True(ledger.States[key].WasCounted);
+    }
+
+    [Fact]
+    public void ImmediateChildCompletesBeforeParentWhileParentReplayKeepsOriginalX()
+    {
+        EnemyEffectiveCardLedger ledger = new();
+        EnemyCardInstanceKey parentKey = new("PARENT");
+        EnemyCardInstanceKey childKey = new("CHILD");
+        EnemyFrozenEffectiveCardState parentBody = ledger.Begin(parentKey, isX: true, multiplier: 2);
+        EnemyFrozenEffectiveCardState child = ledger.Begin(childKey, isX: true, multiplier: 1);
+
+        ledger.Complete(childKey, anyUnitSucceeded: true);
+        EnemyFrozenEffectiveCardState parentReplay = ledger.Begin(parentKey, isX: true, multiplier: 1);
+        ledger.Complete(parentKey, anyUnitSucceeded: true);
+
+        Assert.Equal(parentBody.FrozenN, child.FrozenN);
+        Assert.Equal(parentBody.FrozenN, parentReplay.FrozenN);
+        Assert.Equal(parentBody.FrozenX, parentReplay.FrozenX);
+        Assert.Equal(parentBody.Multiplier, parentReplay.Multiplier);
+        Assert.Equal(2, ledger.CompletedEffectiveCardCount);
+    }
+
+    [Fact]
+    public void FrozenXEffectAllowsAZeroHitSuccessfulUnit()
+    {
+        EnemyCardInstanceKey key = new("ZERO_X");
+        EnemyFrozenEffectiveCardState frozen = new(
+            key,
+            frozenN: 6,
+            frozenX: 0,
+            multiplier: 2,
+            wasCounted: true);
+        EnemyCardSimulationContext simulation = new(
+            [new EnemySimulationTarget("PLAYER", 1m, 1m)],
+            stepLimit: 8,
+            new Dictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> { [key] = frozen });
+        simulation.BeginUnit(key, key, new EnemyCardId("STS2_TOMORIN_MOD:ZERO_X"), replayIndex: 0);
+
+        new EnemyFrozenXAttackAllEffect("TEST:ZERO_X", damage: 8m).Simulate(simulation);
+        simulation.CommitUnit();
+        LiveActionProjection projection = simulation.BuildProjection();
+
+        EnemyCardReplayProjection unit = Assert.Single(projection.Units);
+        Assert.Empty(Assert.Single(unit.Targets).DamageHits);
+        Assert.Same(frozen, projection.EffectiveCardStates[key]);
+        Assert.True(projection.IsComplete);
+    }
+
+    [Fact]
+    public void ReplayExecutesTheSameFrozenHitCountWithoutIncreasingN()
+    {
+        EnemyCardInstanceKey key = new("REPLAY_X");
+        EnemyFrozenEffectiveCardState frozen = new(
+            key,
+            frozenN: 2,
+            frozenX: 8,
+            multiplier: 2,
+            wasCounted: true);
+        EnemyCardSimulationContext simulation = new(
+            [new EnemySimulationTarget("PLAYER", 1m, 1m)],
+            stepLimit: 32,
+            new Dictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> { [key] = frozen });
+        EnemyFrozenXAttackAllEffect effect = new("TEST:REPLAY_X", damage: 8m);
+
+        simulation.BeginUnit(key, key, new EnemyCardId("STS2_TOMORIN_MOD:REPLAY_X"), replayIndex: 0);
+        effect.Simulate(simulation);
+        simulation.CommitUnit();
+        simulation.BeginUnit(key, key, new EnemyCardId("STS2_TOMORIN_MOD:REPLAY_X"), replayIndex: 1);
+        effect.Simulate(simulation);
+        simulation.CommitUnit();
+        LiveActionProjection projection = simulation.BuildProjection();
+
+        Assert.Equal(2, projection.Units.Count);
+        Assert.All(projection.Units, unit =>
+            Assert.Equal(frozen.FrozenX, Assert.Single(unit.Targets).DamageHits.Count));
+        Assert.Equal(frozen.FrozenN, projection.EffectiveCardStates[key].FrozenN);
+    }
+
+    [Fact]
+    public void MultiplierCountsDistinctExhaustedDefinitionsOnly()
+    {
+        CardIntentTestDeck.EnsureRegistered();
+        EnemyCardCombatState combat = EnemyCardDeckRegistry.CreateCombatState(CardIntentTestDeck.DeckId);
+        BaseEnemyCard[] distinct = combat.DrawPile
+            .GroupBy(card => card.CardId)
+            .Select(group => group.First())
+            .Take(5)
+            .ToArray();
+        EnemyPreparedPlanningState state = new(
+            drawPile: [],
+            currentCards: [],
+            retainedCards: [],
+            discardPile: [],
+            exhaustPile: distinct,
+            new EnemyCollectionInventory(),
+            nextGeneratedCardSequence: 0);
+        EnemyFrozenXAttackAllEffect effect = new(
+            "TEST:DISTINCT_EXHAUST_X",
+            damage: 8m,
+            doubleAtDistinctExhaustDefinitionCount: distinct.Length);
+
+        Assert.Equal(2, effect.ResolveMultiplier(state));
+    }
+}

@@ -14,6 +14,7 @@ public sealed record EnemySimulationTarget(
 public sealed class EnemyCardSimulationContext
 {
     private readonly IReadOnlyList<EnemySimulationTarget> _targets;
+    private readonly IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> _effectiveCardStates;
     private readonly List<UnitAccumulator> _units = [];
     private readonly Stack<UnitAccumulator> _parentUnits = new();
     private readonly List<string> _diagnostics = [];
@@ -25,7 +26,10 @@ public sealed class EnemyCardSimulationContext
     /// </summary>
     /// <param name="targets">全部存活且有效的玩家目标及已知修正。</param>
     /// <param name="stepLimit">本次模拟允许提交的最大原子步骤数。</param>
-    public EnemyCardSimulationContext(IEnumerable<EnemySimulationTarget> targets, int stepLimit)
+    public EnemyCardSimulationContext(
+        IEnumerable<EnemySimulationTarget> targets,
+        int stepLimit,
+        IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState>? effectiveCardStates = null)
     {
         _targets = Array.AsReadOnly((targets ?? throw new ArgumentNullException(nameof(targets))).ToArray());
         if (_targets.Any(target => string.IsNullOrWhiteSpace(target.TargetId)))
@@ -44,6 +48,8 @@ public sealed class EnemyCardSimulationContext
         }
 
         StepLimit = stepLimit;
+        _effectiveCardStates = effectiveCardStates ??
+                               new Dictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState>();
     }
 
     /// <summary>获取本次模拟的有限步骤上限。</summary>
@@ -57,6 +63,21 @@ public sealed class EnemyCardSimulationContext
 
     /// <summary>获取投影是否仍然完整。</summary>
     public bool IsComplete { get; private set; } = true;
+
+    /// <summary>读取当前实际执行实例的冻结有效牌状态。</summary>
+    public EnemyFrozenEffectiveCardState GetCurrentEffectiveCardState(bool requireFrozenX = false)
+    {
+        UnitAccumulator unit = RequireCurrentUnit();
+        if (!_effectiveCardStates.TryGetValue(unit.ExecutingCardKey, out EnemyFrozenEffectiveCardState? state) ||
+            state.ExecutingCardInstanceKey != unit.ExecutingCardKey ||
+            requireFrozenX && state.FrozenX is null)
+        {
+            throw new InvalidOperationException(
+                $"执行牌 {unit.ExecutingCardKey} 缺少完整的冻结有效牌元数据。");
+        }
+
+        return state;
+    }
 
     /// <summary>
     /// 开始记录一张来源牌的一次重放。
@@ -105,9 +126,9 @@ public sealed class EnemyCardSimulationContext
     public void AddDamageToAll(decimal baseDamage, int hitCount = 1)
     {
         UnitAccumulator unit = RequireCurrentUnit();
-        if (baseDamage < decimal.Zero || hitCount < 1)
+        if (baseDamage < decimal.Zero || hitCount < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(baseDamage), "伤害不能为负且命中次数必须大于零。");
+            throw new ArgumentOutOfRangeException(nameof(baseDamage), "伤害不能为负且命中次数不能为负。");
         }
 
         if (!TryCommitStep())
@@ -124,6 +145,7 @@ public sealed class EnemyCardSimulationContext
                     baseDamage * target.Input.DamageMultiplier));
             }
         }
+
     }
 
     /// <summary>
@@ -247,7 +269,11 @@ public sealed class EnemyCardSimulationContext
             throw new InvalidOperationException("存在未提交模拟单元，不能生成投影。 ");
         }
 
-        return new LiveActionProjection(_units.Select(unit => unit.ToProjection()), IsComplete, _diagnostics);
+        return new LiveActionProjection(
+            _units.Select(unit => unit.ToProjection()),
+            IsComplete,
+            _diagnostics,
+            _effectiveCardStates.Values);
     }
 
     /// <summary>

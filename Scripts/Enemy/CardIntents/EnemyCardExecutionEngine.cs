@@ -139,18 +139,31 @@ public sealed class EnemyCardExecutionEngine
         }
 
         unit.ValidateFrozenDefinition(executing.Definition);
+        PreparedEnemyCardAction action = state.PreparedAction ??
+                                         throw new InvalidOperationException("执行期间冻结行动不得丢失。");
+        bool requiresFrozenX = executing.Definition.Effects.Any(effect => effect is EnemyFrozenXAttackAllEffect);
+        unit.ValidateFrozenEffectiveState(action, requiresFrozenX);
+
         if (!executing.Definition.PlayCondition.CanExecute(context))
         {
             throw new InvalidOperationException(
                 $"执行牌 {unit.ExecutingCardKey} 的冻结出牌条件在真实结算时不再成立。 ");
         }
 
-        foreach (PreparedEnemyResolutionStep step in unit.OrderedSteps)
+        context.PushExecutingCard(unit.ExecutingCardKey);
+        try
         {
-            await ExecuteStepAsync(state, executing, step, context, session, collectionProgram: null);
-        }
+            foreach (PreparedEnemyResolutionStep step in unit.OrderedSteps)
+            {
+                await ExecuteStepAsync(state, executing, step, context, session, collectionProgram: null);
+            }
 
-        await _abilityHooks.AfterSuccessfulUnitAsync(context);
+            await _abilityHooks.AfterSuccessfulUnitAsync(context);
+        }
+        finally
+        {
+            context.PopExecutingCard(unit.ExecutingCardKey);
+        }
     }
 
     /// <summary>

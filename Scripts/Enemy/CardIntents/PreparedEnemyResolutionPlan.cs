@@ -210,6 +210,31 @@ public sealed record PreparedEnemyCardUnitPlan
     }
 
     /// <summary>
+    /// 验证本单元按真正执行实例共享冻结 N/X，Replay 不得重算或改用根来源。
+    /// </summary>
+    internal EnemyFrozenEffectiveCardState? ValidateFrozenEffectiveState(
+        PreparedEnemyCardAction action,
+        bool requireFrozenX)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (action.EffectiveCardStates.Count == 0 && !requireFrozenX)
+        {
+            return null;
+        }
+
+        if (!action.EffectiveCardStates.TryGetValue(ExecutingCardKey, out EnemyFrozenEffectiveCardState? frozen) ||
+            frozen.ExecutingCardInstanceKey != ExecutingCardKey ||
+            !frozen.WasCounted ||
+            requireFrozenX && frozen.FrozenX is null)
+        {
+            throw new InvalidOperationException(
+                $"执行牌 {ExecutingCardKey} 的冻结有效牌元数据缺失或已损坏。");
+        }
+
+        return frozen;
+    }
+
+    /// <summary>
     /// 判断步骤是否属于受控直接执行禁止携带的递归支付或作词类型。
     /// </summary>
     /// <param name="step">待检查步骤。</param>

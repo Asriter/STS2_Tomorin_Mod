@@ -197,7 +197,8 @@ public sealed class PreparedEnemyCardAction
         IEnumerable<BaseEnemyCard> metricCards,
         IEnumerable<PreparedEnemyCardSource> sources,
         EnemySoftLockDiagnostic softLockDiagnostic,
-        EnemyPreparedPreActionInventoryDelta? preActionInventoryDelta = null)
+        EnemyPreparedPreActionInventoryDelta? preActionInventoryDelta = null,
+        IEnumerable<EnemyFrozenEffectiveCardState>? effectiveCardStates = null)
     {
         ArgumentNullException.ThrowIfNull(retainedPrefix);
         ArgumentNullException.ThrowIfNull(metricCards);
@@ -208,6 +209,16 @@ public sealed class PreparedEnemyCardAction
         Sources = Array.AsReadOnly(sources.ToArray());
         SoftLockDiagnostic = softLockDiagnostic ?? throw new ArgumentNullException(nameof(softLockDiagnostic));
         PreActionInventoryDelta = preActionInventoryDelta ?? EnemyPreparedPreActionInventoryDelta.Empty;
+        EnemyFrozenEffectiveCardState[] effectiveStates = (effectiveCardStates ?? []).ToArray();
+        if (effectiveStates.Any(state => state is null) ||
+            effectiveStates.Select(state => state.ExecutingCardInstanceKey).Distinct().Count() != effectiveStates.Length)
+        {
+            throw new ArgumentException("冻结有效牌状态不能包含空值或重复实例键。", nameof(effectiveCardStates));
+        }
+
+        EffectiveCardStates = new System.Collections.ObjectModel.ReadOnlyDictionary<
+            EnemyCardInstanceKey,
+            EnemyFrozenEffectiveCardState>(effectiveStates.ToDictionary(state => state.ExecutingCardInstanceKey));
         BaseEnemyCard[] ordered = RetainedPrefix.Concat(MetricCards).ToArray();
         if (ordered.Select(card => card.InstanceKey).Distinct().Count() != ordered.Length)
         {
@@ -217,6 +228,22 @@ public sealed class PreparedEnemyCardAction
         if (!Sources.Select(source => source.SourceKey).SequenceEqual(ordered.Select(card => card.InstanceKey)))
         {
             throw new ArgumentException("逐来源计划必须与保留前缀及指标牌的执行顺序完全一致。", nameof(sources));
+        }
+
+        if (EffectiveCardStates.Count > 0)
+        {
+            EnemyCardInstanceKey[] plannedKeys = Sources
+                .SelectMany(source => source.Units)
+                .SelectMany(EnumerateUnitTree)
+                .Select(unit => unit.ExecutingCardKey)
+                .Distinct()
+                .ToArray();
+            if (plannedKeys.Any(key => !EffectiveCardStates.TryGetValue(key, out EnemyFrozenEffectiveCardState? state) ||
+                                       state.ExecutingCardInstanceKey != key ||
+                                       !state.WasCounted))
+            {
+                throw new ArgumentException("每个成功冻结单元都必须具有已计数的逐实例有效牌状态。", nameof(effectiveCardStates));
+            }
         }
     }
 
@@ -238,6 +265,51 @@ public sealed class PreparedEnemyCardAction
     /// <summary>获取与本行动一起提交且只追加一次的准备前库存增量。</summary>
     public EnemyPreparedPreActionInventoryDelta PreActionInventoryDelta { get; }
 
+    /// <summary>获取按真实执行实例键索引的冻结 N/X 元数据。</summary>
+    public IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> EffectiveCardStates { get; }
+
     /// <summary>获取兼容候选调用方的当前冻结行动自身。</summary>
     public PreparedEnemyCardAction Candidate => this;
+
+    private static IEnumerable<PreparedEnemyCardUnitPlan> EnumerateUnitTree(PreparedEnemyCardUnitPlan unit)
+    {
+        yield return unit;
+        foreach (PreparedEnemyResolutionStep step in unit.OrderedSteps)
+        {
+            IEnumerable<PreparedEnemyCardUnitPlan> children = step switch
+            {
+                PreparedConsumedCardStep { ControlledChild: not null } consumed => [consumed.ControlledChild],
+                PreparedConsumedCollectionStep collection => collection.Children.SelectMany(EnumerateStepUnits),
+                PreparedComposeResultStep compose =>
+                    (compose.ImmediateChild is null
+                        ? Enumerable.Empty<PreparedEnemyCardUnitPlan>()
+                        : new[] { compose.ImmediateChild })
+                    .Concat(compose.AdditionalReplayUnits),
+                PreparedImmediateCardStep immediate => [immediate.Child, .. immediate.AdditionalReplayUnits],
+                PreparedRecoveryStep { ImmediateCardChild: not null } recovery =>
+                    [recovery.ImmediateCardChild, .. recovery.AdditionalReplayUnits],
+                _ => []
+            };
+            foreach (PreparedEnemyCardUnitPlan child in children.SelectMany(EnumerateUnitTree))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private static IEnumerable<PreparedEnemyCardUnitPlan> EnumerateStepUnits(PreparedEnemyResolutionStep step) =>
+        step switch
+        {
+            PreparedConsumedCardStep { ControlledChild: not null } consumed => [consumed.ControlledChild],
+            PreparedConsumedCollectionStep collection => collection.Children.SelectMany(EnumerateStepUnits),
+            PreparedComposeResultStep compose =>
+                (compose.ImmediateChild is null
+                    ? Enumerable.Empty<PreparedEnemyCardUnitPlan>()
+                    : new[] { compose.ImmediateChild })
+                .Concat(compose.AdditionalReplayUnits),
+            PreparedImmediateCardStep immediate => [immediate.Child, .. immediate.AdditionalReplayUnits],
+            PreparedRecoveryStep { ImmediateCardChild: not null } recovery =>
+                [recovery.ImmediateCardChild, .. recovery.AdditionalReplayUnits],
+            _ => []
+        };
 }

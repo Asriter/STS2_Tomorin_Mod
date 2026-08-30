@@ -118,13 +118,15 @@ public sealed class EnemyActionMetricPlanner
             EnemyPreparedPlanningState resolutionTransaction = state.CreatePreparedPlanningState(
                 candidate,
                 preparationCycle.Delta);
+            EnemyEffectiveCardLedger effectiveCardLedger = new();
             PreparedEnemyCardSource[] sources = state.RetainedCards.Concat(selected)
                 .Select(card => _resolutionPlanner.PlanSource(
                     card,
                     checked(resolutionTransaction.GetReplayCount(card.InstanceKey) + 1),
                     resolutionTransaction,
                     context.RandomSource,
-                    _rules.StepLimit))
+                    _rules.StepLimit,
+                    effectiveCardLedger))
                 .ToArray();
             EnemySoftLockDiagnostic diagnostic = new(
                 score,
@@ -139,7 +141,8 @@ public sealed class EnemyActionMetricPlanner
                 selected,
                 sources,
                 diagnostic,
-                preparationCycle.Delta);
+                preparationCycle.Delta,
+                effectiveCardLedger.States.Values);
             state.CommitPreparedAction(candidate, action);
             return action;
         }

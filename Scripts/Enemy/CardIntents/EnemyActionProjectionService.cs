@@ -66,7 +66,10 @@ public sealed class EnemyActionProjectionService
             return _cachedProjection;
         }
 
-        EnemyCardSimulationContext simulation = new(input.Targets, input.StepLimit);
+        EnemyCardSimulationContext simulation = new(
+            input.Targets,
+            input.StepLimit,
+            action.EffectiveCardStates);
         foreach (string unknown in input.UnknownModifierIds)
         {
             simulation.MarkIncomplete($"未知第三方数值修改器未执行：{unknown}");
@@ -138,6 +141,16 @@ public sealed class EnemyActionProjectionService
 
             EnemyCardDefinition definition = ResolveCardDefinition(action, unit);
             unit.ValidateFrozenDefinition(definition);
+            bool requiresFrozenX = definition.Effects.Any(effect => effect is EnemyFrozenXAttackAllEffect);
+            try
+            {
+                unit.ValidateFrozenEffectiveState(action, requiresFrozenX);
+            }
+            catch (InvalidOperationException exception)
+            {
+                simulation.MarkIncomplete(exception.Message);
+            }
+
             if (!definition.PlayCondition.CanSimulate(simulation))
             {
                 simulation.MarkIncomplete(
@@ -420,6 +433,17 @@ public sealed class EnemyActionProjectionService
             {
                 AppendUnitFingerprint(builder, unit);
             }
+        }
+
+        foreach (EnemyFrozenEffectiveCardState state in action.EffectiveCardStates.Values
+                     .OrderBy(state => state.ExecutingCardInstanceKey.Value, StringComparer.Ordinal))
+        {
+            builder.Append("|X:")
+                .Append(state.ExecutingCardInstanceKey.Value).Append(':')
+                .Append(state.FrozenN).Append(':')
+                .Append(state.FrozenX?.ToString(CultureInfo.InvariantCulture) ?? "-").Append(':')
+                .Append(state.Multiplier).Append(':')
+                .Append(state.WasCounted);
         }
 
         foreach (EnemySimulationTarget target in input.Targets)

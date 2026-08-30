@@ -36,7 +36,10 @@ public static class StageRoomResolver
             StageRouteNodeKind.Ancient => ModelDb.AncientEvent<GiraffeAncient>().ToMutable(),
             StageRouteNodeKind.FirstEvent or StageRouteNodeKind.SecondEvent => ModelDb.Event<FeedTheCat>().ToMutable(),
             StageRouteNodeKind.Elite => ModelDb.Encounter<MechaKnightElite>().ToMutable(),
-            StageRouteNodeKind.Boss => ModelDb.Encounter<CrychicPhatomBoss>().ToMutable(),
+            StageRouteNodeKind.Boss => runState.Act.BossEncounter?.ToMutable()
+                ?? throw new InvalidOperationException(
+                    $"[Stage] 章节 {runState.Act.Id} 到达 Boss 节点时缺少第一 Boss；" +
+                    $"地图节点={runState.CurrentMapPoint}，路线节点={node.Kind}。"),
             StageRouteNodeKind.Shop or StageRouteNodeKind.RestSite => null,
             _ => throw new InvalidOperationException($"[Stage] 未预期的舞台路线节点：{node.Kind}"),
         };

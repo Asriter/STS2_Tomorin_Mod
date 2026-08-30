@@ -64,6 +64,13 @@ $requiredPaths = @(
     "$featureRoot/Test/CardIntentTestCollectionCatalog.cs",
     "$featureRoot/Test/CardIntentTestDeck.cs",
     "$featureRoot/Test/CardIntentTestMonster.cs",
+    "$featureRoot/ShadowTomorin/ShadowTomorinBalance.cs",
+    "$featureRoot/ShadowTomorin/ShadowTomorinCardCatalog.cs",
+    "$featureRoot/ShadowTomorin/ShadowTomorinCollectionCatalog.cs",
+    "$featureRoot/ShadowTomorin/ShadowTomorinDeck.cs",
+    "$featureRoot/ShadowTomorin/ShadowTomorinRules.cs",
+    "Scripts/Enemy/ShadowTomorin.cs",
+    "Scripts/Encounters/ShadowTomorinBoss.cs",
     "Scripts/Powers/EnemyPowers/EnemyCollectionInventoryPower.cs",
     "Scripts/Powers/EnemyPowers/CardIntentSorrowfulRainPower.cs",
     "Scripts/Powers/EnemyPowers/CardIntentAdayumePower.cs",
@@ -134,8 +141,9 @@ Assert-Matches $combatState "AssertUniqueOwnership" "权威状态必须验证跨
 # 规划器必须执行指标排除、双软锁、最后候选提交，并冻结素材实例引用。
 $planner = Get-RepositoryContent "$featureRoot/EnemyActionMetricPlanner.cs"
 Assert-Matches $planner "LastMetric" "规划器必须根据 LastMetric 排除上次指标。"
-Assert-Matches $planner "AttackLock[\s\S]*TotalScoreLock" "规划器必须同时应用攻击和总评分软锁。"
-Assert-Matches $planner "overLock\s*&&\s*isFinalAttempt" "规划器必须记录最后候选强制提交。"
+Assert-Matches $planner "StaticLocks\.Attack[\s\S]*StaticLocks\.Total[\s\S]*FullLocks\.Attack[\s\S]*FullLocks\.Total" `
+    "规划器必须同时应用静态与完整投影的攻击和总评分软锁。"
+Assert-Matches $planner "EnemyCandidateCommitMode\.ForcedOverLock" "规划器必须记录最后候选强制提交。"
 Assert-Matches $planner "EnemyPreparedResolutionPlanner" "规划器必须通过唯一递归规划器冻结 DFS 行动。"
 $resolutionPlanner = Get-RepositoryContent "$featureRoot/EnemyPreparedResolutionPlanner.cs"
 Assert-Matches $resolutionPlanner "List<PreparedEnemyCardUnitPlan>[\s\S]*replayIndex" `
@@ -186,6 +194,18 @@ $monsterBase = Get-RepositoryContent "$featureRoot/BaseCardIntentMonsterModel.cs
 Assert-Matches $monsterBase "CaptureReconnectState" "怪物基类必须提供主机捕获入口。"
 Assert-Matches $monsterBase "TryApplyReconnectState" "怪物基类必须提供客户端原子应用入口。"
 Assert-Matches $monsterBase "ApplyValidatedCombatState" "怪物基类只能应用已验证的完整临时状态。"
+
+# 正式影灯必须使用注册目录和唯一自循环状态，阶段迁移不得替换当前 MoveState。
+$shadowMonster = Get-RepositoryContent "Scripts/Enemy/ShadowTomorin.cs"
+$shadowCatalog = Get-RepositoryContent "$featureRoot/ShadowTomorin/ShadowTomorinCardCatalog.cs"
+$shadowDeck = Get-RepositoryContent "$featureRoot/ShadowTomorin/ShadowTomorinDeck.cs"
+Assert-Matches $shadowDeck "EnemyCardContentDirectory" "影灯必须注册正式阶段内容目录。"
+Assert-Matches $shadowMonster "CardIntentMoveState\.Create" "影灯必须使用 CardIntent 行动状态。"
+Assert-Matches $shadowMonster "FollowUpState\s*=\s*_cardState" "影灯唯一状态必须稳定自循环。"
+Assert-NotMatches $shadowMonster "SetMoveImmediate" "影灯阶段切换不得立即替换当前行动。"
+Assert-NotMatches $shadowCatalog "Utakotoba" "影灯正式卡池不得包含 Utakotoba。"
+Assert-Matches $sync "EnemyCardDeckRegistry\.GetContentDirectory\(expectedDeckId\)[\s\S]*directory\.CreateDefinition" `
+    "重连必须按同步 DeckId 从注册目录解析正式卡牌。"
 
 # 动态逐牌视图必须按实例键复用、围绕角色头顶居中扩展，并使用唯一共享 Hover 与原版逐牌 Intent。
 $listView = Get-RepositoryContent "$featureRoot/View/NCardListIntentView.cs"

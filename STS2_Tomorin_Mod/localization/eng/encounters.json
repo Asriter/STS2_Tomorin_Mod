@@ -8,5 +8,7 @@
   "STS2_TOMORIN_MOD-OBLIVIONIS_BOSS.title": "Oblivionis",
   "STS2_TOMORIN_MOD-OBLIVIONIS_BOSS.loss": "Your song failed to reach Oblivionis...",
   "STS2_TOMORIN_MOD-BAND_MEMBER_ENCOUNTER.title": "Band",
-  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_ENCOUNTER.title": "Card Intent Test"
+  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_ENCOUNTER.title": "Card Intent Test",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN_BOSS.title": "Shadow Tomori",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN_BOSS.loss": "Your unfinished song was swallowed by its own shadow."
 }

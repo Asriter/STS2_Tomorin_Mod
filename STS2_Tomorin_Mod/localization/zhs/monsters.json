@@ -31,5 +31,8 @@
   "STS2_TOMORIN_MOD-SOYO.moves.doEverything": "你要怎样才会回来？我什么都会做的！",
   "STS2_TOMORIN_MOD-SOYO.moves.forEnding": "不要误会，我是为了结束才来的！",
   "STS2_TOMORIN_MOD-RAANA.name": "要乐奈",
-  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_MONSTER.name": "卡牌意图测试体"
+  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_MONSTER.name": "卡牌意图测试体",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN.name": "影灯",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN.moves.pendingPhaseTwo": "影子开始收集词句，编织成歌。",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN.moves.pendingPhaseThree": "无名之纸已经展开。必须立刻结束这首歌。"
 }

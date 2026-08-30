@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable> <!--Makes code analysis regarding null values stricter.-->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <DefaultItemExcludes>packages/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);packages/**</DefaultItemExcludes>
     <AppOutputBase>$(MSBuildProjectDirectory)\</AppOutputBase>
     <PathMap>$(AppOutputBase)=.\</PathMap>
   </PropertyGroup>
@@ -87,6 +87,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="**/*.cs.uid" />
     <Compile Remove="STS2_Tomorin_Mod/**" />
     <Compile Remove="content/**" />
     <Compile Remove="materials/**" />

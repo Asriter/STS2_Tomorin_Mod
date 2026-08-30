@@ -1,0 +1,35 @@
+[gd_scene load_steps=3 format=3 uid="uid://dqgowydvekl28"]
+
+[ext_resource type="Script" uid="uid://drnpxx4p2723s" path="res://src/Core/Nodes/Combat/NCreatureVisuals.cs" id="1_462ej"]
+[ext_resource type="SpineSkeletonDataResource" uid="uid://b3g2bx1qh0pvl" path="res://STS2_Tomorin_Mod/animations/characters/tomorin/tomorin.tres" id="2_plyul"]
+
+[node name="ShadowTomorin" type="Node2D"]
+script = ExtResource("1_462ej")
+metadata/_edit_group_ = true
+
+[node name="Visuals" type="SpineSprite" parent="."]
+unique_name_in_owner = true
+position = Vector2(4, -151)
+scale = Vector2(-0.135, 0.135)
+skeleton_data_res = ExtResource("2_plyul")
+preview_skin = "Default"
+preview_animation = "idle_loop"
+preview_frame = false
+preview_time = 0.0
+
+[node name="Bounds" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 0
+offset_left = -79.0
+offset_top = -282.0
+offset_right = 85.0
+offset_bottom = -4.0
+
+[node name="IntentPos" type="Marker2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(1, -299)
+
+[node name="CenterPos" type="Marker2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(5, -154)

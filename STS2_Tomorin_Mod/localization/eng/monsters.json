@@ -24,5 +24,8 @@
   "STS2_TOMORIN_MOD-AMORIS.name": "Amoris",
   "STS2_TOMORIN_MOD-FULL_POWER_OBLIVIONIS.name": "Oblivionis",
   "STS2_TOMORIN_MOD-RAANA.name": "Raana Kaname",
-  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_MONSTER.name": "Card Intent Test"
+  "STS2_TOMORIN_MOD-CARD_INTENT_TEST_MONSTER.name": "Card Intent Test",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN.name": "Shadow Tomori",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN.moves.pendingPhaseTwo": "The shadow begins gathering words into a song.",
+  "STS2_TOMORIN_MOD-SHADOW_TOMORIN.moves.pendingPhaseThree": "The nameless page opens. The song must end now."
 }

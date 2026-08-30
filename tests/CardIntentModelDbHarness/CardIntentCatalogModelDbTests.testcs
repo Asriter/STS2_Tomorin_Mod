@@ -1,3 +1,4 @@
+using System.Reflection;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
 using STS2_Tomorin_Mod.Cards;
@@ -52,7 +53,9 @@ public sealed class CardIntentCatalogModelDbTests
             typeof(CrumpledPaper),
             typeof(LeftoverBuffet),
             typeof(MidnightCoffee),
-            typeof(StarStone)
+            typeof(StarStone),
+            typeof(Utakotoba),
+            typeof(UtakotobaToken)
         ];
 
         ModelDb.ResetForTest();
@@ -112,7 +115,24 @@ public sealed class CardIntentCatalogModelDbTests
         Assert.NotEmpty(shadowDefinitions);
         Assert.All(shadowDefinitions, definition =>
             Assert.Same(registeredCards[definition.CardModel.GetType()], definition.CardModel));
-        Assert.NotEmpty(EnemyCardDeckRegistry.GetAssetPaths(ShadowTomorinDeck.DeckId));
+        Assert.DoesNotContain(shadowDefinitions, definition =>
+            definition.CardModel is Utakotoba or UtakotobaToken);
+        IReadOnlyList<string> shadowAssetPaths = EnemyCardDeckRegistry.GetAssetPaths(ShadowTomorinDeck.DeckId);
+        Assert.NotEmpty(shadowAssetPaths);
+        MethodInfo getCardModelAssetPaths = typeof(EnemyCardDeckRegistry).GetMethod(
+            "GetCardModelAssetPaths",
+            BindingFlags.NonPublic | BindingFlags.Static) ??
+            throw new InvalidOperationException("敌人牌组注册表缺少卡牌资源枚举入口。");
+        string[] forbiddenUtakotobaPaths = new CardModel[]
+            {
+                ModelDb.Card<Utakotoba>(),
+                ModelDb.Card<UtakotobaToken>()
+            }
+            .SelectMany(model => Assert.IsAssignableFrom<IEnumerable<string>>(
+                getCardModelAssetPaths.Invoke(null, [model])))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        Assert.DoesNotContain(shadowAssetPaths, forbiddenUtakotobaPaths.Contains);
         Assert.All(ShadowTomorinCollectionCatalog.Catalog.Definitions, definition =>
             Assert.Same(registeredCards[definition.CardModelType], definition.ResolveCardModel()));
 

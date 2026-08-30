@@ -30,6 +30,7 @@ function Assert-NotContains([string]$content, [string]$pattern, [string]$message
 
 $paths = @(
     "Scripts/Acts/Stage.cs",
+    "Scripts/Encounters/ShadowTomorinBoss.cs",
     "Scripts/Stage/StageActMap.cs",
     "Scripts/Stage/StageRouteDefinition.cs",
     "Scripts/Stage/StageRegistrationPolicy.cs",
@@ -95,8 +96,27 @@ Assert-Contains $deathPatch "ModelDb\.Monster<FullPowerOblivionis>" "FPO progres
 Assert-Contains $resolver "ModelDb\.AncientEvent<GiraffeAncient>" "Stage Ancient must resolve to GiraffeAncient."
 Assert-Contains $resolver "ModelDb\.Event<FeedTheCat>" "Both Stage event nodes must resolve to FeedTheCat."
 Assert-Contains $resolver "ModelDb\.Encounter<MechaKnightElite>" "Stage elite must resolve to MechaKnightElite."
-Assert-Contains $resolver "ModelDb\.Encounter<CrychicPhatomBoss>" "Stage boss must resolve to CrychicPhatomBoss."
+Assert-Contains $resolver "StageRouteNodeKind\.Boss\s*=>\s*runState\.Act\.BossEncounter" "Stage boss rooms must resolve from the current authoritative primary boss."
+Assert-NotContains $resolver "StageRouteNodeKind\.Boss\s*=>\s*ModelDb\.Encounter<CrychicPhatomBoss>" "Stage boss rooms must not hard-code the default Crychic encounter."
 Assert-NotContains $allStageSources "LoadModBoss" "Stage must not read LoadModBoss."
+
+Assert-Contains $stage "BossDiscoveryOrder" "Stage must define its default primary-boss discovery order."
+$bossDiscoveryStart = $stage.IndexOf("BossDiscoveryOrder", [StringComparison]::Ordinal)
+$encounterEnumerationStart = $stage.IndexOf("GenerateAllEncounters", [StringComparison]::Ordinal)
+if ($bossDiscoveryStart -lt 0 -or $encounterEnumerationStart -le $bossDiscoveryStart) {
+    throw "Stage boss discovery and encounter enumeration members must have a stable source boundary."
+}
+
+$bossDiscovery = $stage.Substring($bossDiscoveryStart, $encounterEnumerationStart - $bossDiscoveryStart)
+Assert-Contains $bossDiscovery "ModelDb\.Encounter<ShadowTomorinBoss>" "Stage must use ShadowTomorinBoss as its default primary boss."
+Assert-NotContains $bossDiscovery "ModelDb\.Encounter<CrychicPhatomBoss>" "Stage must replace the temporary Crychic primary-boss route."
+Assert-NotContains $bossDiscovery "ModelDb\.Encounter<(?:OblivionisBoss|TakiBoss)>" "Alternative FateGuidance bosses must not enter the default discovery order."
+
+$encounterEnumeration = $stage.Substring($encounterEnumerationStart)
+foreach ($encounter in @("BandMemberEncounter", "ShadowTomorinBoss", "OblivionisBoss", "TakiBoss")) {
+    Assert-Contains $encounterEnumeration ("ModelDb\.Encounter<{0}>" -f $encounter) "Stage legal encounters must include $encounter."
+}
+Assert-NotContains $encounterEnumeration "ModelDb\.Encounter<CrychicPhatomBoss>" "Stage legal encounters must not retain its Crychic placeholder route."
 
 Assert-Contains $rewardPatch "RewardsSet\.WithRewardsFromRoom" "FPO reward eligibility must adapt the native reward entry point."
 Assert-Contains $rewardPatch "EmptyForRoom" "Ineligible Glory bosses must retain a terminal empty rewards screen."

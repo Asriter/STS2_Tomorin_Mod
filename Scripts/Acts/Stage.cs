@@ -70,12 +70,24 @@ public sealed class Stage : CustomActModel
     }
 
     /// <summary>
-    /// 返回舞台路线会直接引用的固定精英与首领 Encounter，供模型库完整枚举。
+    /// 以影灯作为舞台默认第一 Boss，不让其他可选 Boss 参与初始发现顺序。
     /// </summary>
-    /// <returns>固定机甲骑士精英与 Crychic 亡灵首领。</returns>
+    public override IEnumerable<EncounterModel> BossDiscoveryOrder =>
+        [ModelDb.Encounter<ShadowTomorinBoss>()];
+
+    /// <summary>
+    /// 返回舞台路线与 FateGuidance 会引用的全部合法 Encounter，供模型校验和存档恢复。
+    /// </summary>
+    /// <returns>固定乐队成员遭遇以及三个 FateGuidance Boss。</returns>
     public override IEnumerable<EncounterModel> GenerateAllEncounters()
     {
-        return [ModelDb.Encounter<MegaCrit.Sts2.Core.Models.Encounters.MechaKnightElite>(), ModelDb.Encounter<CrychicPhatomBoss>()];
+        return
+        [
+            ModelDb.Encounter<BandMemberEncounter>(),
+            ModelDb.Encounter<ShadowTomorinBoss>(),
+            ModelDb.Encounter<OblivionisBoss>(),
+            ModelDb.Encounter<TakiBoss>(),
+        ];
     }
 
     /// <summary>

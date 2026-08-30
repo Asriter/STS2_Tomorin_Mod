@@ -1,3 +1,5 @@
+using MegaCrit.Sts2.Core.Entities.Cards;
+using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 using Xunit;
@@ -182,6 +184,108 @@ public sealed class ReconnectStateTests
         Assert.False(TryRestore(sync with { Cursor = outOfBounds }, out _));
     }
 
+    [Fact]
+    public void SchemaV3RoundTripPreservesPhaseCarryExhaustFrozenXAndPreparation()
+    {
+        PhaseReconnectFixture fixture = PhaseReconnectFixture.Create("ROUND_TRIP");
+        EnemyCardRuntimeSyncState sync = fixture.Capture();
+
+        Assert.True(fixture.TryRestore(sync, out EnemyCardCombatState? restored, out string reason), reason);
+        Assert.NotNull(restored);
+        Assert.Equal(EnemyCardRuntimeSyncState.CurrentSchemaVersion, sync.SchemaVersion);
+        Assert.Equal(fixture.State.ActivePhase, restored!.ActivePhase);
+        Assert.Equal(fixture.State.PendingPhase, restored.PendingPhase);
+        Assert.Equal(fixture.State.PhaseRevision, restored.PhaseRevision);
+        Assert.Equal(
+            fixture.Carry.InstanceKey,
+            restored.ExhaustPile.Single(card => card.CarryAcrossPhase).InstanceKey);
+        Assert.Equal(EnemyCardPhase.Phase1, restored.ExhaustPile.Single(card => card.CarryAcrossPhase).SourcePhase);
+        Assert.NotNull(restored.FrozenPreparationCollection);
+        Assert.NotNull(restored.FrozenPreparationDelta);
+        Assert.Same(
+            restored.FrozenPreparationCollection,
+            Assert.Single(restored.FrozenPreparationDelta!.AddedAvailable));
+        Assert.Same(
+            restored.FrozenPreparationDelta,
+            restored.PreparedAction!.PreActionInventoryDelta);
+        Assert.Equal(EnemyCardPhase.Phase2, restored.PreparedAction.Phase);
+        EnemyFrozenEffectiveCardState frozen = Assert.Single(restored.PreparedAction.EffectiveCardStates).Value;
+        Assert.NotNull(frozen.FrozenX);
+        Assert.True(frozen.WasCounted);
+        Assert.Equal(sync.CompletedEffectiveCardCount, restored.PreparedAction.EffectiveCardStates.Values.Count(x => x.WasCounted));
+        Assert.Equal(sync.StaticScore!.Attack, restored.PreparedAction.SoftLockDiagnostic.StaticScore.Attack);
+        Assert.Equal(sync.FullScore!.AttackRisk, restored.PreparedAction.SoftLockDiagnostic.FullScore.AttackRisk);
+        Assert.Equal(sync.CommitMode, restored.PreparedAction.SoftLockDiagnostic.CommitMode);
+    }
+
+    [Fact]
+    public void MissingRequiredFrozenXIsRejectedWithoutChangingAuthority()
+    {
+        PhaseReconnectFixture fixture = PhaseReconnectFixture.Create("MISSING_X");
+        EnemyCardRuntimeSyncState valid = fixture.Capture();
+        EnemyFrozenEffectiveCardSyncState xState = valid.EffectiveCardStates.Single(item => item.FrozenX.HasValue);
+        EnemyCardRuntimeSyncState corrupt = valid with
+        {
+            EffectiveCardStates = valid.EffectiveCardStates
+                .Select(item => item.ExecutingCardInstanceKey == xState.ExecutingCardInstanceKey
+                    ? item with { FrozenX = null }
+                    : item)
+                .ToArray()
+        };
+        EnemyCardInstanceKey[] exhaustBefore = fixture.State.ExhaustPile.Select(card => card.InstanceKey).ToArray();
+        PreparedEnemyCardAction actionBefore = fixture.State.PreparedAction!;
+        EnemyCollectionInstance preparationBefore = fixture.State.FrozenPreparationCollection!;
+
+        Assert.False(fixture.TryRestore(corrupt, out EnemyCardCombatState? restored, out string reason));
+        Assert.Null(restored);
+        Assert.Contains("X", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(exhaustBefore, fixture.State.ExhaustPile.Select(card => card.InstanceKey));
+        Assert.Same(actionBefore, fixture.State.PreparedAction);
+        Assert.Same(preparationBefore, fixture.State.FrozenPreparationCollection);
+        Assert.Equal(EnemyCardPhase.Phase2, fixture.State.ActivePhase);
+        Assert.Equal(EnemyCardPhase.Phase3, fixture.State.PendingPhase);
+    }
+
+    [Fact]
+    public void CorruptSchemaV3ClosuresAreRejected()
+    {
+        PhaseReconnectFixture fixture = PhaseReconnectFixture.Create("CORRUPT_CLOSURE");
+        EnemyCardRuntimeSyncState valid = fixture.Capture();
+        PreparedEnemyCardAction actionBefore = fixture.State.PreparedAction!;
+        EnemyCollectionInstance preparationBefore = fixture.State.FrozenPreparationCollection!;
+        EnemyCardRuntimeCardState carry = valid.ExhaustPile.Single(card => card.CarryAcrossPhase);
+        EnemyCardRuntimeSyncState corruptCarry = valid with
+        {
+            ExhaustPile = valid.ExhaustPile
+                .Select(card => card.InstanceKey == carry.InstanceKey
+                    ? card with { CarryAcrossPhase = false }
+                    : card)
+                .ToArray()
+        };
+        EnemyCardRuntimeSyncState duplicateEffective = valid with
+        {
+            EffectiveCardStates = [.. valid.EffectiveCardStates, valid.EffectiveCardStates[0]]
+        };
+        EnemySoftLockDiagnosticSyncState forcedDiagnostic = valid.PreparedAction!.SoftLockDiagnostic! with
+        {
+            WasForcedByAttemptLimit = true
+        };
+        EnemyCardRuntimeSyncState incompleteForced = valid with
+        {
+            CommitMode = EnemyCandidateCommitMode.ForcedOverLock,
+            ProjectionIsComplete = false,
+            PreparedAction = valid.PreparedAction with { SoftLockDiagnostic = forcedDiagnostic }
+        };
+
+        Assert.False(fixture.TryRestore(corruptCarry, out _, out _));
+        Assert.False(fixture.TryRestore(duplicateEffective, out _, out _));
+        Assert.False(fixture.TryRestore(incompleteForced, out _, out _));
+        Assert.Same(actionBefore, fixture.State.PreparedAction);
+        Assert.Same(preparationBefore, fixture.State.FrozenPreparationCollection);
+        Assert.Equal(EnemyCardPhase.Phase2, fixture.State.ActivePhase);
+        Assert.Equal(EnemyCardPhase.Phase3, fixture.State.PendingPhase);
+    }
+
     /// <summary>
     /// 使用测试敌人的显式目录尝试恢复一个传输状态。
     /// </summary>
@@ -203,4 +307,122 @@ public sealed class ReconnectStateTests
         /// <inheritdoc />
         public int NextIndex(int exclusiveUpperBound) => 0;
     }
+
+    private sealed class PhaseReconnectFixture
+    {
+        private static int _nextId;
+
+        private PhaseReconnectFixture(
+            EnemyCardContentDirectory directory,
+            EnemyCardCombatState state,
+            BaseEnemyCard carry)
+        {
+            Directory = directory;
+            State = state;
+            Carry = carry;
+        }
+
+        public EnemyCardContentDirectory Directory { get; }
+        public EnemyCardCombatState State { get; }
+        public BaseEnemyCard Carry { get; }
+
+        public static PhaseReconnectFixture Create(string suffix)
+        {
+            int id = Interlocked.Increment(ref _nextId);
+            StrikeTomorin model = new();
+            EnemyCardDefinition carryDefinition = new(
+                new EnemyCardId($"STS2_TOMORIN_MOD:SYNC_CARRY_{suffix}_{id}"),
+                model,
+                EnemyCardTag.Attack,
+                new EnemyCardScoreProfile(attack: 1m),
+                carryAcrossPhase: true);
+            EnemyCardDefinition xDefinition = new(
+                new EnemyCardId($"STS2_TOMORIN_MOD:SYNC_X_{suffix}_{id}"),
+                model,
+                EnemyCardTag.Attack,
+                EnemyCardScoreProfile.Zero,
+                effects: [new EnemyFrozenXAttackAllEffect($"SYNC:X:{suffix}:{id}", 3m)]);
+            EnemyCardDefinition thirdDefinition = new(
+                new EnemyCardId($"STS2_TOMORIN_MOD:SYNC_P3_{suffix}_{id}"),
+                model,
+                EnemyCardTag.Attack,
+                new EnemyCardScoreProfile(attack: 1m));
+            EnemyCardPlanningRules rules = new(
+                new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+                new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+                maxCandidateAttempts: 1,
+                stepLimit: 128,
+                [new EnemyWeightedActionRecipe(
+                    new EnemyActionRecipe(EnemyActionMetric.Attack, [EnemyCardTag.Attack]),
+                    weight: 1)]);
+            Func<BaseEnemyCard> CarryFactory() => () => new HarnessEnemyCard(carryDefinition);
+            Func<BaseEnemyCard> XFactory() => () => new HarnessEnemyCard(xDefinition);
+            Func<BaseEnemyCard> ThirdFactory() => () => new HarnessEnemyCard(thirdDefinition);
+            EnemyCollectionDefinition collection = new(
+                $"SYNC_COLLECTION_{suffix}_{id}",
+                model.GetType(),
+                CardType.Status,
+                isEpiphany: false,
+                $"SYNC_COLLECTION_EFFECT_{suffix}_{id}",
+                () => model);
+            EnemyCardDeckId deckId = new($"STS2_TOMORIN_MOD:SYNC_PHASE_{suffix}_{id}");
+            EnemyCardContentDirectory directory = new(
+                deckId,
+                EnemyCardPhase.Phase1,
+                [
+                    new EnemyCardPhaseTemplate(EnemyCardPhase.Phase1, [CarryFactory()], rules, 1),
+                    new EnemyCardPhaseTemplate(EnemyCardPhase.Phase2, [XFactory()], rules, 1),
+                    new EnemyCardPhaseTemplate(EnemyCardPhase.Phase3, [ThirdFactory()], rules, 1)
+                ],
+                new Dictionary<EnemyCardId, Func<BaseEnemyCard>>
+                {
+                    [carryDefinition.CardId] = CarryFactory(),
+                    [xDefinition.CardId] = XFactory(),
+                    [thirdDefinition.CardId] = ThirdFactory()
+                },
+                new EnemyCollectionCatalog([collection]));
+            EnemyCardDeckRegistry.Register(directory);
+            EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(deckId);
+            BaseEnemyCard carry = Assert.Single(state.DrawPile);
+            state.MoveCard(carry.InstanceKey, EnemyCardZone.Exhaust);
+            state.RequestPhase(EnemyCardPhase.Phase2);
+            state.ApplyPhaseTransition(state.BuildPhaseTransitionCandidate(
+                directory.GetPhase(EnemyCardPhase.Phase2),
+                new ZeroRandomSource()));
+            EnemyActionMetricPlanner planner = new(rules, new EnemyCardScoreCalculator());
+            planner.Prepare(
+                state,
+                new EnemyPlanningContext(
+                    new ZeroRandomSource(),
+                    createPreparationCycle: (owner, _) =>
+                    {
+                        EnemyCollectionInstance added = new(collection, owner.NextCollectionSequence);
+                        return new EnemyPreparationCycle(
+                            added,
+                            new EnemyPreparedPreActionInventoryDelta([added]));
+                    }));
+            state.RequestPhase(EnemyCardPhase.Phase3);
+            return new PhaseReconnectFixture(directory, state, carry);
+        }
+
+        public EnemyCardRuntimeSyncState Capture() =>
+            EnemyCardRuntimeSynchronizer.Capture("PHASE_SYNC", State, null);
+
+        public bool TryRestore(
+            EnemyCardRuntimeSyncState sync,
+            out EnemyCardCombatState? restored,
+            out string reason) =>
+            EnemyCardRuntimeSynchronizer.TryRestore(
+                sync,
+                Directory.DeckId,
+                Directory.DefinitionFactories.Keys.ToDictionary(
+                    cardId => cardId,
+                    cardId => Directory.CreateDefinition(cardId).Definition),
+                Directory.CollectionCatalog,
+                out restored,
+                out _,
+            out reason);
+    }
+
+    private sealed class HarnessEnemyCard(EnemyCardDefinition definition) : BaseEnemyCard(definition);
 }

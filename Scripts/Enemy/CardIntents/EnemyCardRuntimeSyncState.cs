@@ -22,6 +22,12 @@ public sealed record EnemyCardRuntimeCardState
 
     /// <summary>获取或初始化已持久化的额外重放次数。</summary>
     public int ReplayCount { get; init; }
+
+    /// <summary>获取或初始化实例最初创建时的内容阶段。</summary>
+    public EnemyCardPhase SourcePhase { get; init; }
+
+    /// <summary>获取或初始化定义是否允许跨阶段保留；恢复时必须与目录定义一致。</summary>
+    public bool CarryAcrossPhase { get; init; }
 }
 
 /// <summary>
@@ -37,6 +43,50 @@ public sealed record EnemyCollectionRuntimeState
 
     /// <summary>获取或初始化由定义与序号派生的稳定实例标识。</summary>
     public string CollectionInstanceId { get; init; } = string.Empty;
+}
+
+/// <summary>保存尚未或已经随冻结行动提交的准备前收藏品增量。</summary>
+public sealed record EnemyPreparedPreActionInventoryDeltaSyncState
+{
+    public IReadOnlyList<EnemyCollectionRuntimeState> AddedAvailable { get; init; } = [];
+}
+
+/// <summary>保存一个实际执行实例冻结的 N、X、倍率与唯一计数状态。</summary>
+public sealed record EnemyFrozenEffectiveCardSyncState
+{
+    public string ExecutingCardInstanceKey { get; init; } = string.Empty;
+    public int FrozenN { get; init; }
+    public int? FrozenX { get; init; }
+    public int Multiplier { get; init; }
+    public bool WasCounted { get; init; }
+}
+
+/// <summary>保存静态候选分与对应门槛。</summary>
+public sealed record EnemyStaticScoreSyncState
+{
+    public decimal Attack { get; init; }
+    public decimal Total { get; init; }
+    public decimal AttackLock { get; init; }
+    public decimal TotalLock { get; init; }
+}
+
+/// <summary>保存完整行动风险四分量与对应门槛。</summary>
+public sealed record EnemyActionRiskScoreSyncState
+{
+    public decimal AttackRisk { get; init; }
+    public decimal SurvivalRisk { get; init; }
+    public decimal EngineRisk { get; init; }
+    public decimal DeferredRisk { get; init; }
+    public decimal AttackLock { get; init; }
+    public decimal TotalLock { get; init; }
+}
+
+/// <summary>保存一次候选拒绝的稳定分类与诊断。</summary>
+public sealed record EnemyCandidateRejectionSyncState
+{
+    public int Attempt { get; init; }
+    public EnemyCandidateRejectionReason Reason { get; init; }
+    public string Diagnostic { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -273,6 +323,9 @@ public sealed record EnemySoftLockDiagnosticSyncState
 
     /// <summary>获取或初始化最终候选是否由次数上限强制提交。</summary>
     public bool WasForcedByAttemptLimit { get; init; }
+
+    /// <summary>获取或初始化最终提交前的完整候选拒绝历史。</summary>
+    public IReadOnlyList<EnemyCandidateRejectionSyncState> Rejections { get; init; } = [];
 }
 
 /// <summary>
@@ -280,6 +333,9 @@ public sealed record EnemySoftLockDiagnosticSyncState
 /// </summary>
 public sealed record PreparedEnemyCardActionSyncState
 {
+    /// <summary>获取或初始化冻结行动所属的权威阶段。</summary>
+    public EnemyCardPhase Phase { get; init; }
+
     /// <summary>获取或初始化本次行动指标。</summary>
     public EnemyActionMetric Metric { get; init; }
 
@@ -302,7 +358,7 @@ public sealed record PreparedEnemyCardActionSyncState
 public sealed record EnemyCardRuntimeSyncState
 {
     /// <summary>获取当前且唯一接受的协议结构版本。</summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     /// <summary>获取或初始化协议结构版本。</summary>
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
@@ -354,6 +410,42 @@ public sealed record EnemyCardRuntimeSyncState
 
     /// <summary>获取或初始化结构故障诊断。</summary>
     public string? FaultDiagnostic { get; init; }
+
+    /// <summary>获取或初始化当前生效内容阶段。</summary>
+    public EnemyCardPhase ActivePhase { get; init; }
+
+    /// <summary>获取或初始化已经请求但尚未安全迁移的阶段。</summary>
+    public EnemyCardPhase PendingPhase { get; init; }
+
+    /// <summary>获取或初始化已成功应用的阶段迁移修订号。</summary>
+    public long PhaseRevision { get; init; }
+
+    /// <summary>获取或初始化候选循环唯一选择的准备收藏品。</summary>
+    public EnemyCollectionRuntimeState? FrozenPreparationCollection { get; init; }
+
+    /// <summary>获取或初始化候选循环冻结的准备前库存增量。</summary>
+    public EnemyPreparedPreActionInventoryDeltaSyncState? FrozenPreparationDelta { get; init; }
+
+    /// <summary>获取或初始化冻结行动已经完成计数的有效牌数量。</summary>
+    public int CompletedEffectiveCardCount { get; init; }
+
+    /// <summary>获取或初始化按真实执行实例冻结的 N/X 元数据。</summary>
+    public IReadOnlyList<EnemyFrozenEffectiveCardSyncState> EffectiveCardStates { get; init; } = [];
+
+    /// <summary>获取或初始化最终提交候选的静态分与静态锁。</summary>
+    public EnemyStaticScoreSyncState? StaticScore { get; init; }
+
+    /// <summary>获取或初始化最终提交候选的完整风险分与完整锁。</summary>
+    public EnemyActionRiskScoreSyncState? FullScore { get; init; }
+
+    /// <summary>获取或初始化最终候选的提交方式。</summary>
+    public EnemyCandidateCommitMode? CommitMode { get; init; }
+
+    /// <summary>获取或初始化门控使用的投影是否完整。</summary>
+    public bool? ProjectionIsComplete { get; init; }
+
+    /// <summary>获取或初始化完整投影的结构诊断。</summary>
+    public IReadOnlyList<string> ProjectionDiagnostics { get; init; } = [];
 }
 
 /// <summary>
@@ -389,6 +481,8 @@ public static class EnemyCardRuntimeSynchronizer
             throw new ArgumentException("重连游标没有停留在合法非负边界。", nameof(cursor));
         }
 
+        PreparedEnemyCardAction? preparedAction = state.PreparedAction;
+        EnemySoftLockDiagnostic? diagnostic = preparedAction?.SoftLockDiagnostic;
         return new EnemyCardRuntimeSyncState
         {
             StateId = stateId,
@@ -404,9 +498,55 @@ public static class EnemyCardRuntimeSynchronizer
             NextCollectionSequence = state.NextCollectionSequence,
             LastMetric = state.LastMetric,
             RuntimePhase = state.RuntimePhase,
-            PreparedAction = CapturePreparedAction(state.PreparedAction),
+            PreparedAction = CapturePreparedAction(preparedAction),
             Cursor = cursor?.Clone(),
-            FaultDiagnostic = state.FaultDiagnostic
+            FaultDiagnostic = state.FaultDiagnostic,
+            ActivePhase = state.ActivePhase,
+            PendingPhase = state.PendingPhase,
+            PhaseRevision = state.PhaseRevision,
+            FrozenPreparationCollection = state.FrozenPreparationCollection is null
+                ? null
+                : CaptureCollection(state.FrozenPreparationCollection),
+            FrozenPreparationDelta = state.FrozenPreparationDelta is null
+                ? null
+                : new EnemyPreparedPreActionInventoryDeltaSyncState
+                {
+                    AddedAvailable = CaptureCollections(state.FrozenPreparationDelta.AddedAvailable)
+                },
+            CompletedEffectiveCardCount = preparedAction?.EffectiveCardStates.Values.Count(item => item.WasCounted) ?? 0,
+            EffectiveCardStates = preparedAction?.EffectiveCardStates.Values
+                .OrderBy(item => item.ExecutingCardInstanceKey.Value, StringComparer.Ordinal)
+                .Select(item => new EnemyFrozenEffectiveCardSyncState
+                {
+                    ExecutingCardInstanceKey = item.ExecutingCardInstanceKey.Value,
+                    FrozenN = item.FrozenN,
+                    FrozenX = item.FrozenX,
+                    Multiplier = item.Multiplier,
+                    WasCounted = item.WasCounted
+                }).ToArray() ?? [],
+            StaticScore = diagnostic is null
+                ? null
+                : new EnemyStaticScoreSyncState
+                {
+                    Attack = diagnostic.StaticScore.Attack,
+                    Total = diagnostic.StaticScore.Total,
+                    AttackLock = diagnostic.StaticLocks.Attack,
+                    TotalLock = diagnostic.StaticLocks.Total
+                },
+            FullScore = diagnostic is null
+                ? null
+                : new EnemyActionRiskScoreSyncState
+                {
+                    AttackRisk = diagnostic.FullScore.AttackRisk,
+                    SurvivalRisk = diagnostic.FullScore.SurvivalRisk,
+                    EngineRisk = diagnostic.FullScore.EngineRisk,
+                    DeferredRisk = diagnostic.FullScore.DeferredRisk,
+                    AttackLock = diagnostic.FullLocks.Attack,
+                    TotalLock = diagnostic.FullLocks.Total
+                },
+            CommitMode = diagnostic?.CommitMode,
+            ProjectionIsComplete = diagnostic?.ProjectionIsComplete,
+            ProjectionDiagnostics = diagnostic?.ProjectionDiagnostics.ToArray() ?? []
         };
     }
 
@@ -440,8 +580,36 @@ public static class EnemyCardRuntimeSynchronizer
             ArgumentNullException.ThrowIfNull(collectionCatalog);
             ValidateEnvelope(syncState, expectedDeckId);
 
+            EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(expectedDeckId);
+            ValidateContentPhase(syncState, directory);
+            IReadOnlyDictionary<EnemyCardId, EnemyCardDefinition> registeredDefinitions =
+                directory.DefinitionFactories.Keys.ToDictionary(
+                    cardId => cardId,
+                    cardId => directory.CreateDefinition(cardId).Definition);
+            if (cardDefinitions.Keys.Except(registeredDefinitions.Keys).Any() ||
+                registeredDefinitions.Keys.Except(cardDefinitions.Keys).Any())
+            {
+                throw new InvalidOperationException("调用方卡牌定义集合与已注册内容目录不一致。");
+            }
+
+            EnemyCollectionCatalog registeredCollections = directory.CollectionCatalog;
+            string[] suppliedCollectionIds = collectionCatalog.Definitions
+                .Select(item => item.CollectionId)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            string[] registeredCollectionIds = registeredCollections.Definitions
+                .Select(item => item.CollectionId)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (!suppliedCollectionIds.SequenceEqual(registeredCollectionIds))
+            {
+                throw new InvalidOperationException("调用方收藏品定义集合与已注册内容目录不一致。");
+            }
+
             EnemyCardCombatState temporary = EnemyCardDeckRegistry.CreateCombatState(expectedDeckId);
-            Dictionary<int, BaseEnemyCard> templates = temporary.DrawPile.ToDictionary(card => card.TemplateSlot!.Value);
+            Dictionary<int, BaseEnemyCard> templates = directory.OrderedPhases
+                .SelectMany(phase => EnemyCardDeckRegistry.CreatePhaseDeck(expectedDeckId, phase.Phase))
+                .ToDictionary(card => card.TemplateSlot!.Value);
             Dictionary<EnemyCardZone, IReadOnlyList<EnemyCardRuntimeCardState>> transferZones = new()
             {
                 [EnemyCardZone.Draw] = syncState.DrawPile,
@@ -462,7 +630,12 @@ public static class EnemyCardRuntimeSynchronizer
                 List<BaseEnemyCard> restoredCards = [];
                 foreach (EnemyCardRuntimeCardState cardState in cards)
                 {
-                    BaseEnemyCard card = RestoreCard(cardState, templates, cardDefinitions);
+                    BaseEnemyCard card = RestoreCard(
+                        cardState,
+                        templates,
+                        registeredDefinitions,
+                        directory,
+                        syncState.ActivePhase);
                     if (!cardsByKey.TryAdd(card.InstanceKey.Value, card))
                     {
                         throw new InvalidOperationException($"卡牌实例 {card.InstanceKey} 同时出现在多个牌区。");
@@ -474,24 +647,44 @@ public static class EnemyCardRuntimeSynchronizer
                 restoredZones.Add(zone, restoredCards.AsReadOnly());
             }
 
-            if (templates.Keys.Except(cardsByKey.Values.Where(card => card.TemplateSlot.HasValue)
-                    .Select(card => card.TemplateSlot!.Value)).Any())
+            int[] restoredTemplateSlots = cardsByKey.Values.Where(card => card.TemplateSlot.HasValue)
+                .Select(card => card.TemplateSlot!.Value)
+                .Order()
+                .ToArray();
+            int[] expectedTemplateSlots = templates.Values
+                .Where(card => card.SourcePhase == syncState.ActivePhase ||
+                               card.SourcePhase < syncState.ActivePhase && card.CarryAcrossPhase)
+                .Select(card => card.TemplateSlot!.Value)
+                .Order()
+                .ToArray();
+            if (!restoredTemplateSlots.SequenceEqual(expectedTemplateSlots))
             {
-                throw new InvalidOperationException("重连 DTO 缺少牌组模板中的一个或多个初始实例。");
+                throw new InvalidOperationException("重连 DTO 的阶段模板实例集合与活动阶段及 CarryAcrossPhase 规则不一致。");
             }
 
             (EnemyCollectionInventorySnapshot inventorySnapshot,
                 Dictionary<string, EnemyCollectionInstance> collectionsById) =
-                RestoreCollections(syncState, collectionCatalog);
+                RestoreCollections(syncState, registeredCollections);
+            (EnemyCollectionInstance? frozenPreparationCollection,
+                EnemyPreparedPreActionInventoryDelta? frozenPreparationDelta) = RestorePreparationCycle(
+                syncState,
+                inventorySnapshot,
+                collectionsById,
+                registeredCollections);
+            IReadOnlyList<EnemyFrozenEffectiveCardState> effectiveCardStates =
+                RestoreEffectiveCardStates(syncState);
             PreparedEnemyCardAction? preparedAction = RestorePreparedAction(
                 syncState.PreparedAction,
                 cardsByKey,
                 collectionsById,
-                cardDefinitions,
-                collectionCatalog,
+                registeredDefinitions,
+                registeredCollections,
                 syncState.NextGeneratedCardSequence,
-                syncState.NextCollectionSequence);
-            ValidatePhase(syncState, preparedAction);
+                syncState.NextCollectionSequence,
+                frozenPreparationDelta,
+                effectiveCardStates,
+                syncState);
+            ValidatePhase(syncState, preparedAction, frozenPreparationCollection, frozenPreparationDelta);
             EnemyCardExecutionCursor? cursor = ValidateAndCloneCursor(syncState.Cursor, preparedAction);
             temporary.RestoreValidatedRuntime(
                 restoredZones,
@@ -500,7 +693,12 @@ public static class EnemyCardRuntimeSynchronizer
                 syncState.LastMetric,
                 preparedAction,
                 syncState.RuntimePhase,
-                syncState.FaultDiagnostic);
+                syncState.FaultDiagnostic,
+                frozenPreparationCollection,
+                frozenPreparationDelta,
+                syncState.ActivePhase,
+                syncState.PendingPhase,
+                syncState.PhaseRevision);
             restoredState = temporary;
             restoredCursor = cursor;
             return true;
@@ -522,18 +720,23 @@ public static class EnemyCardRuntimeSynchronizer
             InstanceKey = card.InstanceKey.Value,
             TemplateSlot = card.TemplateSlot,
             RuntimeInstanceId = card.RuntimeInstanceId,
-            ReplayCount = card.ReplayCount
+            ReplayCount = card.ReplayCount,
+            SourcePhase = card.SourcePhase,
+            CarryAcrossPhase = card.CarryAcrossPhase
         }).ToArray();
 
     /// <summary>捕获一个收藏品区域的稳定实例顺序。</summary>
     private static IReadOnlyList<EnemyCollectionRuntimeState> CaptureCollections(
         IEnumerable<EnemyCollectionInstance> collections) =>
-        collections.Select(item => new EnemyCollectionRuntimeState
+        collections.Select(CaptureCollection).ToArray();
+
+    private static EnemyCollectionRuntimeState CaptureCollection(EnemyCollectionInstance item) =>
+        new()
         {
             CollectionId = item.Definition.CollectionId,
             Sequence = item.Sequence,
             CollectionInstanceId = item.CollectionInstanceId
-        }).ToArray();
+        };
 
     /// <summary>捕获可选冻结行动及其素材引用。</summary>
     private static PreparedEnemyCardActionSyncState? CapturePreparedAction(PreparedEnemyCardAction? action)
@@ -546,6 +749,7 @@ public static class EnemyCardRuntimeSynchronizer
         EnemySoftLockDiagnostic diagnostic = action.SoftLockDiagnostic;
         return new PreparedEnemyCardActionSyncState
         {
+            Phase = action.Phase,
             Metric = action.Metric,
             RetainedPrefixKeys = action.RetainedPrefix.Select(card => card.InstanceKey.Value).ToArray(),
             MetricCardKeys = action.MetricCards.Select(card => card.InstanceKey.Value).ToArray(),
@@ -564,7 +768,13 @@ public static class EnemyCardRuntimeSynchronizer
                 TotalScoreLock = diagnostic.TotalScoreLock,
                 CandidateAttemptCount = diagnostic.CandidateAttemptCount,
                 RejectedCandidateCount = diagnostic.RejectedCandidateCount,
-                WasForcedByAttemptLimit = diagnostic.WasForcedByAttemptLimit
+                WasForcedByAttemptLimit = diagnostic.WasForcedByAttemptLimit,
+                Rejections = diagnostic.Rejections.Select(rejection => new EnemyCandidateRejectionSyncState
+                {
+                    Attempt = rejection.Attempt,
+                    Reason = rejection.Reason,
+                    Diagnostic = rejection.Diagnostic
+                }).ToArray()
             }
         };
     }
@@ -710,9 +920,41 @@ public static class EnemyCardRuntimeSynchronizer
             throw new InvalidOperationException($"重连 DTO 牌组 {syncState.DeckId} 与预期 {expectedDeckId} 不一致。");
         }
 
-        if (syncState.NextGeneratedCardSequence < 0 || syncState.NextCollectionSequence < 0)
+        if (syncState.NextGeneratedCardSequence < 0 || syncState.NextCollectionSequence < 0 ||
+            syncState.PhaseRevision < 0 || syncState.CompletedEffectiveCardCount < 0)
         {
-            throw new InvalidOperationException("重连 DTO 的下一实例序号不能为负数。");
+            throw new InvalidOperationException("重连 DTO 的实例序号、阶段修订与有效牌计数不能为负数。");
+        }
+    }
+
+    /// <summary>验证活动阶段、待迁移阶段与内容目录之间的合法关系。</summary>
+    private static void ValidateContentPhase(
+        EnemyCardRuntimeSyncState syncState,
+        EnemyCardContentDirectory directory)
+    {
+        if (!Enum.IsDefined(syncState.ActivePhase) || !Enum.IsDefined(syncState.PendingPhase))
+        {
+            throw new InvalidOperationException("重连 DTO 包含未知内容阶段。");
+        }
+
+        _ = directory.GetPhase(syncState.ActivePhase);
+        if (syncState.PendingPhase != EnemyCardPhase.None)
+        {
+            _ = directory.GetPhase(syncState.PendingPhase);
+            if (syncState.ActivePhase == EnemyCardPhase.None || syncState.PendingPhase <= syncState.ActivePhase)
+            {
+                throw new InvalidOperationException("待迁移阶段必须是活动阶段之后的已注册显式阶段。");
+            }
+        }
+
+        if (syncState.ActivePhase == directory.InitialPhase && syncState.PhaseRevision != 0)
+        {
+            throw new InvalidOperationException("尚未离开初始阶段的状态不能携带非零阶段修订。");
+        }
+
+        if (syncState.ActivePhase != directory.InitialPhase && syncState.PhaseRevision == 0)
+        {
+            throw new InvalidOperationException("已经迁移到后续阶段的状态必须携带非零阶段修订。");
         }
     }
 
@@ -720,13 +962,18 @@ public static class EnemyCardRuntimeSynchronizer
     private static BaseEnemyCard RestoreCard(
         EnemyCardRuntimeCardState cardState,
         IReadOnlyDictionary<int, BaseEnemyCard> templates,
-        IReadOnlyDictionary<EnemyCardId, EnemyCardDefinition> cardDefinitions)
+        IReadOnlyDictionary<EnemyCardId, EnemyCardDefinition> cardDefinitions,
+        EnemyCardContentDirectory directory,
+        EnemyCardPhase activePhase)
     {
         ArgumentNullException.ThrowIfNull(cardState);
-        if (!EnemyCardId.TryParse(cardState.CardId, out EnemyCardId cardId) || cardState.ReplayCount < 0)
+        if (!EnemyCardId.TryParse(cardState.CardId, out EnemyCardId cardId) || cardState.ReplayCount < 0 ||
+            !Enum.IsDefined(cardState.SourcePhase))
         {
-            throw new InvalidOperationException("重连卡牌定义标识或重放次数无效。");
+            throw new InvalidOperationException("重连卡牌定义标识、来源阶段或重放次数无效。");
         }
+
+        _ = directory.GetPhase(cardState.SourcePhase);
 
         bool isTemplate = cardState.TemplateSlot.HasValue;
         if (isTemplate == cardState.RuntimeInstanceId.HasValue)
@@ -754,11 +1001,25 @@ public static class EnemyCardRuntimeSynchronizer
 
             card = CreateCatalogCard(cardDefinitions[cardId]);
             card.AssignRuntimeInstanceId(runtimeId);
+            card.AssignSourcePhase(cardState.SourcePhase);
         }
 
         if (!string.Equals(cardState.InstanceKey, card.InstanceKey.Value, StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"卡牌实例键 {cardState.InstanceKey} 与其身份字段不一致。");
+        }
+
+        if (card.SourcePhase != cardState.SourcePhase ||
+            card.CarryAcrossPhase != cardState.CarryAcrossPhase ||
+            card.Definition.CarryAcrossPhase != cardState.CarryAcrossPhase)
+        {
+            throw new InvalidOperationException($"卡牌实例 {cardState.InstanceKey} 的来源阶段或 CarryAcrossPhase 与注册目录不一致。");
+        }
+
+        if (card.SourcePhase > activePhase ||
+            card.SourcePhase < activePhase && !card.CarryAcrossPhase)
+        {
+            throw new InvalidOperationException($"卡牌实例 {cardState.InstanceKey} 违反活动阶段保留规则。");
         }
 
         card.RestoreReplayCount(cardState.ReplayCount);
@@ -814,6 +1075,138 @@ public static class EnemyCardRuntimeSynchronizer
         }
     }
 
+    /// <summary>从传输 DTO 重建唯一准备周期，并复用已经提交到库存的同一收藏品实例。</summary>
+    private static (EnemyCollectionInstance? Collection, EnemyPreparedPreActionInventoryDelta? Delta)
+        RestorePreparationCycle(
+            EnemyCardRuntimeSyncState syncState,
+            EnemyCollectionInventorySnapshot inventory,
+            IDictionary<string, EnemyCollectionInstance> collectionsById,
+            EnemyCollectionCatalog collectionCatalog)
+    {
+        EnemyPreparedPreActionInventoryDeltaSyncState? transfer = syncState.FrozenPreparationDelta;
+        if (transfer is null)
+        {
+            if (syncState.FrozenPreparationCollection is not null)
+            {
+                throw new InvalidOperationException("冻结准备收藏品存在但准备库存增量缺失。");
+            }
+
+            return (null, null);
+        }
+
+        if (transfer.AddedAvailable is null)
+        {
+            throw new InvalidOperationException("冻结准备库存增量为空引用。");
+        }
+
+        HashSet<string> availableIds = inventory.Available
+            .Select(item => item.CollectionInstanceId)
+            .ToHashSet(StringComparer.Ordinal);
+        HashSet<string> consumedIds = inventory.Consumed
+            .Select(item => item.CollectionInstanceId)
+            .ToHashSet(StringComparer.Ordinal);
+        List<EnemyCollectionInstance> added = [];
+        HashSet<string> deltaIds = new(StringComparer.Ordinal);
+        foreach (EnemyCollectionRuntimeState item in transfer.AddedAvailable)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            EnemyCollectionDefinition definition = collectionCatalog.GetRequired(item.CollectionId);
+            EnemyCollectionInstance candidate = new(definition, item.Sequence);
+            if (!string.Equals(candidate.CollectionInstanceId, item.CollectionInstanceId, StringComparison.Ordinal) ||
+                !deltaIds.Add(item.CollectionInstanceId))
+            {
+                throw new InvalidOperationException("冻结准备库存增量包含重复或身份不一致的收藏品。");
+            }
+
+            if (consumedIds.Contains(item.CollectionInstanceId))
+            {
+                throw new InvalidOperationException("准备前新增收藏品不能已经位于消耗区。");
+            }
+
+            if (collectionsById.TryGetValue(item.CollectionInstanceId, out EnemyCollectionInstance? existing))
+            {
+                if (!availableIds.Contains(item.CollectionInstanceId) ||
+                    existing.Sequence != item.Sequence ||
+                    !string.Equals(existing.Definition.CollectionId, item.CollectionId, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("冻结准备库存增量与已提交可用区实例不一致。");
+                }
+
+                candidate = existing;
+            }
+            else
+            {
+                if (syncState.RuntimePhase is EnemyCardRuntimePhase.Prepared or EnemyCardRuntimePhase.Executing)
+                {
+                    throw new InvalidOperationException("准备或执行阶段的准备库存增量尚未原子提交到可用区。");
+                }
+
+                if (item.Sequence < syncState.NextCollectionSequence)
+                {
+                    throw new InvalidOperationException("未提交的准备收藏品序号落后于当前下一收藏品序号。");
+                }
+
+                collectionsById.Add(candidate.CollectionInstanceId, candidate);
+            }
+
+            added.Add(candidate);
+        }
+
+        EnemyPreparedPreActionInventoryDelta delta = new(added.AsReadOnly());
+        if (syncState.FrozenPreparationCollection is null)
+        {
+            return (null, delta);
+        }
+
+        EnemyCollectionRuntimeState frozen = syncState.FrozenPreparationCollection;
+        EnemyCollectionInstance collection = added.SingleOrDefault(item =>
+            string.Equals(item.CollectionInstanceId, frozen.CollectionInstanceId, StringComparison.Ordinal)) ??
+            throw new InvalidOperationException("冻结准备收藏品不属于同一准备库存增量。");
+        if (collection.Sequence != frozen.Sequence ||
+            !string.Equals(collection.Definition.CollectionId, frozen.CollectionId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("冻结准备收藏品与增量中的定义或序号不一致。");
+        }
+
+        return (collection, delta);
+    }
+
+    /// <summary>验证并重建冻结行动的逐实例 N/X 状态。</summary>
+    private static IReadOnlyList<EnemyFrozenEffectiveCardState> RestoreEffectiveCardStates(
+        EnemyCardRuntimeSyncState syncState)
+    {
+        if (syncState.EffectiveCardStates is null)
+        {
+            throw new InvalidOperationException("冻结有效牌状态为空引用。");
+        }
+
+        List<EnemyFrozenEffectiveCardState> result = [];
+        HashSet<string> keys = new(StringComparer.Ordinal);
+        foreach (EnemyFrozenEffectiveCardSyncState transfer in syncState.EffectiveCardStates)
+        {
+            ArgumentNullException.ThrowIfNull(transfer);
+            if (string.IsNullOrWhiteSpace(transfer.ExecutingCardInstanceKey) ||
+                !keys.Add(transfer.ExecutingCardInstanceKey))
+            {
+                throw new InvalidOperationException("冻结有效牌状态包含空键或重复键。");
+            }
+
+            result.Add(new EnemyFrozenEffectiveCardState(
+                new EnemyCardInstanceKey(transfer.ExecutingCardInstanceKey),
+                transfer.FrozenN,
+                transfer.FrozenX,
+                transfer.Multiplier,
+                transfer.WasCounted));
+        }
+
+        if (syncState.CompletedEffectiveCardCount != result.Count(item => item.WasCounted))
+        {
+            throw new InvalidOperationException("CompletedEffectiveCardCount 与唯一已计数有效牌状态数量不一致。");
+        }
+
+        return result.AsReadOnly();
+    }
+
     /// <summary>验证稳定引用并重建冻结行动。</summary>
     private static PreparedEnemyCardAction? RestorePreparedAction(
         PreparedEnemyCardActionSyncState? transfer,
@@ -822,11 +1215,32 @@ public static class EnemyCardRuntimeSynchronizer
         IReadOnlyDictionary<EnemyCardId, EnemyCardDefinition> cardDefinitions,
         EnemyCollectionCatalog collectionCatalog,
         long nextGeneratedCardSequence,
-        long nextCollectionSequence)
+        long nextCollectionSequence,
+        EnemyPreparedPreActionInventoryDelta? preparationDelta,
+        IReadOnlyList<EnemyFrozenEffectiveCardState> effectiveCardStates,
+        EnemyCardRuntimeSyncState syncState)
     {
         if (transfer is null)
         {
+            if (effectiveCardStates.Count != 0 || syncState.CompletedEffectiveCardCount != 0 ||
+                syncState.StaticScore is not null || syncState.FullScore is not null ||
+                syncState.CommitMode is not null || syncState.ProjectionIsComplete is not null ||
+                syncState.ProjectionDiagnostics is null || syncState.ProjectionDiagnostics.Count != 0)
+            {
+                throw new InvalidOperationException("没有冻结行动的状态不能携带有效牌或两层门控快照。");
+            }
+
             return null;
+        }
+
+        if (preparationDelta is null)
+        {
+            throw new InvalidOperationException("冻结行动缺少同一准备周期的库存增量。");
+        }
+
+        if (transfer.Phase != syncState.ActivePhase)
+        {
+            throw new InvalidOperationException("冻结行动阶段与当前活动阶段不一致。");
         }
 
         BaseEnemyCard ResolveCard(string key) => cardsByKey.TryGetValue(key, out BaseEnemyCard? card)
@@ -854,10 +1268,60 @@ public static class EnemyCardRuntimeSynchronizer
             source.TruncationAttemptIndex)).ToArray();
         EnemySoftLockDiagnosticSyncState diagnostic = transfer.SoftLockDiagnostic ??
                                                        throw new InvalidOperationException("冻结行动缺少软锁诊断。");
-        if (diagnostic.CandidateAttemptCount < 0 || diagnostic.RejectedCandidateCount < 0)
+        if (diagnostic.CandidateAttemptCount < 1 || diagnostic.RejectedCandidateCount < 0 ||
+            diagnostic.Rejections is null || diagnostic.RejectedCandidateCount != diagnostic.Rejections.Count)
         {
-            throw new InvalidOperationException("冻结行动的候选诊断数量不能为负数。");
+            throw new InvalidOperationException("冻结行动的候选次数或拒绝历史无效。");
         }
+
+        EnemyStaticScoreSyncState staticScore = syncState.StaticScore ??
+                                                throw new InvalidOperationException("冻结行动缺少静态评分快照。");
+        EnemyActionRiskScoreSyncState fullScore = syncState.FullScore ??
+                                                  throw new InvalidOperationException("冻结行动缺少完整风险快照。");
+        EnemyCandidateCommitMode commitMode = syncState.CommitMode ??
+                                              throw new InvalidOperationException("冻结行动缺少提交方式。");
+        bool projectionIsComplete = syncState.ProjectionIsComplete ??
+                                    throw new InvalidOperationException("冻结行动缺少投影完整性字段。");
+        if (syncState.ProjectionDiagnostics is null)
+        {
+            throw new InvalidOperationException("冻结行动的投影诊断为空引用。");
+        }
+
+        if (diagnostic.AttackScore != staticScore.Attack ||
+            diagnostic.TotalScore != staticScore.Total ||
+            diagnostic.AttackLock != staticScore.AttackLock ||
+            diagnostic.TotalScoreLock != staticScore.TotalLock ||
+            diagnostic.WasForcedByAttemptLimit != (commitMode == EnemyCandidateCommitMode.ForcedOverLock))
+        {
+            throw new InvalidOperationException("冻结行动的兼容软锁字段与 schema v3 两层门控快照不闭合。");
+        }
+
+        EnemyCandidateRejection[] rejections = diagnostic.Rejections
+            .Select(rejection => new EnemyCandidateRejection(
+                rejection.Attempt,
+                rejection.Reason,
+                rejection.Diagnostic))
+            .ToArray();
+        EnemyCardScore restoredStaticScore = new(staticScore.Attack, staticScore.Total);
+        EnemyActionRiskScore restoredFullScore = new(
+            fullScore.AttackRisk,
+            fullScore.SurvivalRisk,
+            fullScore.EngineRisk,
+            fullScore.DeferredRisk);
+        EnemySoftLockLimits staticLocks = new(staticScore.AttackLock, staticScore.TotalLock);
+        EnemySoftLockLimits fullLocks = new(fullScore.AttackLock, fullScore.TotalLock);
+        bool staticOver = restoredStaticScore.Attack > staticLocks.Attack ||
+                          restoredStaticScore.Total > staticLocks.Total;
+        bool fullOver = restoredFullScore.AttackRisk > fullLocks.Attack ||
+                        restoredFullScore.TotalRisk > fullLocks.Total;
+        if (!projectionIsComplete ||
+            commitMode == EnemyCandidateCommitMode.WithinLocks && (staticOver || fullOver) ||
+            commitMode == EnemyCandidateCommitMode.ForcedOverLock && !staticOver && !fullOver)
+        {
+            throw new InvalidOperationException("冻结行动的评分、提交方式与投影完整性不满足门控闭合关系。");
+        }
+
+        ValidateEffectiveCardClosure(transfer, effectiveCardStates, cardDefinitions, cardsByKey);
 
         return new PreparedEnemyCardAction(
             transfer.Metric,
@@ -865,13 +1329,116 @@ public static class EnemyCardRuntimeSynchronizer
             metric,
             sources,
             new EnemySoftLockDiagnostic(
-                new EnemyCardScore(diagnostic.AttackScore, diagnostic.TotalScore),
-                diagnostic.AttackLock,
-                diagnostic.TotalScoreLock,
+                restoredStaticScore,
+                restoredFullScore,
+                staticLocks,
+                fullLocks,
                 diagnostic.CandidateAttemptCount,
-                diagnostic.RejectedCandidateCount,
-                diagnostic.WasForcedByAttemptLimit));
+                rejections,
+                commitMode,
+                projectionIsComplete,
+                syncState.ProjectionDiagnostics),
+            preparationDelta,
+            effectiveCardStates,
+            transfer.Phase);
     }
+
+    /// <summary>验证同步计划中的每个实际执行实例恰好对应一个冻结有效牌状态。</summary>
+    private static void ValidateEffectiveCardClosure(
+        PreparedEnemyCardActionSyncState action,
+        IReadOnlyList<EnemyFrozenEffectiveCardState> effectiveCardStates,
+        IReadOnlyDictionary<EnemyCardId, EnemyCardDefinition> cardDefinitions,
+        IReadOnlyDictionary<string, BaseEnemyCard> cardsByKey)
+    {
+        Dictionary<string, EnemyCardId> knownExecutions = action.Sources.ToDictionary(
+            source => source.SourceInstanceKey,
+            source => cardsByKey.TryGetValue(source.SourceInstanceKey, out BaseEnemyCard? card)
+                ? card.CardId
+                : throw new InvalidOperationException("冻结来源实例不在恢复牌区中。"),
+            StringComparer.Ordinal);
+        HashSet<string> successful = new(StringComparer.Ordinal);
+        foreach (PreparedEnemyCardUnitPlanSyncState unit in action.Sources
+                     .SelectMany(source => source.Units)
+                     .SelectMany(EnumerateUnitTree))
+        {
+            if (!EnemyCardId.TryParse(unit.ExecutingCardId, out EnemyCardId cardId))
+            {
+                throw new InvalidOperationException("冻结计划包含无效的实际执行定义标识。");
+            }
+
+            if (knownExecutions.TryGetValue(unit.ExecutingCardKey, out EnemyCardId existing) && existing != cardId)
+            {
+                throw new InvalidOperationException("同一实际执行实例键在冻结计划中引用了不同定义。");
+            }
+
+            knownExecutions[unit.ExecutingCardKey] = cardId;
+            successful.Add(unit.ExecutingCardKey);
+        }
+
+        Dictionary<string, EnemyFrozenEffectiveCardState> states = effectiveCardStates.ToDictionary(
+            item => item.ExecutingCardInstanceKey.Value,
+            StringComparer.Ordinal);
+        if (states.Keys.Any(key => !knownExecutions.ContainsKey(key)) ||
+            !successful.SetEquals(states.Values
+                .Where(state => state.WasCounted)
+                .Select(state => state.ExecutingCardInstanceKey.Value)))
+        {
+            throw new InvalidOperationException("冻结计划的成功单元与 WasCounted 有效牌实例集合不闭合。");
+        }
+
+        foreach ((string key, EnemyFrozenEffectiveCardState state) in states)
+        {
+            EnemyCardId cardId = knownExecutions[key];
+            if (!cardDefinitions.TryGetValue(cardId, out EnemyCardDefinition? definition))
+            {
+                throw new InvalidOperationException($"实际执行定义 {cardId} 不在同步内容目录中。");
+            }
+
+            bool requiresFrozenX = definition.Effects.Any(effect => effect is EnemyFrozenXAttackAllEffect);
+            if (requiresFrozenX != state.FrozenX.HasValue)
+            {
+                throw new InvalidOperationException($"实际执行实例 {key} 的冻结 X 元数据与定义不一致。");
+            }
+        }
+    }
+
+    private static IEnumerable<PreparedEnemyCardUnitPlanSyncState> EnumerateUnitTree(
+        PreparedEnemyCardUnitPlanSyncState unit)
+    {
+        yield return unit;
+        foreach (PreparedEnemyCardUnitPlanSyncState child in unit.OrderedSteps.SelectMany(EnumerateStepUnits))
+        {
+            foreach (PreparedEnemyCardUnitPlanSyncState descendant in EnumerateUnitTree(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private static IEnumerable<PreparedEnemyCardUnitPlanSyncState> EnumerateStepUnits(
+        PreparedEnemyResolutionStepSyncState step) => step.Kind switch
+    {
+        PreparedEnemyResolutionStepSyncKind.ConsumedCard when step.ConsumedCard?.ControlledChild is not null =>
+            [step.ConsumedCard.ControlledChild],
+        PreparedEnemyResolutionStepSyncKind.ConsumedCollection when step.ConsumedCollection is not null =>
+            step.ConsumedCollection.Children.SelectMany(EnumerateStepUnits),
+        PreparedEnemyResolutionStepSyncKind.ComposeResult when step.ComposeResult is not null =>
+            (step.ComposeResult.ImmediateChild is null
+                ? Enumerable.Empty<PreparedEnemyCardUnitPlanSyncState>()
+                : [step.ComposeResult.ImmediateChild])
+            .Concat(step.ComposeResult.AdditionalReplayUnits),
+        PreparedEnemyResolutionStepSyncKind.ImmediateCard when step.ImmediateCard is not null =>
+            (step.ImmediateCard.Child is null
+                ? Enumerable.Empty<PreparedEnemyCardUnitPlanSyncState>()
+                : [step.ImmediateCard.Child])
+            .Concat(step.ImmediateCard.AdditionalReplayUnits),
+        PreparedEnemyResolutionStepSyncKind.Recovery when step.Recovery is not null =>
+            (step.Recovery.ImmediateCardChild is null
+                ? Enumerable.Empty<PreparedEnemyCardUnitPlanSyncState>()
+                : [step.Recovery.ImmediateCardChild])
+            .Concat(step.Recovery.AdditionalReplayUnits),
+        _ => []
+    };
 
     /// <summary>
     /// 递归验证同步单元的稳定身份、引用、步骤预算和模式组合。
@@ -1139,8 +1706,15 @@ public static class EnemyCardRuntimeSynchronizer
     /// <summary>验证运行阶段、冻结行动和故障诊断之间的闭合关系。</summary>
     private static void ValidatePhase(
         EnemyCardRuntimeSyncState syncState,
-        PreparedEnemyCardAction? preparedAction)
+        PreparedEnemyCardAction? preparedAction,
+        EnemyCollectionInstance? frozenPreparationCollection,
+        EnemyPreparedPreActionInventoryDelta? frozenPreparationDelta)
     {
+        if (!Enum.IsDefined(syncState.RuntimePhase))
+        {
+            throw new InvalidOperationException("重连 DTO 包含未知运行阶段。");
+        }
+
         if (syncState.RuntimePhase == EnemyCardRuntimePhase.Idle && preparedAction is not null)
         {
             throw new InvalidOperationException("空闲阶段不能携带冻结行动。");
@@ -1156,6 +1730,26 @@ public static class EnemyCardRuntimeSynchronizer
             !string.IsNullOrWhiteSpace(syncState.FaultDiagnostic))
         {
             throw new InvalidOperationException("故障阶段与故障诊断不一致。");
+        }
+
+        if (syncState.RuntimePhase == EnemyCardRuntimePhase.Idle &&
+            (frozenPreparationCollection is not null || frozenPreparationDelta is not null))
+        {
+            throw new InvalidOperationException("空闲阶段不能携带尚未清除的准备周期。");
+        }
+
+        if (preparedAction is not null &&
+            (frozenPreparationDelta is null ||
+             !ReferenceEquals(preparedAction.PreActionInventoryDelta, frozenPreparationDelta)))
+        {
+            throw new InvalidOperationException("冻结行动必须引用当前恢复状态的同一准备库存增量对象。");
+        }
+
+        if (frozenPreparationCollection is not null &&
+            (frozenPreparationDelta is null ||
+             !frozenPreparationDelta.AddedAvailable.Any(item => ReferenceEquals(item, frozenPreparationCollection))))
+        {
+            throw new InvalidOperationException("冻结准备收藏品必须来自同一准备库存增量。");
         }
     }
 

@@ -652,7 +652,12 @@ public sealed class EnemyCardCombatState
         EnemyActionMetric? lastMetric,
         PreparedEnemyCardAction? preparedAction,
         EnemyCardRuntimePhase runtimePhase,
-        string? faultDiagnostic)
+        string? faultDiagnostic,
+        EnemyCollectionInstance? frozenPreparationCollection = null,
+        EnemyPreparedPreActionInventoryDelta? frozenPreparationDelta = null,
+        EnemyCardPhase activePhase = EnemyCardPhase.None,
+        EnemyCardPhase pendingPhase = EnemyCardPhase.None,
+        long phaseRevision = 0)
     {
         ArgumentNullException.ThrowIfNull(zones);
         foreach (EnemyCardZone zone in Enum.GetValues<EnemyCardZone>())
@@ -666,6 +671,13 @@ public sealed class EnemyCardCombatState
         if (nextGeneratedCardSequence < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(nextGeneratedCardSequence));
+        }
+
+        if (!Enum.IsDefined(activePhase) || !Enum.IsDefined(pendingPhase) || phaseRevision < 0 ||
+            pendingPhase != EnemyCardPhase.None &&
+            (activePhase == EnemyCardPhase.None || pendingPhase <= activePhase))
+        {
+            throw new ArgumentException("重连恢复的活动阶段、待迁移阶段或修订号无效。", nameof(activePhase));
         }
 
         BaseEnemyCard[] all = zones.Values.SelectMany(cards => cards).ToArray();
@@ -705,6 +717,26 @@ public sealed class EnemyCardCombatState
             throw new ArgumentException("非故障阶段不能携带故障诊断。", nameof(faultDiagnostic));
         }
 
+        if (preparedAction is not null &&
+            (preparedAction.Phase != activePhase || frozenPreparationDelta is null ||
+             !ReferenceEquals(preparedAction.PreActionInventoryDelta, frozenPreparationDelta)))
+        {
+            throw new ArgumentException("冻结行动阶段或准备库存增量与恢复状态不一致。", nameof(preparedAction));
+        }
+
+        if (runtimePhase == EnemyCardRuntimePhase.Idle &&
+            (frozenPreparationCollection is not null || frozenPreparationDelta is not null))
+        {
+            throw new ArgumentException("空闲阶段不能恢复准备周期。", nameof(frozenPreparationDelta));
+        }
+
+        if (frozenPreparationCollection is not null &&
+            (frozenPreparationDelta is null ||
+             !frozenPreparationDelta.AddedAvailable.Any(item => ReferenceEquals(item, frozenPreparationCollection))))
+        {
+            throw new ArgumentException("冻结准备收藏品必须来自同一准备库存增量。", nameof(frozenPreparationCollection));
+        }
+
         foreach (EnemyCardZone zone in Enum.GetValues<EnemyCardZone>())
         {
             List<BaseEnemyCard> target = GetMutableZone(zone);
@@ -713,10 +745,19 @@ public sealed class EnemyCardCombatState
         }
 
         NextGeneratedCardSequence = nextGeneratedCardSequence;
+        TemplateSlots = Array.AsReadOnly(all.Where(card => card.TemplateSlot.HasValue)
+            .Select(card => card.TemplateSlot!.Value)
+            .Order()
+            .ToArray());
         LastMetric = lastMetric;
         PreparedAction = preparedAction;
         RuntimePhase = runtimePhase;
         FaultDiagnostic = faultDiagnostic;
+        FrozenPreparationCollection = frozenPreparationCollection;
+        FrozenPreparationDelta = frozenPreparationDelta;
+        ActivePhase = activePhase;
+        PendingPhase = pendingPhase;
+        PhaseRevision = phaseRevision;
         _immediateResolutionStack.Clear();
         AssertUniqueOwnership();
     }

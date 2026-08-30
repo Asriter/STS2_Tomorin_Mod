@@ -368,6 +368,7 @@ public sealed class CardIntentMoveState : MoveState
         }
 
         CombatState = validatedState;
+        _liveProjection = null;
         if (validatedState.RuntimePhase == EnemyCardRuntimePhase.Faulted)
         {
             ReportFaultDiagnostic(

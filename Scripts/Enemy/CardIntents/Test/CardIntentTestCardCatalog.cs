@@ -147,7 +147,8 @@ public static class CardIntentTestCardCatalog
             effects: [Attack("HITOSHIZUKU_ATTACK", HitoshizukuDamage)],
             lifecycle: EnemyCardLifecycle.Exhaust,
             tokenTiming: EnemyCardTokenTiming.Immediate,
-            composeResultCardId: hitoshizukuTokenId));
+            composeResultCardId: hitoshizukuTokenId,
+            customExecutionTiming: EnemyCardCustomExecutionTiming.BeforeBaseEffects));
 
         NamelessPaper nameless = ModelDb.Card<NamelessPaper>();
         EnemyCardId songId = CardId("SONG_OF_BE_HUMAN");
@@ -315,6 +316,7 @@ public static class CardIntentTestCardCatalog
         EnemyCardFailureDisposition failureDisposition = EnemyCardFailureDisposition.Discard,
         EnemyCardTokenTiming tokenTiming = EnemyCardTokenTiming.None,
         EnemyCardId? composeResultCardId = null,
+        EnemyCardCustomExecutionTiming customExecutionTiming = EnemyCardCustomExecutionTiming.AfterBaseEffects,
         string descriptionOverride = "") =>
         new(
             CardId(suffix),
@@ -327,6 +329,7 @@ public static class CardIntentTestCardCatalog
             tokenTiming: tokenTiming,
             composeResultCardId: composeResultCardId,
             effects: effects,
+            customExecutionTiming: customExecutionTiming,
             descriptionOverride: descriptionOverride);
 
     /// <summary>承载目录定义且不包含额外对象状态的敌人卡牌实例。</summary>

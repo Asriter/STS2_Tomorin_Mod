@@ -137,12 +137,21 @@ public sealed class EnemyActionProjectionService
             }
 
             EnemyCardDefinition definition = ResolveCardDefinition(action, unit);
-            ProjectSteps(
-                action,
-                unit,
-                unit.OrderedSteps,
-                definition.Effects,
-                simulation);
+            unit.ValidateFrozenDefinition(definition);
+            if (!definition.PlayCondition.CanSimulate(simulation))
+            {
+                simulation.MarkIncomplete(
+                    $"执行牌 {unit.ExecutingCardKey} 的冻结出牌条件在投影时不再成立。");
+            }
+            else
+            {
+                ProjectSteps(
+                    action,
+                    unit,
+                    unit.OrderedSteps,
+                    definition.Effects,
+                    simulation);
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {

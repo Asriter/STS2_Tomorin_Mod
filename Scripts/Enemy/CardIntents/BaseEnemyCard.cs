@@ -1,4 +1,3 @@
-using System.Threading;
 using MegaCrit.Sts2.Core.Models;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
@@ -20,7 +19,6 @@ public enum EnemyCardCustomExecutionTiming
 /// </summary>
 public abstract class BaseEnemyCard
 {
-    private int _executionGate;
     private EnemyCardInstanceKey? _instanceKey;
     private EnemyCardPhase? _sourcePhase;
 
@@ -31,20 +29,23 @@ public abstract class BaseEnemyCard
     /// <param name="cardModel">仅用于本地化和原版 NCard 渲染的只读原型。</param>
     /// <param name="atk">本牌的一次基础攻击贡献。</param>
     /// <param name="def">本牌对怪物自身的基础防御贡献。</param>
-    /// <param name="customExecutionTiming">子类自定义效果相对基础攻防的时机。</param>
+    /// <param name="customExecutionTiming">只在构造边界翻译为显式程序的兼容时机。</param>
+    /// <param name="resolutionProgram">可选唯一显式结算程序。</param>
     protected BaseEnemyCard(
         EnemyCardId cardId,
         CardModel cardModel,
         decimal atk = 0m,
         decimal def = 0m,
-        EnemyCardCustomExecutionTiming customExecutionTiming = EnemyCardCustomExecutionTiming.AfterBaseEffects)
+        EnemyCardCustomExecutionTiming customExecutionTiming = EnemyCardCustomExecutionTiming.AfterBaseEffects,
+        EnemyCardResolutionProgram? resolutionProgram = null)
         : this(new EnemyCardDefinition(
             cardId,
             cardModel,
             (atk > 0m ? EnemyCardTag.Attack : EnemyCardTag.None) |
             (def > 0m ? EnemyCardTag.Defense : EnemyCardTag.None),
             new EnemyCardScoreProfile(attack: atk, block: def),
-            customExecutionTiming: customExecutionTiming))
+            customExecutionTiming: customExecutionTiming,
+            resolutionProgram: resolutionProgram))
     {
     }
 
@@ -76,9 +77,6 @@ public abstract class BaseEnemyCard
 
     /// <summary>获取本牌对怪物自身的基础防御贡献。</summary>
     public decimal Def { get; }
-
-    /// <summary>获取子类自定义效果相对统一基础攻防的执行时机。</summary>
-    public EnemyCardCustomExecutionTiming CustomExecutionTiming => Definition.CustomExecutionTiming;
 
     /// <summary>获取定义级跨阶段保留契约；该值不复制进实例可变状态。</summary>
     public bool CarryAcrossPhase => Definition.CarryAcrossPhase;
@@ -182,77 +180,4 @@ public abstract class BaseEnemyCard
         }
     }
 
-    /// <summary>
-    /// 按固定模板执行自定义前置、基础攻击、基础防御和自定义后置效果。
-    /// </summary>
-    /// <param name="context">与当前状态和怪物绑定的执行上下文。</param>
-    /// <returns>整张敌人卡牌效果完成任务。</returns>
-    public async Task ExecuteAsync(EnemyCardExecutionContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        if (!ReferenceEquals(context.Owner, context.State.Owner) || !context.State.IsExecuting)
-        {
-            throw new InvalidOperationException("敌人卡牌只能由拥有它的正在执行中的 CardIntentMoveState 调用。");
-        }
-
-        if (Interlocked.CompareExchange(ref _executionGate, 1, 0) != 0)
-        {
-            throw new InvalidOperationException($"敌人卡牌 {CardId} 正在执行，禁止重入。");
-        }
-
-        try
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
-            if (context.ShouldStop)
-            {
-                return;
-            }
-
-            if (CustomExecutionTiming == EnemyCardCustomExecutionTiming.BeforeBaseEffects)
-            {
-                await CustomExecuteAsync(context);
-            }
-
-            if (context.ShouldStop)
-            {
-                return;
-            }
-
-            if (Atk > 0m)
-            {
-                await context.ExecuteAttackAsync(Atk);
-            }
-
-            if (context.ShouldStop)
-            {
-                return;
-            }
-
-            if (Def > 0m)
-            {
-                await context.ExecuteDefendAsync(Def);
-            }
-
-            if (context.ShouldStop)
-            {
-                return;
-            }
-
-            if (CustomExecutionTiming == EnemyCardCustomExecutionTiming.AfterBaseEffects)
-            {
-                await CustomExecuteAsync(context);
-            }
-        }
-        finally
-        {
-            Volatile.Write(ref _executionGate, 0);
-        }
-    }
-
-    /// <summary>
-    /// 执行子类额外效果；默认不产生效果，且不得直接修改状态的三类牌堆。
-    /// </summary>
-    /// <param name="context">当前卡牌执行上下文。</param>
-    /// <returns>自定义效果完成任务。</returns>
-    protected virtual Task CustomExecuteAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
 }

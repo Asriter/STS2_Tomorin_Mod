@@ -340,6 +340,36 @@ public sealed class EnemyCardCombatState
         AssertUniqueOwnership();
     }
 
+    /// <summary>在真实即时子牌开始执行前把当前区权威实例压入 LIFO 结算栈。</summary>
+    internal void PushImmediateResolution(BaseEnemyCard card)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        if (RuntimePhase != EnemyCardRuntimePhase.Executing ||
+            !_currentCards.Contains(card) ||
+            _immediateResolutionStack.Contains(card))
+        {
+            throw new InvalidOperationException(
+                "即时结算只能压入 Executing 状态当前牌区中尚未入栈的权威实例。");
+        }
+
+        _immediateResolutionStack.Add(card);
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>在真实即时子牌及其全部重放结束后弹出同一实例，严格保持 LIFO。</summary>
+    internal void PopImmediateResolution(BaseEnemyCard card)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        if (_immediateResolutionStack.Count == 0 ||
+            !ReferenceEquals(_immediateResolutionStack[^1], card))
+        {
+            throw new InvalidOperationException("即时结算栈弹出顺序与当前权威实例不一致。");
+        }
+
+        _immediateResolutionStack.RemoveAt(_immediateResolutionStack.Count - 1);
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>
     /// 清除已消费完毕或测试显式撤销的准备行动，但保留 LastMetric。
     /// </summary>
@@ -375,6 +405,11 @@ public sealed class EnemyCardCombatState
         if (RuntimePhase != EnemyCardRuntimePhase.Executing)
         {
             throw new InvalidOperationException("只有 Executing 状态才能正常完成行动。");
+        }
+
+        if (_immediateResolutionStack.Count != 0)
+        {
+            throw new InvalidOperationException("即时结算栈非空时不能完成敌人卡牌行动。");
         }
 
         PreparedAction = null;

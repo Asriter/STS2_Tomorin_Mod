@@ -38,7 +38,9 @@ public sealed class EnemyCardDefinition
     /// <param name="composeResultCardId">可选作词结果卡牌定义标识。</param>
     /// <param name="effects">投影与真实结算共享的有序效果程序。</param>
     /// <param name="effectProgramIds">在效果节点尚未构造时仍可显式提供的有序效果程序标识。</param>
-    /// <param name="customExecutionTiming">兼容旧执行模板的自定义步骤时机。</param>
+    /// <param name="customExecutionTiming">只在构造边界翻译为显式程序的兼容时机。</param>
+    /// <param name="resolutionProgram">可选唯一显式结算程序；为空时由兼容时机翻译。</param>
+    /// <param name="playCondition">准备前检查并在投影、执行时重验的稳定条件。</param>
     /// <param name="descriptionOverride">只用于敌人 Intent 卡面的可信富文本描述；空串沿用原版描述。</param>
     /// <param name="carryAcrossPhase">阶段迁移时是否保留实例身份与所在牌区。</param>
     /// <param name="effectClasses">不参与 Tag 槽位匹配的效果分类。</param>
@@ -56,6 +58,8 @@ public sealed class EnemyCardDefinition
         IEnumerable<IEnemyCardEffectNode>? effects = null,
         IEnumerable<string>? effectProgramIds = null,
         EnemyCardCustomExecutionTiming customExecutionTiming = EnemyCardCustomExecutionTiming.AfterBaseEffects,
+        EnemyCardResolutionProgram? resolutionProgram = null,
+        IEnemyCardPlayCondition? playCondition = null,
         string descriptionOverride = "",
         bool carryAcrossPhase = false,
         EnemyCardEffectClass effectClasses = EnemyCardEffectClass.None)
@@ -79,7 +83,25 @@ public sealed class EnemyCardDefinition
         ComposeResultCardId = composeResultCardId;
         Effects = Array.AsReadOnly((effects ?? []).ToArray());
         EffectProgramIds = BuildEffectProgramIds(Effects, effectProgramIds);
-        CustomExecutionTiming = customExecutionTiming;
+        bool needsMaterials = MaterialRequests.Count > 0 || MaterialRequestProgramIds.Count > 0;
+        bool needsCompose = ComposeResultCardId is not null;
+        bool needsDirectEffects = Effects.Count > 0 || EffectProgramIds.Count > 0;
+        ResolutionProgram = resolutionProgram ?? EnemyCardResolutionProgram.FromCompatibility(
+            customExecutionTiming,
+            needsMaterials,
+            needsCompose,
+            needsDirectEffects);
+        ResolutionProgram.ValidateDefinitionShape(
+            needsMaterials,
+            needsCompose,
+            needsDirectEffects,
+            nameof(resolutionProgram));
+        PlayCondition = playCondition ?? EnemyCardAlwaysPlayCondition.Instance;
+        if (string.IsNullOrWhiteSpace(PlayCondition.ProgramId))
+        {
+            throw new ArgumentException("敌人卡牌出牌条件必须提供稳定 ProgramId。", nameof(playCondition));
+        }
+
         CarryAcrossPhase = carryAcrossPhase;
         EffectClasses = effectClasses;
 
@@ -139,8 +161,11 @@ public sealed class EnemyCardDefinition
     /// <summary>获取有序效果程序标识。</summary>
     public IReadOnlyList<string> EffectProgramIds { get; }
 
-    /// <summary>获取兼容旧卡牌模板的自定义执行时机。</summary>
-    public EnemyCardCustomExecutionTiming CustomExecutionTiming { get; }
+    /// <summary>获取规划、投影、执行和同步共同使用的唯一显式结算程序。</summary>
+    public EnemyCardResolutionProgram ResolutionProgram { get; }
+
+    /// <summary>获取准备前检查并由冻结计划重验的出牌条件。</summary>
+    public IEnemyCardPlayCondition PlayCondition { get; }
 
     /// <summary>获取阶段迁移是否必须保留本定义的所有实例。</summary>
     public bool CarryAcrossPhase { get; }
@@ -252,7 +277,8 @@ public sealed class EnemyCardDefinition
             FailureDisposition,
             TokenTiming,
             ComposeResultCardId?.Value ?? string.Empty,
-            CustomExecutionTiming,
+            ResolutionProgram.Fingerprint,
+            PlayCondition.ProgramId,
             effects,
             CarryAcrossPhase,
             (int)EffectClasses);

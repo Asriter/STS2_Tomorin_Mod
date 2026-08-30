@@ -220,6 +220,10 @@ public sealed record PreparedEnemyCardUnitPlanSyncState
     public int ReplayIndex { get; init; }
     /// <summary>获取或初始化完整或受控直接模式。</summary>
     public EnemyPreparedExecutionMode Mode { get; init; }
+    /// <summary>获取或初始化准备时冻结的显式程序指纹。</summary>
+    public string ResolutionProgramFingerprint { get; init; } = string.Empty;
+    /// <summary>获取或初始化准备时冻结的出牌条件程序标识。</summary>
+    public string PlayConditionProgramId { get; init; } = string.Empty;
     /// <summary>获取或初始化本单元完整素材预留。</summary>
     public IReadOnlyList<EnemyMaterialReservationSyncState> MaterialReservations { get; init; } = [];
     /// <summary>获取或初始化严格 DFS 顺序步骤。</summary>
@@ -578,6 +582,8 @@ public static class EnemyCardRuntimeSynchronizer
             ExecutingCardId = unit.ExecutingCardId.Value,
             ReplayIndex = unit.ReplayIndex,
             Mode = unit.Mode,
+            ResolutionProgramFingerprint = unit.ResolutionProgramFingerprint,
+            PlayConditionProgramId = unit.PlayConditionProgramId,
             MaterialReservations = unit.MaterialReservations.Select(CaptureReservation).ToArray(),
             OrderedSteps = unit.OrderedSteps.Select(CaptureStep).ToArray()
         };
@@ -891,20 +897,31 @@ public static class EnemyCardRuntimeSynchronizer
         }
 
         context.ValidateExecutingCard(executingKey, executingId);
+        if (string.IsNullOrWhiteSpace(transfer.ResolutionProgramFingerprint) ||
+            string.IsNullOrWhiteSpace(transfer.PlayConditionProgramId) ||
+            !context.CardDefinitions.TryGetValue(executingId, out EnemyCardDefinition? definition))
+        {
+            throw new InvalidOperationException("冻结单元缺少有效显式程序、条件或执行定义。 ");
+        }
+
         EnemyMaterialReservation[] reservations = transfer.MaterialReservations
             .Select(item => RestoreReservation(item, context.CardsByKey, context.CollectionsById))
             .ToArray();
         PreparedEnemyResolutionStep[] steps = transfer.OrderedSteps
             .Select(item => RestoreStep(item, expectedRoot, context, depth + 1))
             .ToArray();
-        return new PreparedEnemyCardUnitPlan(
+        PreparedEnemyCardUnitPlan unit = new(
             root,
             executingKey,
             executingId,
             transfer.ReplayIndex,
             transfer.Mode,
             reservations,
-            steps);
+            steps,
+            transfer.ResolutionProgramFingerprint,
+            transfer.PlayConditionProgramId);
+        unit.ValidateFrozenDefinition(definition);
+        return unit;
     }
 
     /// <summary>

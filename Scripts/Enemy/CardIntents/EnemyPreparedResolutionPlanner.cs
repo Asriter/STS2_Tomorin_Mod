@@ -254,7 +254,8 @@ public sealed class EnemyPreparedResolutionPlanner
                     transaction,
                     random,
                     session,
-                    out PreparedEnemyCardUnitPlan? unit))
+                    out PreparedEnemyCardUnitPlan? unit,
+                    out UnitPlanFailure failure))
             {
                 truncation = replayIndex;
                 break;
@@ -278,7 +279,8 @@ public sealed class EnemyPreparedResolutionPlanner
     /// <param name="random">唯一战斗随机源。</param>
     /// <param name="session">递归与步骤预算。</param>
     /// <param name="unit">成功时返回冻结单元。</param>
-    /// <returns>素材足够且成功冻结时为真。</returns>
+    /// <param name="failure">失败时区分正常素材截断与出牌条件拒绝。</param>
+    /// <returns>条件满足、素材足够且成功冻结时为真。</returns>
     private bool TryBuildUnit(
         BaseEnemyCard source,
         EnemyCardInstanceKey rootSourceKey,
@@ -287,17 +289,78 @@ public sealed class EnemyPreparedResolutionPlanner
         EnemyPreparedPlanningState state,
         IEnemyCardRandomSource random,
         PlanningSession session,
-        out PreparedEnemyCardUnitPlan? unit)
+        out PreparedEnemyCardUnitPlan? unit,
+        out UnitPlanFailure failure)
     {
         session.Enter(source.InstanceKey);
         try
         {
+            if (!source.Definition.PlayCondition.CanPlan(state, source))
+            {
+                unit = null;
+                failure = UnitPlanFailure.ConditionRejected;
+                return false;
+            }
+
             List<EnemyMaterialReservation> reservations = [];
             List<PreparedEnemyResolutionStep> steps = [];
-            if (mode == EnemyPreparedExecutionMode.Normal)
+            foreach (EnemyCardProgramOperation operation in source.Definition.ResolutionProgram.Operations)
             {
-                EnemyCollectionInventory reservationInventory = state.CollectionInventory.CreateTransactionalClone();
+                if (mode == EnemyPreparedExecutionMode.ControlledDirectOnly &&
+                    operation.Kind != EnemyCardProgramOperationKind.DirectEffects)
+                {
+                    continue;
+                }
+
+                switch (operation.Kind)
+                {
+                    case EnemyCardProgramOperationKind.ConsumeMaterials:
+                        if (!TryAppendConsumedMaterials())
+                        {
+                            unit = null;
+                            failure = UnitPlanFailure.MaterialShortfall;
+                            return false;
+                        }
+
+                        break;
+
+                    case EnemyCardProgramOperationKind.ComposeResult:
+                        EnemyCardId resultId = source.Definition.ComposeResultCardId ??
+                            throw new InvalidOperationException("显式 ComposeResult 操作缺少结果定义。");
+                        steps.Add(BuildComposeStep(source, resultId, rootSourceKey, state, random, session));
+                        break;
+
+                    case EnemyCardProgramOperationKind.DirectEffects:
+                        session.Step();
+                        steps.Add(new PreparedDirectEffectsStep(
+                            source.Definition.Effects.Select(effect => effect.ProgramId)));
+                        steps.AddRange(BuildGeneratedCollectionSteps(source, state, random, session));
+                        break;
+
+                    default:
+                        throw new InvalidOperationException($"未知敌人卡牌显式程序操作 {operation.Kind}。");
+                }
+            }
+
+            unit = new PreparedEnemyCardUnitPlan(
+                rootSourceKey,
+                source.InstanceKey,
+                source.CardId,
+                replayIndex,
+                mode,
+                reservations,
+                steps,
+                source.Definition.ResolutionProgram.Fingerprint,
+                source.Definition.PlayCondition.ProgramId);
+            failure = UnitPlanFailure.None;
+            return true;
+
+            bool TryAppendConsumedMaterials()
+            {
+                EnemyCollectionInventory reservationInventory =
+                    state.CollectionInventory.CreateTransactionalClone();
                 HashSet<EnemyCardInstanceKey> virtuallyConsumedCards = [];
+                List<EnemyMaterialReservation> operationReservations = [];
                 foreach (EnemyMaterialRequest request in source.Definition.MaterialRequests)
                 {
                     session.Step();
@@ -310,11 +373,10 @@ public sealed class EnemyPreparedResolutionPlanner
                             new EnemyMaterialContext(hand, reservationInventory, source.InstanceKey),
                             out EnemyMaterialReservation reservation))
                     {
-                        unit = null;
                         return false;
                     }
 
-                    reservations.Add(reservation);
+                    operationReservations.Add(reservation);
                     foreach (EnemyMaterialBinding binding in reservation.Bindings)
                     {
                         if (binding.CardInstanceKey is EnemyCardInstanceKey cardKey)
@@ -328,7 +390,8 @@ public sealed class EnemyPreparedResolutionPlanner
                     }
                 }
 
-                foreach (EnemyMaterialBinding binding in reservations.SelectMany(item => item.Bindings))
+                reservations.AddRange(operationReservations);
+                foreach (EnemyMaterialBinding binding in operationReservations.SelectMany(item => item.Bindings))
                 {
                     steps.Add(BuildConsumedMaterialStep(
                         binding,
@@ -337,26 +400,9 @@ public sealed class EnemyPreparedResolutionPlanner
                         random,
                         session));
                 }
-            }
 
-            session.Step();
-            steps.Add(new PreparedDirectEffectsStep(source.Definition.Effects.Select(effect => effect.ProgramId)));
-            steps.AddRange(BuildGeneratedCollectionSteps(source, state, random, session));
-            if (mode == EnemyPreparedExecutionMode.Normal &&
-                source.Definition.ComposeResultCardId is EnemyCardId resultId)
-            {
-                steps.Add(BuildComposeStep(source, resultId, rootSourceKey, state, random, session));
+                return true;
             }
-
-            unit = new PreparedEnemyCardUnitPlan(
-                rootSourceKey,
-                source.InstanceKey,
-                source.CardId,
-                replayIndex,
-                mode,
-                reservations,
-                steps);
-            return true;
         }
         finally
         {
@@ -396,9 +442,11 @@ public sealed class EnemyPreparedResolutionPlanner
                         state,
                         random,
                         session,
-                        out child))
+                        out child,
+                        out UnitPlanFailure failure))
                 {
-                    throw new InvalidOperationException("受控灵感子单元不应发生素材截断。 ");
+                    throw new InvalidOperationException(
+                        $"受控灵感子单元不应在准备时失败：{failure}。 ");
                 }
             }
 
@@ -592,7 +640,8 @@ public sealed class EnemyPreparedResolutionPlanner
                     state,
                     random,
                     session,
-                    out PreparedEnemyCardUnitPlan? child))
+                    out PreparedEnemyCardUnitPlan? child,
+                    out _))
             {
                 break;
             }
@@ -606,6 +655,14 @@ public sealed class EnemyPreparedResolutionPlanner
         }
 
         return children.AsReadOnly();
+    }
+
+    /// <summary>区分不会生成冻结单元的两种正常规划边界。</summary>
+    private enum UnitPlanFailure
+    {
+        None,
+        MaterialShortfall,
+        ConditionRejected
     }
 
     /// <summary>

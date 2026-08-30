@@ -1,5 +1,6 @@
 using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
@@ -13,6 +14,150 @@ namespace CardIntentHarness;
 /// </summary>
 public sealed class ExecutionEngineTests
 {
+    /// <summary>
+    /// 验证前置显式程序先执行即时子牌，且真实权威栈在子牌期间阻止阶段迁移。
+    /// </summary>
+    [Fact]
+    public async Task ImmediateComposeUsesExplicitOrderAndAuthoritativeImmediateStack()
+    {
+        EnemyCardDefinition tokenDefinition = CardIntentTestCardCatalog.AllDefinitions.Values.Single(definition =>
+            definition.CardId.Value.EndsWith("_HITOSHIZUKU_TOKEN", StringComparison.Ordinal));
+        List<string> sequence = [];
+        EnemyCardDefinition sourceDefinition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:EXECUTION_ORDERED_COMPOSE_SOURCE"),
+            new Hitoshizuku(),
+            EnemyCardTag.Attack | EnemyCardTag.Compose,
+            EnemyCardScoreProfile.Zero,
+            lifecycle: EnemyCardLifecycle.Exhaust,
+            tokenTiming: EnemyCardTokenTiming.Immediate,
+            composeResultCardId: tokenDefinition.CardId,
+            effects:
+            [
+                new EnemyCardEffectNode(
+                    "TEST:ORDERED_COMPOSE:SOURCE",
+                    _ => { },
+                    context =>
+                    {
+                        Assert.Empty(context.State.CombatState.ImmediateResolutionStack);
+                        sequence.Add("source");
+                        return Task.CompletedTask;
+                    })
+            ],
+            customExecutionTiming: EnemyCardCustomExecutionTiming.BeforeBaseEffects);
+        ExecutionFixture fixture = CreateFixture("ORDERED_COMPOSE", sourceDefinition);
+        EnemyCardCombatState combatState = fixture.State.CombatState;
+        BaseEnemyCard source = Assert.Single(combatState.DrawPile);
+        combatState.MoveCard(source.InstanceKey, EnemyCardZone.Current);
+        EnemyCardInstanceKey resultKey = EnemyCardInstanceKey.FromRuntimeInstanceId(
+            combatState.NextGeneratedCardSequence);
+        PreparedEnemyCardUnitPlan child = new(
+            source.InstanceKey,
+            resultKey,
+            tokenDefinition.CardId,
+            replayIndex: 0,
+            EnemyPreparedExecutionMode.Normal,
+            materialReservations: [],
+            orderedSteps: [new PreparedDirectEffectsStep(tokenDefinition.EffectProgramIds)],
+            tokenDefinition.ResolutionProgram.Fingerprint,
+            tokenDefinition.PlayCondition.ProgramId);
+        PreparedComposeResultStep compose = new(
+            tokenDefinition.CardId,
+            resultKey,
+            EnemyCardTokenTiming.Immediate,
+            increasesExistingReplay: false,
+            child);
+        PreparedEnemyCardUnitPlan sourceUnit = new(
+            source.InstanceKey,
+            source.InstanceKey,
+            source.CardId,
+            replayIndex: 0,
+            EnemyPreparedExecutionMode.Normal,
+            materialReservations: [],
+            orderedSteps:
+            [
+                compose,
+                new PreparedDirectEffectsStep(sourceDefinition.EffectProgramIds)
+            ],
+            sourceDefinition.ResolutionProgram.Fingerprint,
+            sourceDefinition.PlayCondition.ProgramId);
+        SetPreparedAction(fixture.State, source, sourceUnit);
+
+        CardIntentTestRules rules = CardIntentTestRules.ForTesting(
+            new EnemyActionRecipe(EnemyActionMetric.Attack, [null]));
+        EnemyCardExecutionContext context = new(
+            fixture.Owner,
+            fixture.State,
+            new ThrowingPlayerChoiceContext(),
+            [],
+            DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
+            shouldStopExecution: () => false,
+            attackAllExecutor: (_, _) =>
+            {
+                BaseEnemyCard immediate = Assert.Single(combatState.ImmediateResolutionStack);
+                Assert.Equal(tokenDefinition.CardId, immediate.CardId);
+                Assert.Equal(EnemyCardRuntimePhase.Executing, combatState.RuntimePhase);
+                EnemyCardPhaseTemplate dummyNextPhase = new(
+                    EnemyCardPhase.Phase2,
+                    [() => new ExecutionEnemyCard(sourceDefinition)],
+                    rules,
+                    initialSourceInstanceCount: 1);
+                InvalidOperationException guard = Assert.Throws<InvalidOperationException>(() =>
+                    combatState.BuildPhaseTransitionCandidate(
+                        dummyNextPhase,
+                        new EnemyCardRandomSource(_ => 0)));
+                Assert.Contains("无即时结算栈", guard.Message, StringComparison.Ordinal);
+                sequence.Add("child");
+                return Task.CompletedTask;
+            },
+            collectionPowerExecutor: _ => Task.CompletedTask);
+        EnemyCardExecutionEngine engine = new(abilityHooks: new NoOpAbilityHooks());
+
+        await engine.ExecutePreparedActionAsync(
+            combatState,
+            context,
+            new EnemyCardRandomSource(_ => 0),
+            stepLimit: 32);
+
+        Assert.Equal(["child", "source"], sequence);
+        Assert.Empty(combatState.ImmediateResolutionStack);
+        Assert.NotEqual(EnemyCardRuntimePhase.Faulted, combatState.RuntimePhase);
+    }
+
+    /// <summary>验证投影与真实执行只重验冻结条件，失败时报告损坏而不执行另一个分支。</summary>
+    [Fact]
+    public async Task FrozenConditionFailureMarksProjectionIncompleteAndExecutionFaulted()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:EXECUTION_FROZEN_CONDITION"),
+            new StrikeTomorin(),
+            EnemyCardTag.Attack,
+            new EnemyCardScoreProfile(attack: attack),
+            effects: [new EnemyAttackAllEffect("TEST:FROZEN_CONDITION:ATTACK", attack)],
+            playCondition: new PlanOnlyCondition());
+        List<decimal> attacks = [];
+        ExecutionFixture fixture = CreateFixture(
+            "FROZEN_CONDITION",
+            definition,
+            attackAllExecutor: (amount, _) =>
+            {
+                attacks.Add(amount);
+                return Task.CompletedTask;
+            });
+        EnemyCardCombatState combatState = PrepareSingleUnitAction(fixture.State, definition);
+        PreparedEnemyCardAction action = combatState.PreparedAction!;
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(
+            action,
+            new EnemyActionProjectionInput([new EnemySimulationTarget("TARGET", 1m, 1m)], 64));
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.False(projection.IsComplete);
+        Assert.Empty(attacks);
+        Assert.Equal(EnemyCardRuntimePhase.Faulted, combatState.RuntimePhase);
+        Assert.Contains("冻结出牌条件", combatState.FaultDiagnostic, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// 验证每次冻结重放各执行一次直接效果，并且成功来源按定义进入弃牌堆。
     /// </summary>
@@ -46,7 +191,7 @@ public sealed class ExecutionEngineTests
             });
         card = fixture.State.CombatState.DrawPile.Single();
         card.IncreaseReplayCount();
-        Assert.True(fixture.State.PrepareCards());
+        PrepareWithoutGodotLogging(fixture);
         int frozenAttempts = fixture.State.CombatState.PreparedAction!.Sources.Single().MaximumAttempts;
 
         await fixture.State.ExecuteCardsAsync([]);
@@ -84,7 +229,7 @@ public sealed class ExecutionEngineTests
                 return Task.CompletedTask;
             });
         BaseEnemyCard card = fixture.State.CombatState.DrawPile.Single();
-        Assert.True(fixture.State.PrepareCards());
+        PrepareWithoutGodotLogging(fixture);
 
         await fixture.State.ExecuteCardsAsync([]);
 
@@ -115,7 +260,7 @@ public sealed class ExecutionEngineTests
                 return Task.CompletedTask;
             });
         BaseEnemyCard card = fixture.State.CombatState.DrawPile.Single();
-        Assert.True(fixture.State.PrepareCards());
+        PrepareWithoutGodotLogging(fixture);
         int frozenAttempts = fixture.State.CombatState.PreparedAction!.Sources.Single().MaximumAttempts;
 
         await fixture.State.ExecuteCardsAsync([]);
@@ -150,7 +295,7 @@ public sealed class ExecutionEngineTests
                 randomCalls++;
                 return 0;
             });
-        Assert.True(fixture.State.PrepareCards());
+        PrepareWithoutGodotLogging(fixture);
         PreparedEnemyCardSource source = fixture.State.CombatState.PreparedAction!.Sources.Single();
         int callsAfterPreparation = randomCalls;
         int frozenCollectionResults = source.Units
@@ -181,7 +326,7 @@ public sealed class ExecutionEngineTests
             "FAULT_LOG",
             definition,
             attackAllExecutor: ThrowExecutionFailure);
-        Assert.True(fixture.State.PrepareCards());
+        PrepareWithoutGodotLogging(fixture);
 
         await fixture.State.ExecuteCardsAsync([]);
 
@@ -297,6 +442,87 @@ public sealed class ExecutionEngineTests
         return effects.AsReadOnly();
     }
 
+    /// <summary>提交一个调用方已完整冻结的自定义单元，供真实执行路径测试。</summary>
+    private static void SetPreparedAction(
+        CardIntentMoveState moveState,
+        BaseEnemyCard card,
+        PreparedEnemyCardUnitPlan unit)
+    {
+        PreparedEnemyCardAction action = new(
+            EnemyActionMetric.Attack,
+            retainedPrefix: [],
+            metricCards: [card],
+            sources: [new PreparedEnemyCardSource(card, maximumAttempts: 1, [unit])],
+            new EnemySoftLockDiagnostic(
+                new EnemyCardScore(decimal.Zero, decimal.Zero),
+                attackLock: decimal.Zero,
+                totalScoreLock: decimal.Zero,
+                candidateAttemptCount: 1,
+                rejectedCandidateCount: 0,
+                wasForcedByAttemptLimit: false));
+        typeof(EnemyCardCombatState)
+            .GetProperty(nameof(EnemyCardCombatState.PreparedAction))!
+            .SetValue(moveState.CombatState, action);
+        typeof(EnemyCardCombatState)
+            .GetProperty(nameof(EnemyCardCombatState.RuntimePhase))!
+            .SetValue(moveState.CombatState, EnemyCardRuntimePhase.Prepared);
+    }
+
+    /// <summary>绕过 Godot 日志入口，为纯执行测试提交一个成功冻结单元。</summary>
+    private static EnemyCardCombatState PrepareSingleUnitAction(
+        CardIntentMoveState moveState,
+        EnemyCardDefinition definition) =>
+        PrepareAction(moveState, definition, successfulUnitCount: 1);
+
+    /// <summary>绕过 Godot 日志入口，为纯执行测试提交指定数量的成功冻结单元。</summary>
+    private static EnemyCardCombatState PrepareAction(
+        CardIntentMoveState moveState,
+        EnemyCardDefinition definition,
+        int successfulUnitCount)
+    {
+        EnemyCardCombatState state = moveState.CombatState;
+        BaseEnemyCard card = state.DrawPile.Single();
+        state.MoveCard(card.InstanceKey, EnemyCardZone.Current);
+        PreparedEnemyCardUnitPlan[] units = Enumerable.Range(0, successfulUnitCount)
+            .Select(replayIndex => new PreparedEnemyCardUnitPlan(
+                card.InstanceKey,
+                card.InstanceKey,
+                card.CardId,
+                replayIndex,
+                EnemyPreparedExecutionMode.Normal,
+                materialReservations: [],
+                orderedSteps:
+                [
+                    new PreparedDirectEffectsStep(definition.Effects.Select(effect => effect.ProgramId))
+                ]))
+            .ToArray();
+        PreparedEnemyCardAction action = new(
+            EnemyActionMetric.Attack,
+            retainedPrefix: [],
+            metricCards: [card],
+            sources: [new PreparedEnemyCardSource(card, successfulUnitCount, units)],
+            new EnemySoftLockDiagnostic(
+                new EnemyCardScore(decimal.Zero, decimal.Zero),
+                attackLock: decimal.Zero,
+                totalScoreLock: decimal.Zero,
+                candidateAttemptCount: 1,
+                rejectedCandidateCount: 0,
+                wasForcedByAttemptLimit: false));
+        typeof(EnemyCardCombatState)
+            .GetProperty(nameof(EnemyCardCombatState.PreparedAction))!
+            .SetValue(state, action);
+        typeof(EnemyCardCombatState)
+            .GetProperty(nameof(EnemyCardCombatState.RuntimePhase))!
+            .SetValue(state, EnemyCardRuntimePhase.Prepared);
+        return state;
+    }
+
+    /// <summary>直接调用领域 planner，避开纯 .NET 测试宿主无法初始化的 Godot 日志外壳。</summary>
+    private static PreparedEnemyCardAction PrepareWithoutGodotLogging(ExecutionFixture fixture) =>
+        new EnemyActionMetricPlanner(fixture.Rules, new EnemyCardScoreCalculator()).Prepare(
+            fixture.State.CombatState,
+            new EnemyPlanningContext(new EnemyCardRandomSource(fixture.RandomIndexSelector)));
+
     /// <summary>创建仅含一个来源实例、单槽配方和全部无副作用测试 seam 的执行夹具。</summary>
     private static ExecutionFixture CreateFixture(
         string scope,
@@ -314,12 +540,13 @@ public sealed class ExecutionEngineTests
         EnemyActionRecipe recipe = new(EnemyActionMetric.Attack, [null]);
         CardIntentTestRules rules = CardIntentTestRules.ForTesting(recipe);
         HarnessMonster owner = new();
+        Func<int, int> resolvedRandomIndexSelector = randomIndexSelector ?? (_ => 0);
         CardIntentMoveState state = CardIntentMoveState.Create(
             $"EXECUTION_{scope}",
             owner,
             deckId,
             recipe.Slots.Count,
-            randomIndexSelector: randomIndexSelector ?? (_ => 0),
+            randomIndexSelector: resolvedRandomIndexSelector,
             shouldStopExecution: () => false,
             defendExecutor: defendExecutor,
             attackAllExecutor: attackAllExecutor,
@@ -327,11 +554,15 @@ public sealed class ExecutionEngineTests
             combatStateOverride: DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
             rules: rules,
             executionEngine: new EnemyCardExecutionEngine(abilityHooks: new NoOpAbilityHooks()));
-        return new ExecutionFixture(state, owner);
+        return new ExecutionFixture(state, owner, rules, resolvedRandomIndexSelector);
     }
 
     /// <summary>保存执行测试所需的行动状态。</summary>
-    private sealed record ExecutionFixture(CardIntentMoveState State, HarnessMonster Owner);
+    private sealed record ExecutionFixture(
+        CardIntentMoveState State,
+        HarnessMonster Owner,
+        EnemyCardPlanningRules Rules,
+        Func<int, int> RandomIndexSelector);
 
     /// <summary>承载共享定义且不增加额外执行状态的敌人牌。</summary>
     private sealed class ExecutionEnemyCard : BaseEnemyCard
@@ -350,6 +581,18 @@ public sealed class ExecutionEngineTests
 
         /// <inheritdoc />
         public Task AfterSuccessfulUnitAsync(EnemyCardExecutionContext context) => Task.CompletedTask;
+    }
+
+    /// <summary>只允许准备，用于证明投影和执行重验不会重新选择分支。</summary>
+    private sealed class PlanOnlyCondition : IEnemyCardPlayCondition
+    {
+        public string ProgramId => "TEST:PLAY_CONDITION:PLAN_ONLY";
+
+        public bool CanPlan(EnemyPreparedPlanningState state, BaseEnemyCard card) => true;
+
+        public bool CanSimulate(EnemyCardSimulationContext context) => false;
+
+        public bool CanExecute(EnemyCardExecutionContext context) => false;
     }
 
     /// <summary>提供不会被当前 seam 路径调用的空战斗状态接口代理。</summary>

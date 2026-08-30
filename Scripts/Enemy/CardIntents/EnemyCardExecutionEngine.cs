@@ -138,6 +138,13 @@ public sealed class EnemyCardExecutionEngine
                 $"冻结单元实例 {unit.ExecutingCardKey} 的 CardId 与权威对象不匹配。 ");
         }
 
+        unit.ValidateFrozenDefinition(executing.Definition);
+        if (!executing.Definition.PlayCondition.CanExecute(context))
+        {
+            throw new InvalidOperationException(
+                $"执行牌 {unit.ExecutingCardKey} 的冻结出牌条件在真实结算时不再成立。 ");
+        }
+
         foreach (PreparedEnemyResolutionStep step in unit.OrderedSteps)
         {
             await ExecuteStepAsync(state, executing, step, context, session, collectionProgram: null);
@@ -326,11 +333,13 @@ public sealed class EnemyCardExecutionEngine
         if (compose.ImmediateChild is not null)
         {
             session.Publish(EnemyCardResolutionEventType.ImmediateCardQueued, generated.InstanceKey);
-            await ExecuteUnitPlanAsync(state, compose.ImmediateChild, context, session);
-            foreach (PreparedEnemyCardUnitPlan replayUnit in compose.AdditionalReplayUnits)
-            {
-                await ExecuteUnitPlanAsync(state, replayUnit, context, session);
-            }
+            await ExecuteImmediateUnitsAsync(
+                state,
+                generated,
+                compose.ImmediateChild,
+                compose.AdditionalReplayUnits,
+                context,
+                session);
 
             ApplySourceLifecycle(state, generated, successful: true, immediateFailure: true);
         }
@@ -361,11 +370,13 @@ public sealed class EnemyCardExecutionEngine
         BaseEnemyCard selected = RequireCardInZone(state.DrawPile, immediate.SelectedCardKey, "抽牌堆");
         state.MoveCard(selected.InstanceKey, EnemyCardZone.Current);
         session.Publish(EnemyCardResolutionEventType.ImmediateCardQueued, selected.InstanceKey);
-        await ExecuteUnitPlanAsync(state, immediate.Child, context, session);
-        foreach (PreparedEnemyCardUnitPlan replayUnit in immediate.AdditionalReplayUnits)
-        {
-            await ExecuteUnitPlanAsync(state, replayUnit, context, session);
-        }
+        await ExecuteImmediateUnitsAsync(
+            state,
+            selected,
+            immediate.Child,
+            immediate.AdditionalReplayUnits,
+            context,
+            session);
 
         ApplySourceLifecycle(state, selected, successful: true, immediateFailure: true);
     }
@@ -399,13 +410,41 @@ public sealed class EnemyCardExecutionEngine
         BaseEnemyCard card = RequireCardInZone(state.ExhaustPile, key, "消耗牌区");
         state.MoveCard(card.InstanceKey, EnemyCardZone.Current);
         session.Publish(EnemyCardResolutionEventType.ImmediateCardQueued, card.InstanceKey);
-        await ExecuteUnitPlanAsync(state, recovery.ImmediateCardChild!, context, session);
-        foreach (PreparedEnemyCardUnitPlan replayUnit in recovery.AdditionalReplayUnits)
-        {
-            await ExecuteUnitPlanAsync(state, replayUnit, context, session);
-        }
+        await ExecuteImmediateUnitsAsync(
+            state,
+            card,
+            recovery.ImmediateCardChild!,
+            recovery.AdditionalReplayUnits,
+            context,
+            session);
 
         ApplySourceLifecycle(state, card, successful: true, immediateFailure: true);
+    }
+
+    /// <summary>
+    /// 通过战斗状态的权威 LIFO 栈执行一个即时实例的首单元和全部冻结重放。
+    /// </summary>
+    private async Task ExecuteImmediateUnitsAsync(
+        EnemyCardCombatState state,
+        BaseEnemyCard card,
+        PreparedEnemyCardUnitPlan first,
+        IReadOnlyList<PreparedEnemyCardUnitPlan> additional,
+        EnemyCardExecutionContext context,
+        ExecutionSession session)
+    {
+        state.PushImmediateResolution(card);
+        try
+        {
+            await ExecuteUnitPlanAsync(state, first, context, session);
+            foreach (PreparedEnemyCardUnitPlan replayUnit in additional)
+            {
+                await ExecuteUnitPlanAsync(state, replayUnit, context, session);
+            }
+        }
+        finally
+        {
+            state.PopImmediateResolution(card);
+        }
     }
 
     /// <summary>

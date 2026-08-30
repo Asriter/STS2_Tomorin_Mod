@@ -39,6 +39,8 @@ public sealed record PreparedEnemyCardUnitPlan
     /// <param name="mode">完整或受控直接执行模式。</param>
     /// <param name="materialReservations">本单元冻结的完整素材预留。</param>
     /// <param name="orderedSteps">严格按深度优先执行顺序排列的步骤。</param>
+    /// <param name="resolutionProgramFingerprint">准备时冻结的显式程序指纹。</param>
+    /// <param name="playConditionProgramId">准备时冻结的出牌条件程序标识。</param>
     public PreparedEnemyCardUnitPlan(
         EnemyCardInstanceKey rootSourceKey,
         EnemyCardInstanceKey executingCardKey,
@@ -46,7 +48,9 @@ public sealed record PreparedEnemyCardUnitPlan
         int replayIndex,
         EnemyPreparedExecutionMode mode,
         IEnumerable<EnemyMaterialReservation> materialReservations,
-        IEnumerable<PreparedEnemyResolutionStep> orderedSteps)
+        IEnumerable<PreparedEnemyResolutionStep> orderedSteps,
+        string resolutionProgramFingerprint = "",
+        string playConditionProgramId = "")
     {
         RootSourceKey = rootSourceKey ?? throw new ArgumentNullException(nameof(rootSourceKey));
         ExecutingCardKey = executingCardKey ?? throw new ArgumentNullException(nameof(executingCardKey));
@@ -79,6 +83,14 @@ public sealed record PreparedEnemyCardUnitPlan
             throw new ArgumentException("冻结单元不能包含空步骤。", nameof(orderedSteps));
         }
 
+        if ((string.IsNullOrWhiteSpace(resolutionProgramFingerprint) &&
+             !string.IsNullOrEmpty(resolutionProgramFingerprint)) ||
+            (string.IsNullOrWhiteSpace(playConditionProgramId) &&
+             !string.IsNullOrEmpty(playConditionProgramId)))
+        {
+            throw new ArgumentException("冻结程序与条件标识不能只包含空白字符。");
+        }
+
         if (mode == EnemyPreparedExecutionMode.ControlledDirectOnly &&
             (reservations.Length != 0 || steps.Any(IsRecursivePaymentOrComposeStep)))
         {
@@ -90,6 +102,8 @@ public sealed record PreparedEnemyCardUnitPlan
         Mode = mode;
         MaterialReservations = Array.AsReadOnly(reservations);
         OrderedSteps = Array.AsReadOnly(steps);
+        ResolutionProgramFingerprint = resolutionProgramFingerprint;
+        PlayConditionProgramId = playConditionProgramId;
     }
 
     /// <summary>获取公开卡列中的根来源实例键。</summary>
@@ -112,6 +126,88 @@ public sealed record PreparedEnemyCardUnitPlan
 
     /// <summary>获取严格保持构造顺序的不可修改步骤。</summary>
     public IReadOnlyList<PreparedEnemyResolutionStep> OrderedSteps { get; }
+
+    /// <summary>获取准备时冻结的显式程序指纹；空值仅兼容手工旧测试计划。</summary>
+    public string ResolutionProgramFingerprint { get; }
+
+    /// <summary>获取准备时冻结的出牌条件标识；空值仅兼容手工旧测试计划。</summary>
+    public string PlayConditionProgramId { get; }
+
+    /// <summary>
+    /// 对当前定义重验冻结程序、条件身份和顶层步骤顺序，不选择或重建任何分支。
+    /// </summary>
+    internal void ValidateFrozenDefinition(EnemyCardDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (definition.CardId != ExecutingCardId)
+        {
+            throw new InvalidOperationException("冻结单元执行定义与当前卡牌定义不一致。");
+        }
+
+        bool hasFrozenContract = ResolutionProgramFingerprint.Length != 0 || PlayConditionProgramId.Length != 0;
+        if (!hasFrozenContract)
+        {
+            return;
+        }
+
+        if (!string.Equals(
+                ResolutionProgramFingerprint,
+                definition.ResolutionProgram.Fingerprint,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                PlayConditionProgramId,
+                definition.PlayCondition.ProgramId,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("冻结单元的显式程序或出牌条件与当前定义不一致。");
+        }
+
+        EnemyCardProgramOperationKind[] expected = definition.ResolutionProgram.Operations
+            .Where(operation => Mode == EnemyPreparedExecutionMode.Normal ||
+                                operation.Kind == EnemyCardProgramOperationKind.DirectEffects)
+            .Select(operation => operation.Kind)
+            .ToArray();
+        List<EnemyCardProgramOperationKind> actual = [];
+        int consumedStepCount = 0;
+        foreach (PreparedEnemyResolutionStep step in OrderedSteps)
+        {
+            switch (step)
+            {
+                case PreparedConsumedCardStep:
+                case PreparedConsumedCollectionStep:
+                    consumedStepCount++;
+                    if (actual.Count == 0 || actual[^1] != EnemyCardProgramOperationKind.ConsumeMaterials)
+                    {
+                        actual.Add(EnemyCardProgramOperationKind.ConsumeMaterials);
+                    }
+
+                    break;
+                case PreparedComposeResultStep:
+                    actual.Add(EnemyCardProgramOperationKind.ComposeResult);
+                    break;
+                case PreparedDirectEffectsStep:
+                    actual.Add(EnemyCardProgramOperationKind.DirectEffects);
+                    break;
+                case PreparedGeneratedCollectionStep:
+                case PreparedImmediateCardStep:
+                case PreparedRecoveryStep:
+                    if (actual.Count == 0 || actual[^1] != EnemyCardProgramOperationKind.DirectEffects)
+                    {
+                        throw new InvalidOperationException("冻结派生步骤没有紧跟所属 DirectEffects 操作。");
+                    }
+
+                    break;
+                default:
+                    throw new InvalidOperationException($"冻结单元包含未知步骤 {step.GetType().Name}。");
+            }
+        }
+
+        int reservedBindingCount = MaterialReservations.Sum(reservation => reservation.Bindings.Count);
+        if (!actual.SequenceEqual(expected) || consumedStepCount != reservedBindingCount)
+        {
+            throw new InvalidOperationException("冻结顶层步骤顺序与显式结算程序不一致。");
+        }
+    }
 
     /// <summary>
     /// 判断步骤是否属于受控直接执行禁止携带的递归支付或作词类型。

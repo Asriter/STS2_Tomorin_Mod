@@ -1,4 +1,5 @@
 using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 using Xunit;
 
 namespace CardIntentHarness;
@@ -8,6 +9,181 @@ namespace CardIntentHarness;
 /// </summary>
 public sealed class FrozenResolutionPlanTests
 {
+    /// <summary>
+    /// 防止规划器把即时作词结果固定追加到来源直接效果之后，而忽略定义边界的前置顺序。
+    /// </summary>
+    [Fact]
+    public void ImmediateComposeCanResolveBeforeSourceDirectEffects()
+    {
+        CardIntentTestDeck.EnsureRegistered();
+        EnemyCardCombatState combat = EnemyCardDeckRegistry.CreateCombatState(CardIntentTestDeck.DeckId);
+        BaseEnemyCard source = combat.DrawPile.First(card =>
+            card.CardId.Value.EndsWith("_HITOSHIZUKU", StringComparison.Ordinal));
+        BaseEnemyCard material = combat.DrawPile.First(card =>
+            card.CardId.Value.EndsWith("_ATTACK", StringComparison.Ordinal));
+        EnemyPreparedPlanningState transaction = new(
+            drawPile: [],
+            currentCards: [source, material],
+            retainedCards: [],
+            discardPile: [],
+            exhaustPile: [],
+            new EnemyCollectionInventory(),
+            nextGeneratedCardSequence: 0);
+
+        PreparedEnemyCardSource planned = new EnemyPreparedResolutionPlanner().PlanSource(
+            source,
+            maximumAttempts: 1,
+            transaction,
+            new EnemyCardRandomSource(_ => 0),
+            stepLimit: 64);
+
+        PreparedEnemyCardUnitPlan unit = Assert.Single(planned.Units);
+        Assert.Collection(
+            unit.OrderedSteps,
+            step => Assert.IsType<PreparedConsumedCardStep>(step),
+            step => Assert.IsType<PreparedComposeResultStep>(step),
+            step => Assert.IsType<PreparedDirectEffectsStep>(step));
+    }
+
+    /// <summary>
+    /// 防止失败条件在素材预留或牌区移动之后才检查，从而留下空单元或错误消费。
+    /// </summary>
+    [Fact]
+    public void FailedPlayConditionCreatesNoUnitAndUsesRetainDisposition()
+    {
+        EnemyCardDefinition sourceDefinition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:FROZEN_CONDITION_SOURCE"),
+            new STS2_Tomorin_Mod.Cards.StrikeTomorin(),
+            EnemyCardTag.Attack,
+            EnemyCardScoreProfile.Zero,
+            materialRequests:
+            [
+                EnemyMaterialRequest.NonCompose(
+                    MegaCrit.Sts2.Core.Entities.Cards.CardType.Attack,
+                    1)
+            ],
+            failureDisposition: EnemyCardFailureDisposition.Retain,
+            effects: [],
+            playCondition: new NeverPlayableCondition());
+        EnemyCardDefinition materialDefinition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:FROZEN_CONDITION_MATERIAL"),
+            new STS2_Tomorin_Mod.Cards.StrikeTomorin(),
+            EnemyCardTag.Attack,
+            EnemyCardScoreProfile.Zero,
+            effects: []);
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:FROZEN_CONDITION_DECK");
+        if (!EnemyCardDeckRegistry.IsRegistered(deckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                deckId,
+                [
+                    () => new FixtureEnemyCard(sourceDefinition),
+                    () => new FixtureEnemyCard(materialDefinition)
+                ]);
+        }
+
+        EnemyCardCombatState combat = EnemyCardDeckRegistry.CreateCombatState(deckId);
+        BaseEnemyCard source = combat.DrawPile.Single(card => card.CardId == sourceDefinition.CardId);
+        BaseEnemyCard material = combat.DrawPile.Single(card => card.CardId == materialDefinition.CardId);
+        EnemyPreparedPlanningState transaction = new(
+            drawPile: [],
+            currentCards: [source, material],
+            retainedCards: [],
+            discardPile: [],
+            exhaustPile: [],
+            new EnemyCollectionInventory(),
+            nextGeneratedCardSequence: 0);
+
+        PreparedEnemyCardSource planned = new EnemyPreparedResolutionPlanner().PlanSource(
+            source,
+            maximumAttempts: 1,
+            transaction,
+            new EnemyCardRandomSource(_ => 0),
+            stepLimit: 64);
+
+        Assert.Empty(planned.Units);
+        Assert.Contains(transaction.RetainedCards, card => card.InstanceKey == source.InstanceKey);
+        Assert.Contains(transaction.CurrentCards, card => card.InstanceKey == material.InstanceKey);
+        Assert.Empty(transaction.ExhaustPile);
+    }
+
+    /// <summary>
+    /// 防止显式程序遗漏、重复或携带定义不需要的操作，导致计划与执行解释不同。
+    /// </summary>
+    [Fact]
+    public void DefinitionRejectsMissingDuplicateAndUnneededProgramOperations()
+    {
+        EnemyCardId resultId = new("STS2_TOMORIN_MOD:FROZEN_PROGRAM_RESULT");
+        EnemyMaterialRequest material = EnemyMaterialRequest.NonCompose(
+            MegaCrit.Sts2.Core.Entities.Cards.CardType.Attack,
+            1);
+        IEnemyCardEffectNode effect = new EnemyAttackAllEffect("TEST:PROGRAM:EFFECT", 1m);
+
+        Assert.Throws<ArgumentException>(() => new EnemyCardDefinition(
+            new EnemyCardId("STS2_TOMORIN_MOD:FROZEN_PROGRAM_MISSING"),
+            new STS2_Tomorin_Mod.Cards.StrikeTomorin(),
+            EnemyCardTag.Compose,
+            EnemyCardScoreProfile.Zero,
+            materialRequests: [material],
+            tokenTiming: EnemyCardTokenTiming.RetainedNextTurn,
+            composeResultCardId: resultId,
+            effects: [effect],
+            resolutionProgram: Program(
+                EnemyCardProgramOperationKind.ConsumeMaterials,
+                EnemyCardProgramOperationKind.DirectEffects)));
+        Assert.Throws<ArgumentException>(() => Program(
+            EnemyCardProgramOperationKind.DirectEffects,
+            EnemyCardProgramOperationKind.DirectEffects));
+        Assert.Throws<ArgumentException>(() => new EnemyCardDefinition(
+            new EnemyCardId("STS2_TOMORIN_MOD:FROZEN_PROGRAM_UNNEEDED"),
+            new STS2_Tomorin_Mod.Cards.StrikeTomorin(),
+            EnemyCardTag.None,
+            EnemyCardScoreProfile.Zero,
+            effects: [],
+            resolutionProgram: Program(EnemyCardProgramOperationKind.ComposeResult)));
+    }
+
+    /// <summary>
+    /// 防止兼容 timing 枚举继续进入指纹或运行时分支；边界翻译后只保留同一显式程序。
+    /// </summary>
+    [Fact]
+    public void CompatibilityTimingTranslatesToTheSameExplicitProgramFingerprint()
+    {
+        EnemyCardId resultId = new("STS2_TOMORIN_MOD:FROZEN_COMPAT_RESULT");
+        EnemyMaterialRequest material = EnemyMaterialRequest.NonCompose(
+            MegaCrit.Sts2.Core.Entities.Cards.CardType.Attack,
+            1);
+        IEnemyCardEffectNode effect = new EnemyAttackAllEffect("TEST:COMPAT:EFFECT", 1m);
+        EnemyCardResolutionProgram expected = Program(
+            EnemyCardProgramOperationKind.ConsumeMaterials,
+            EnemyCardProgramOperationKind.ComposeResult,
+            EnemyCardProgramOperationKind.DirectEffects);
+        EnemyCardDefinition translated = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:FROZEN_COMPAT"),
+            new STS2_Tomorin_Mod.Cards.StrikeTomorin(),
+            EnemyCardTag.Compose,
+            EnemyCardScoreProfile.Zero,
+            materialRequests: [material],
+            tokenTiming: EnemyCardTokenTiming.RetainedNextTurn,
+            composeResultCardId: resultId,
+            effects: [effect],
+            customExecutionTiming: EnemyCardCustomExecutionTiming.BeforeBaseEffects);
+        EnemyCardDefinition explicitProgram = new(
+            translated.CardId,
+            translated.CardModel,
+            translated.Tags,
+            translated.ScoreProfile,
+            materialRequests: [material],
+            tokenTiming: translated.TokenTiming,
+            composeResultCardId: resultId,
+            effects: [effect],
+            customExecutionTiming: EnemyCardCustomExecutionTiming.AfterBaseEffects,
+            resolutionProgram: expected);
+
+        Assert.Equal(expected.Fingerprint, translated.ResolutionProgram.Fingerprint);
+        Assert.Equal(translated.SemanticFingerprint, explicitProgram.SemanticFingerprint);
+    }
+
     /// <summary>
     /// 验证一个公开来源的不同成功重放拥有独立单元，并允许子牌保留相同根来源。
     /// </summary>
@@ -194,4 +370,28 @@ public sealed class FrozenResolutionPlanTests
             EnemyPreparedExecutionMode.Normal,
             [],
             [new PreparedDirectEffectsStep([])]);
+
+    /// <summary>从手写操作种类创建测试显式程序。</summary>
+    private static EnemyCardResolutionProgram Program(params EnemyCardProgramOperationKind[] kinds) =>
+        new(kinds.Select(kind => new EnemyCardProgramOperation(kind)));
+
+    /// <summary>始终拒绝规划，用于证明条件检查早于任何事务修改。</summary>
+    private sealed class NeverPlayableCondition : IEnemyCardPlayCondition
+    {
+        public string ProgramId => "TEST:NEVER_PLAYABLE";
+
+        public bool CanPlan(EnemyPreparedPlanningState state, BaseEnemyCard card) => false;
+
+        public bool CanSimulate(EnemyCardSimulationContext context) => false;
+
+        public bool CanExecute(EnemyCardExecutionContext context) => false;
+    }
+
+    /// <summary>承载测试定义且不引入额外执行路径。</summary>
+    private sealed class FixtureEnemyCard : BaseEnemyCard
+    {
+        public FixtureEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
 }

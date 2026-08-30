@@ -1,0 +1,349 @@
+using System.Reflection;
+using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Models.Cards;
+using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证阶段迁移只在安全点以候选态原子替换五区与阶段元数据。
+/// </summary>
+public sealed class PhaseMigrationTests
+{
+    /// <summary>
+    /// 验证 Carry 实例在任意权威牌区都保留对象、顺序、身份与重放次数。
+    /// </summary>
+    [Theory]
+    [InlineData(EnemyCardZone.Draw)]
+    [InlineData(EnemyCardZone.Current)]
+    [InlineData(EnemyCardZone.Retained)]
+    [InlineData(EnemyCardZone.Discard)]
+    [InlineData(EnemyCardZone.Exhaust)]
+    public void TransitionPreservesCarryIdentityZoneOrderAndReplay(EnemyCardZone zone)
+    {
+        PhaseFixture fixture = PhaseFixture.Create($"ZONE_{zone.ToString().ToUpperInvariant()}");
+        (BaseEnemyCard firstCarry, BaseEnemyCard secondCarry, BaseEnemyCard ordinary) =
+            fixture.PlacePhaseOneCards(zone);
+        firstCarry.IncreaseReplayCount();
+        firstCarry.IncreaseReplayCount();
+        EnemyCardInstanceKey firstKey = firstCarry.InstanceKey;
+        EnemyCardInstanceKey secondKey = secondCarry.InstanceKey;
+        EnemyCardInstanceKey ordinaryKey = ordinary.InstanceKey;
+
+        fixture.State.RequestPhase(EnemyCardPhase.Phase2);
+        EnemyCardPhaseTransitionCandidate candidate = fixture.State.BuildPhaseTransitionCandidate(
+            fixture.Directory.GetPhase(EnemyCardPhase.Phase2), fixture.Random);
+        fixture.State.ApplyPhaseTransition(candidate);
+
+        Assert.Same(firstCarry, fixture.Find(firstKey));
+        Assert.Same(secondCarry, fixture.Find(secondKey));
+        Assert.Equal(zone, fixture.FindZone(firstKey));
+        Assert.Equal(zone, fixture.FindZone(secondKey));
+        Assert.Equal([firstKey, secondKey], fixture.Zone(zone)
+            .Where(card => card.CarryAcrossPhase)
+            .Select(card => card.InstanceKey));
+        Assert.Equal(2, fixture.Find(firstKey).ReplayCount);
+        Assert.False(fixture.Contains(ordinaryKey));
+        Assert.All(fixture.AllCards().Where(card => !card.CarryAcrossPhase),
+            card => Assert.Equal(EnemyCardPhase.Phase2, card.SourcePhase));
+    }
+
+    /// <summary>
+    /// 验证 Build 只消耗权威随机源并构造独立候选，Apply 才一次提交全部字段。
+    /// </summary>
+    [Fact]
+    public void CandidateBuildDoesNotMutateLiveStateAndApplySwapsOnce()
+    {
+        PhaseFixture fixture = PhaseFixture.Create("ATOMIC");
+        EnemyActionMetricPlanner planner = new(fixture.Rules, new EnemyCardScoreCalculator());
+        _ = planner.Prepare(fixture.State, new EnemyPlanningContext(new ZeroRandomSource()));
+        Assert.NotNull(fixture.State.LastMetric);
+        fixture.State.ClearPreparedAction();
+        foreach (BaseEnemyCard plannedCard in fixture.State.CurrentCards.ToArray())
+        {
+            fixture.State.MoveCard(plannedCard.InstanceKey, EnemyCardZone.Draw);
+        }
+
+        (BaseEnemyCard firstCarry, BaseEnemyCard secondCarry, BaseEnemyCard ordinary) =
+            fixture.PlacePhaseOneCards(EnemyCardZone.Draw);
+        BaseEnemyCard generated = fixture.CreateOrdinary();
+        fixture.State.AddGeneratedCard(generated, EnemyCardZone.Exhaust);
+        long nextGeneratedSequence = fixture.State.NextGeneratedCardSequence;
+        EnemyCollectionInstance consumed = fixture.State.CollectionInventory.Append(fixture.Collection);
+        fixture.State.CollectionInventory.Consume(consumed);
+        EnemyCollectionInstance available = fixture.State.CollectionInventory.Append(fixture.Collection);
+        long nextCollectionSequence = fixture.State.NextCollectionSequence;
+        BaseEnemyCard[] liveOrder = fixture.AllCards().ToArray();
+        fixture.State.RequestPhase(EnemyCardPhase.Phase2);
+        int notifications = 0;
+        fixture.State.StateChanged += (_, _) => notifications++;
+
+        EnemyCardPhaseTransitionCandidate candidate = fixture.State.BuildPhaseTransitionCandidate(
+            fixture.Directory.GetPhase(EnemyCardPhase.Phase2), fixture.Random);
+
+        Assert.Equal(liveOrder, fixture.AllCards());
+        Assert.Equal(EnemyCardPhase.Phase1, fixture.State.ActivePhase);
+        Assert.Equal(EnemyCardPhase.Phase2, fixture.State.PendingPhase);
+        Assert.Equal(0, fixture.State.PhaseRevision);
+        Assert.Equal(0, notifications);
+        Assert.NotSame(fixture.State, candidate.CandidateState);
+        Assert.Equal(EnemyCardPhase.Phase2, candidate.CandidateState.ActivePhase);
+        Assert.Equal(EnemyCardPhase.None, candidate.CandidateState.PendingPhase);
+        Assert.Equal(1, candidate.CandidateState.PhaseRevision);
+
+        fixture.State.ApplyPhaseTransition(candidate);
+
+        Assert.Equal(1, notifications);
+        Assert.Equal(EnemyCardPhase.Phase2, fixture.State.ActivePhase);
+        Assert.Equal(EnemyCardPhase.None, fixture.State.PendingPhase);
+        Assert.Equal(1, fixture.State.PhaseRevision);
+        Assert.Null(fixture.State.LastMetric);
+        Assert.Equal(nextGeneratedSequence, fixture.State.NextGeneratedCardSequence);
+        Assert.Equal(nextCollectionSequence, fixture.State.NextCollectionSequence);
+        Assert.Same(consumed, fixture.State.ConsumedCollections.Single());
+        Assert.Same(available, fixture.State.CollectionQueue.Single());
+        Assert.DoesNotContain(fixture.AllCards(), card => ReferenceEquals(card, ordinary));
+        Assert.DoesNotContain(fixture.AllCards(), card => ReferenceEquals(card, generated));
+        Assert.Equal([firstCarry, secondCarry], fixture.State.DrawPile.Take(2));
+        Assert.Equal([3, 2], fixture.Random.RequestedBounds);
+        Assert.Equal(3, fixture.State.DrawPile.Count(card => card.SourcePhase == EnemyCardPhase.Phase2));
+    }
+
+    /// <summary>
+    /// 验证迁移只能在 Idle、无冻结行动且无即时栈的安全点构建。
+    /// </summary>
+    [Fact]
+    public void TransitionRefusesPreparedExecutingOrImmediateState()
+    {
+        PhaseFixture prepared = PhaseFixture.Create("REFUSE_PREPARED");
+        prepared.State.RequestPhase(EnemyCardPhase.Phase2);
+        EnemyActionMetricPlanner planner = new(prepared.Rules, new EnemyCardScoreCalculator());
+        _ = planner.Prepare(prepared.State, new EnemyPlanningContext(new ZeroRandomSource()));
+        Assert.Throws<InvalidOperationException>(() => prepared.State.BuildPhaseTransitionCandidate(
+            prepared.Directory.GetPhase(EnemyCardPhase.Phase2), prepared.Random));
+
+        prepared.State.BeginExecution();
+        Assert.Throws<InvalidOperationException>(() => prepared.State.BuildPhaseTransitionCandidate(
+            prepared.Directory.GetPhase(EnemyCardPhase.Phase2), prepared.Random));
+
+        PhaseFixture immediate = PhaseFixture.Create("REFUSE_IMMEDIATE");
+        immediate.State.RequestPhase(EnemyCardPhase.Phase2);
+        PushImmediateThroughTestBoundary(immediate.State, immediate.State.DrawPile[0]);
+        Assert.Throws<InvalidOperationException>(() => immediate.State.BuildPhaseTransitionCandidate(
+            immediate.Directory.GetPhase(EnemyCardPhase.Phase2), immediate.Random));
+    }
+
+    /// <summary>
+    /// 验证生成牌记录当前活跃阶段，且旧候选不能重复或跨修订应用。
+    /// </summary>
+    [Fact]
+    public void GeneratedCardsUseActivePhaseAndStaleCandidatesAreRejected()
+    {
+        PhaseFixture fixture = PhaseFixture.Create("REVISION");
+        fixture.State.RequestPhase(EnemyCardPhase.Phase2);
+        EnemyCardPhaseTransitionCandidate candidate = fixture.State.BuildPhaseTransitionCandidate(
+            fixture.Directory.GetPhase(EnemyCardPhase.Phase2), fixture.Random);
+        fixture.State.ApplyPhaseTransition(candidate);
+        BaseEnemyCard generated = fixture.CreateCarry();
+
+        fixture.State.AddGeneratedCard(generated, EnemyCardZone.Retained);
+
+        Assert.Equal(EnemyCardPhase.Phase2, generated.SourcePhase);
+        Assert.Throws<InvalidOperationException>(() => fixture.State.ApplyPhaseTransition(candidate));
+        Assert.Equal(EnemyCardPhase.Phase2, fixture.State.ActivePhase);
+        Assert.Same(generated, fixture.State.RetainedCards.Single());
+    }
+
+    /// <summary>
+    /// 只在测试边界构造当前生产引擎尚未公开入栈 API 的防御性即时栈状态。
+    /// </summary>
+    private static void PushImmediateThroughTestBoundary(EnemyCardCombatState state, BaseEnemyCard card)
+    {
+        FieldInfo field = typeof(EnemyCardCombatState).GetField(
+                              "_immediateResolutionStack",
+                              BindingFlags.Instance | BindingFlags.NonPublic) ??
+                          throw new InvalidOperationException("无法定位即时结算栈。");
+        ((List<BaseEnemyCard>)field.GetValue(state)!).Add(card);
+    }
+
+    /// <summary>
+    /// 为阶段迁移测试提供完整、显式且不共享可变状态的内容目录。
+    /// </summary>
+    private sealed class PhaseFixture
+    {
+        private static int _nextDeckId;
+        private readonly EnemyCardDefinition _carryDefinition;
+        private readonly EnemyCardDefinition _ordinaryDefinition;
+
+        private PhaseFixture(
+            EnemyCardContentDirectory directory,
+            EnemyCardCombatState state,
+            EnemyCardPlanningRules rules,
+            EnemyCollectionDefinition collection,
+            EnemyCardDefinition carryDefinition,
+            EnemyCardDefinition ordinaryDefinition)
+        {
+            Directory = directory;
+            State = state;
+            Rules = rules;
+            Collection = collection;
+            _carryDefinition = carryDefinition;
+            _ordinaryDefinition = ordinaryDefinition;
+        }
+
+        public EnemyCardContentDirectory Directory { get; }
+        public EnemyCardCombatState State { get; }
+        public EnemyCardPlanningRules Rules { get; }
+        public EnemyCollectionDefinition Collection { get; }
+        public RecordingRandomSource Random { get; } = new();
+
+        public static PhaseFixture Create(string suffix)
+        {
+            int sequence = Interlocked.Increment(ref _nextDeckId);
+            EnemyCardDeckId deckId = new($"STS2_TOMORIN_MOD:PHASE_MIGRATION_{suffix}_{sequence}");
+            StrikeTomorin model = new();
+            EnemyCardDefinition carry = Definition(
+                $"STS2_TOMORIN_MOD:PHASE_CARRY_{suffix}_{sequence}", model, carryAcrossPhase: true);
+            EnemyCardDefinition ordinary = Definition(
+                $"STS2_TOMORIN_MOD:PHASE_ORDINARY_{suffix}_{sequence}", model);
+            EnemyCardDefinition nextA = Definition(
+                $"STS2_TOMORIN_MOD:PHASE_NEXT_A_{suffix}_{sequence}", model);
+            EnemyCardDefinition nextB = Definition(
+                $"STS2_TOMORIN_MOD:PHASE_NEXT_B_{suffix}_{sequence}", model);
+            EnemyCardDefinition nextC = Definition(
+                $"STS2_TOMORIN_MOD:PHASE_NEXT_C_{suffix}_{sequence}", model);
+            EnemyCardPlanningRules rules = CreateRules();
+            Func<BaseEnemyCard>[] phaseOne =
+            [
+                Factory(carry),
+                Factory(carry),
+                Factory(ordinary),
+                Factory(ordinary)
+            ];
+            Func<BaseEnemyCard>[] phaseTwo = [Factory(nextA), Factory(nextB), Factory(nextC)];
+            Dictionary<EnemyCardId, Func<BaseEnemyCard>> definitions = new()
+            {
+                [carry.CardId] = Factory(carry),
+                [ordinary.CardId] = Factory(ordinary),
+                [nextA.CardId] = Factory(nextA),
+                [nextB.CardId] = Factory(nextB),
+                [nextC.CardId] = Factory(nextC)
+            };
+            EnemyCollectionDefinition collection = new(
+                $"PHASE_COLLECTION_{suffix}_{sequence}",
+                model.GetType(),
+                CardType.Status,
+                isEpiphany: false,
+                $"PHASE_COLLECTION_EFFECT_{suffix}_{sequence}",
+                () => model);
+            EnemyCardContentDirectory directory = new(
+                deckId,
+                EnemyCardPhase.Phase1,
+                [
+                    new EnemyCardPhaseTemplate(EnemyCardPhase.Phase1, phaseOne, rules, phaseOne.Length),
+                    new EnemyCardPhaseTemplate(EnemyCardPhase.Phase2, phaseTwo, rules, phaseTwo.Length)
+                ],
+                definitions,
+                new EnemyCollectionCatalog([collection]));
+            EnemyCardDeckRegistry.Register(directory);
+            EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(deckId);
+            return new PhaseFixture(directory, state, rules, collection, carry, ordinary);
+        }
+
+        public (BaseEnemyCard FirstCarry, BaseEnemyCard SecondCarry, BaseEnemyCard Ordinary)
+            PlacePhaseOneCards(EnemyCardZone zone)
+        {
+            BaseEnemyCard[] carries = State.DrawPile.Where(card => card.CarryAcrossPhase).ToArray();
+            BaseEnemyCard ordinary = State.DrawPile.First(card => !card.CarryAcrossPhase);
+            foreach (BaseEnemyCard card in carries.Append(ordinary))
+            {
+                State.MoveCard(card.InstanceKey, zone);
+            }
+
+            return (carries[0], carries[1], ordinary);
+        }
+
+        public BaseEnemyCard CreateCarry() => new HarnessEnemyCard(_carryDefinition);
+        public BaseEnemyCard CreateOrdinary() => new HarnessEnemyCard(_ordinaryDefinition);
+
+        public bool Contains(EnemyCardInstanceKey key) => AllCards().Any(card => card.InstanceKey == key);
+
+        public BaseEnemyCard Find(EnemyCardInstanceKey key) =>
+            AllCards().Single(card => card.InstanceKey == key);
+
+        public EnemyCardZone FindZone(EnemyCardInstanceKey key) =>
+            Enum.GetValues<EnemyCardZone>().Single(zone => Zone(zone).Any(card => card.InstanceKey == key));
+
+        public IReadOnlyList<BaseEnemyCard> Zone(EnemyCardZone zone) => zone switch
+        {
+            EnemyCardZone.Draw => State.DrawPile,
+            EnemyCardZone.Current => State.CurrentCards,
+            EnemyCardZone.Retained => State.RetainedCards,
+            EnemyCardZone.Discard => State.DiscardPile,
+            EnemyCardZone.Exhaust => State.ExhaustPile,
+            _ => throw new ArgumentOutOfRangeException(nameof(zone), zone, null)
+        };
+
+        public IEnumerable<BaseEnemyCard> AllCards() =>
+            State.DrawPile
+                .Concat(State.CurrentCards)
+                .Concat(State.RetainedCards)
+                .Concat(State.DiscardPile)
+                .Concat(State.ExhaustPile);
+
+        private static EnemyCardDefinition Definition(
+            string rawId,
+            StrikeTomorin model,
+            bool carryAcrossPhase = false) =>
+            new(
+                new EnemyCardId(rawId),
+                model,
+                EnemyCardTag.Attack,
+                new EnemyCardScoreProfile(attack: model.DynamicVars.Damage.BaseValue),
+                carryAcrossPhase: carryAcrossPhase,
+                effectClasses: EnemyCardEffectClass.Control);
+
+        private static Func<BaseEnemyCard> Factory(EnemyCardDefinition definition) =>
+            () => new HarnessEnemyCard(definition);
+
+        private static EnemyCardPlanningRules CreateRules() =>
+            new(
+                new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+                new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+                maxCandidateAttempts: 1,
+                stepLimit: 64,
+                [new EnemyWeightedActionRecipe(
+                    new EnemyActionRecipe(EnemyActionMetric.Attack, [null]),
+                    weight: 1)]);
+    }
+
+    /// <summary>
+    /// 记录洗牌唯一权威随机源的调用上界。
+    /// </summary>
+    private sealed class RecordingRandomSource : IEnemyCardRandomSource
+    {
+        public List<int> RequestedBounds { get; } = [];
+
+        public int NextIndex(int exclusiveUpperBound)
+        {
+            RequestedBounds.Add(exclusiveUpperBound);
+            return 0;
+        }
+    }
+
+    /// <summary>始终选择首个候选的确定性规划随机源。</summary>
+    private sealed class ZeroRandomSource : IEnemyCardRandomSource
+    {
+        public int NextIndex(int exclusiveUpperBound) => 0;
+    }
+
+    /// <summary>只承载不可变领域定义的测试卡牌。</summary>
+    private sealed class HarnessEnemyCard : BaseEnemyCard
+    {
+        public HarnessEnemyCard(EnemyCardDefinition definition) : base(definition)
+        {
+        }
+    }
+}

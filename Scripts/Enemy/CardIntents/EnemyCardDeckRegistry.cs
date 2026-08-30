@@ -7,6 +7,14 @@ public static class EnemyCardDeckRegistry
 {
     private static readonly object Sync = new();
     private static readonly Dictionary<EnemyCardDeckId, DeckDefinition> Definitions = new();
+    private static readonly EnemyCardPlanningRules LegacyDirectoryRules = new(
+        new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+        new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+        maxCandidateAttempts: 1,
+        stepLimit: 64,
+        [new EnemyWeightedActionRecipe(
+            new EnemyActionRecipe(EnemyActionMetric.Gain, [null]),
+            weight: 1)]);
 
     /// <summary>
     /// 注册一副敌人牌组，并立即验证工厂的非空、实例独立性、稳定身份与显示资源。
@@ -42,7 +50,6 @@ public static class EnemyCardDeckRegistry
         CardDefinitionFingerprint[] templateDefinitions = firstProbe
             .Select(CardDefinitionFingerprint.FromCard)
             .ToArray();
-        EnemyCardId[] templateCardIds = templateDefinitions.Select(definition => definition.CardId).ToArray();
         List<BaseEnemyCard> secondProbe = InstantiateAndValidate(deckId, factories, templateDefinitions);
         HashSet<BaseEnemyCard> firstReferences = new(firstProbe, ReferenceEqualityComparer.Instance);
         if (secondProbe.Any(firstReferences.Contains))
@@ -51,13 +58,41 @@ public static class EnemyCardDeckRegistry
                 $"敌人牌组 {deckId} 的工厂跨调用复用了卡牌对象；每个工厂每次必须创建新实例。");
         }
 
-        string[] assetPaths = firstProbe
-            .SelectMany(card => EnumerateCardModelAssetPaths(card.CardModel))
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        Dictionary<EnemyCardId, Func<BaseEnemyCard>> definitionFactories = [];
+        for (int index = 0; index < firstProbe.Count; index++)
+        {
+            definitionFactories.TryAdd(firstProbe[index].CardId, factories[index]);
+        }
 
-        DeckDefinition definition = new(factories, templateDefinitions, assetPaths);
+        EnemyCardContentDirectory directory = new(
+            deckId,
+            EnemyCardPhase.None,
+            [new EnemyCardPhaseTemplate(
+                EnemyCardPhase.None,
+                factories,
+                LegacyDirectoryRules,
+                factories.Length)],
+            definitionFactories,
+            new EnemyCollectionCatalog([]));
+        Register(directory);
+    }
+
+    /// <summary>
+    /// 注册一副含完整阶段、生成链定义与收藏品的不可变内容目录。
+    /// </summary>
+    public static void Register(EnemyCardContentDirectory contentDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(contentDirectory);
+        EnemyCardDeckId deckId = contentDirectory.DeckId;
+        lock (Sync)
+        {
+            if (Definitions.ContainsKey(deckId))
+            {
+                throw new InvalidOperationException($"敌人牌组 {deckId} 已经注册，DeckId 必须唯一。");
+            }
+        }
+
+        DeckDefinition definition = BuildDeckDefinition(contentDirectory);
         lock (Sync)
         {
             if (!Definitions.TryAdd(deckId, definition))
@@ -94,16 +129,31 @@ public static class EnemyCardDeckRegistry
         }
 
         DeckDefinition definition = GetDefinition(deckId);
-        if (definition.Factories.Count < minimumCardCount)
+        List<BaseEnemyCard> cards = CreatePhaseDeck(deckId, definition.ContentDirectory.InitialPhase);
+        if (cards.Count < minimumCardCount)
         {
             throw new InvalidOperationException(
-                $"敌人牌组 {deckId} 的容量 {definition.Factories.Count} 小于状态要求的 {minimumCardCount}。");
+                $"敌人牌组 {deckId} 的容量 {cards.Count} 小于状态要求的 {minimumCardCount}。");
         }
 
-        List<BaseEnemyCard> cards = InstantiateAndValidate(deckId, definition.Factories, definition.TemplateDefinitions);
-        for (int templateSlot = 0; templateSlot < cards.Count; templateSlot++)
+        return cards;
+    }
+
+    /// <summary>
+    /// 从指定阶段模板创建全部新来源实例，并绑定跨阶段唯一模板槽位。
+    /// </summary>
+    public static List<BaseEnemyCard> CreatePhaseDeck(EnemyCardDeckId deckId, EnemyCardPhase phase)
+    {
+        DeckDefinition definition = GetDefinition(deckId);
+        PhaseDefinition phaseDefinition = definition.GetPhase(phase);
+        List<BaseEnemyCard> cards = InstantiateAndValidate(
+            deckId,
+            phaseDefinition.Factories,
+            phaseDefinition.TemplateDefinitions);
+        for (int index = 0; index < cards.Count; index++)
         {
-            cards[templateSlot].AssignTemplateSlot(templateSlot);
+            cards[index].AssignTemplateSlot(checked(phaseDefinition.TemplateSlotOffset + index));
+            cards[index].AssignSourcePhase(phase);
         }
 
         return cards;
@@ -114,8 +164,14 @@ public static class EnemyCardDeckRegistry
     /// </summary>
     /// <param name="deckId">已注册牌组稳定标识。</param>
     /// <returns>全部初始牌位于抽牌堆且实例身份唯一的新状态。</returns>
-    public static EnemyCardCombatState CreateCombatState(EnemyCardDeckId deckId) =>
-        new(deckId, CreateDeck(deckId));
+    public static EnemyCardCombatState CreateCombatState(EnemyCardDeckId deckId)
+    {
+        EnemyCardContentDirectory directory = GetContentDirectory(deckId);
+        return new EnemyCardCombatState(
+            deckId,
+            CreatePhaseDeck(deckId, directory.InitialPhase),
+            directory.InitialPhase);
+    }
 
     /// <summary>
     /// 获取牌组模板中保留重复副本与顺序的稳定卡牌标识。
@@ -123,7 +179,19 @@ public static class EnemyCardDeckRegistry
     /// <param name="deckId">已注册牌组标识。</param>
     /// <returns>不可修改的模板卡牌标识视图。</returns>
     public static IReadOnlyList<EnemyCardId> GetTemplateCardIds(EnemyCardDeckId deckId) =>
-        GetDefinition(deckId).TemplateCardIds;
+        GetDefinition(deckId).GetPhase(GetContentDirectory(deckId).InitialPhase).TemplateCardIds;
+
+    /// <summary>获取已注册牌组的完整阶段内容目录。</summary>
+    public static EnemyCardContentDirectory GetContentDirectory(EnemyCardDeckId deckId) =>
+        GetDefinition(deckId).ContentDirectory;
+
+    /// <summary>从已注册完整目录创建未绑定身份的新定义实例。</summary>
+    public static BaseEnemyCard ResolveDefinition(EnemyCardDeckId deckId, EnemyCardId cardId) =>
+        GetContentDirectory(deckId).CreateDefinition(cardId);
+
+    /// <summary>获取已注册牌组的收藏品目录。</summary>
+    public static EnemyCollectionCatalog GetCollectionCatalog(EnemyCardDeckId deckId) =>
+        GetContentDirectory(deckId).CollectionCatalog;
 
     /// <summary>
     /// 获取注册校验阶段缓存并去重后的 CardModel 显示资源路径。
@@ -140,7 +208,87 @@ public static class EnemyCardDeckRegistry
     /// <param name="cardId">待解析卡牌标识。</param>
     /// <returns>模板中至少存在一个同标识副本时为 <see langword="true"/>。</returns>
     public static bool CanResolveCardId(EnemyCardDeckId deckId, EnemyCardId cardId) =>
-        cardId.IsValid && GetDefinition(deckId).TemplateCardIds.Contains(cardId);
+        cardId.IsValid && GetContentDirectory(deckId).DefinitionFactories.ContainsKey(cardId);
+
+    /// <summary>
+    /// 全量验证完整目录的定义工厂、阶段工厂与预加载资源。
+    /// </summary>
+    private static DeckDefinition BuildDeckDefinition(EnemyCardContentDirectory directory)
+    {
+        EnemyCardDeckId deckId = directory.DeckId;
+        Dictionary<EnemyCardId, CardDefinitionFingerprint> canonicalDefinitions = [];
+        List<BaseEnemyCard> definitionProbes = [];
+        foreach (EnemyCardId cardId in directory.DefinitionFactories.Keys)
+        {
+            BaseEnemyCard first = directory.CreateDefinition(cardId);
+            BaseEnemyCard second = directory.CreateDefinition(cardId);
+            if (ReferenceEquals(first, second))
+            {
+                throw new InvalidOperationException(
+                    $"敌人牌组 {deckId} 的定义工厂 {cardId} 跨调用复用了卡牌对象。");
+            }
+
+            CardDefinitionFingerprint fingerprint = CardDefinitionFingerprint.FromCard(first);
+            if (!fingerprint.Matches(second))
+            {
+                throw new InvalidOperationException(
+                    $"敌人牌组 {deckId} 的定义工厂 {cardId} 跨调用改变了完整语义。");
+            }
+
+            canonicalDefinitions.Add(cardId, fingerprint);
+            definitionProbes.Add(first);
+        }
+
+        Dictionary<EnemyCardPhase, PhaseDefinition> phases = [];
+        int templateSlotOffset = 0;
+        foreach (EnemyCardPhaseTemplate phase in directory.OrderedPhases)
+        {
+            List<BaseEnemyCard> firstProbe = InstantiateAndValidate(
+                deckId,
+                phase.SourceFactories,
+                expectedDefinitions: null);
+            CardDefinitionFingerprint[] templateDefinitions = firstProbe
+                .Select(CardDefinitionFingerprint.FromCard)
+                .ToArray();
+            foreach (BaseEnemyCard card in firstProbe)
+            {
+                if (!canonicalDefinitions.TryGetValue(card.CardId, out CardDefinitionFingerprint? canonical) ||
+                    !canonical.Matches(card))
+                {
+                    throw new InvalidOperationException(
+                        $"敌人牌组 {deckId} 的阶段 {phase.Phase} 引用了未注册或语义不同的定义 {card.CardId}。");
+                }
+            }
+
+            List<BaseEnemyCard> secondProbe = InstantiateAndValidate(
+                deckId,
+                phase.SourceFactories,
+                templateDefinitions);
+            HashSet<BaseEnemyCard> firstReferences = new(firstProbe, ReferenceEqualityComparer.Instance);
+            if (secondProbe.Any(firstReferences.Contains))
+            {
+                throw new InvalidOperationException(
+                    $"敌人牌组 {deckId} 的阶段 {phase.Phase} 工厂跨调用复用了卡牌对象。");
+            }
+
+            phases.Add(
+                phase.Phase,
+                new PhaseDefinition(
+                    phase.SourceFactories,
+                    templateDefinitions,
+                    templateSlotOffset));
+            templateSlotOffset = checked(templateSlotOffset + phase.InitialSourceInstanceCount);
+        }
+
+        string[] assetPaths = definitionProbes
+            .SelectMany(card => EnumerateCardModelAssetPaths(card.CardModel))
+            .Concat(directory.CollectionCatalog.Definitions
+                .SelectMany(collection => EnumerateCardModelAssetPaths(collection.ResolveCardModel())))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return new DeckDefinition(directory, phases, assetPaths);
+    }
 
     /// <summary>
     /// 取得已注册定义；未知牌组属于配置或恢复错误，绝不使用替代牌组兜底。
@@ -231,39 +379,49 @@ public static class EnemyCardDeckRegistry
         }
     }
 
-    /// <summary>
-    /// 保存注册后不可变的工厂、身份模板与预加载资源路径。
-    /// </summary>
+    /// <summary>保存注册后不可变的完整内容目录、阶段验证结果与预加载路径。</summary>
     private sealed class DeckDefinition
     {
-        /// <summary>
-        /// 创建不可变牌组定义。
-        /// </summary>
-        /// <param name="factories">已验证工厂。</param>
-        /// <param name="templateDefinitions">包含重复副本的稳定定义身份顺序。</param>
-        /// <param name="assetPaths">去重后的显示资源路径。</param>
         public DeckDefinition(
+            EnemyCardContentDirectory contentDirectory,
+            IReadOnlyDictionary<EnemyCardPhase, PhaseDefinition> phases,
+            IReadOnlyList<string> assetPaths)
+        {
+            ContentDirectory = contentDirectory;
+            Phases = new Dictionary<EnemyCardPhase, PhaseDefinition>(phases);
+            AssetPaths = Array.AsReadOnly(assetPaths.ToArray());
+        }
+
+        public EnemyCardContentDirectory ContentDirectory { get; }
+        public IReadOnlyDictionary<EnemyCardPhase, PhaseDefinition> Phases { get; }
+
+        /// <summary>获取已缓存并去重的牌面显示资源路径。</summary>
+        public IReadOnlyList<string> AssetPaths { get; }
+
+        public PhaseDefinition GetPhase(EnemyCardPhase phase) =>
+            Phases.TryGetValue(phase, out PhaseDefinition? definition)
+                ? definition
+                : throw new KeyNotFoundException($"牌组 {ContentDirectory.DeckId} 未注册阶段 {phase}。");
+    }
+
+    /// <summary>保存一个阶段的有序工厂、语义指纹和全局模板槽位起点。</summary>
+    private sealed class PhaseDefinition
+    {
+        public PhaseDefinition(
             IReadOnlyList<Func<BaseEnemyCard>> factories,
             IReadOnlyList<CardDefinitionFingerprint> templateDefinitions,
-            IReadOnlyList<string> assetPaths)
+            int templateSlotOffset)
         {
             Factories = Array.AsReadOnly(factories.ToArray());
             TemplateDefinitions = Array.AsReadOnly(templateDefinitions.ToArray());
             TemplateCardIds = Array.AsReadOnly(templateDefinitions.Select(definition => definition.CardId).ToArray());
-            AssetPaths = Array.AsReadOnly(assetPaths.ToArray());
+            TemplateSlotOffset = templateSlotOffset;
         }
 
-        /// <summary>获取已验证的卡牌实例工厂。</summary>
         public IReadOnlyList<Func<BaseEnemyCard>> Factories { get; }
-
-        /// <summary>获取用于拒绝行为漂移工厂的完整定义身份模板。</summary>
         public IReadOnlyList<CardDefinitionFingerprint> TemplateDefinitions { get; }
-
-        /// <summary>获取包含重复副本与顺序的稳定身份模板。</summary>
         public IReadOnlyList<EnemyCardId> TemplateCardIds { get; }
-
-        /// <summary>获取已缓存并去重的牌面显示资源路径。</summary>
-        public IReadOnlyList<string> AssetPaths { get; }
+        public int TemplateSlotOffset { get; }
     }
 
     /// <summary>

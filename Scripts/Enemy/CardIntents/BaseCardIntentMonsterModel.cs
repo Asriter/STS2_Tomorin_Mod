@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using BaseLib.Abstracts;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
-using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 using STS2_Tomorin_Mod.Powers;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
@@ -107,17 +106,17 @@ public abstract class BaseCardIntentMonsterModel : CustomMonsterModel
             return false;
         }
 
-        if (state.DeckId != CardIntentTestDeck.DeckId)
-        {
-            reason = $"牌组 {state.DeckId} 尚未注册当前版本重连定义目录。";
-            return false;
-        }
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(state.DeckId);
+        IReadOnlyDictionary<EnemyCardId, EnemyCardDefinition> definitions =
+            directory.DefinitionFactories.Keys.ToDictionary(
+                cardId => cardId,
+                cardId => EnemyCardDeckRegistry.ResolveDefinition(state.DeckId, cardId).Definition);
 
         if (!EnemyCardRuntimeSynchronizer.TryRestore(
                 syncState,
                 state.DeckId,
-                CardIntentTestCardCatalog.AllDefinitions,
-                CardIntentTestCollectionCatalog.Catalog,
+                definitions,
+                EnemyCardDeckRegistry.GetCollectionCatalog(state.DeckId),
                 out EnemyCardCombatState? restoredState,
                 out restoredCursor,
                 out reason))

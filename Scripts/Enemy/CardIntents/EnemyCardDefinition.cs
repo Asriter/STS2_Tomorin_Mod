@@ -4,6 +4,21 @@ using System.Globalization;
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
 /// <summary>
+/// 表示敌人卡牌对规划标签之外的效果与评分分类。
+/// </summary>
+[Flags]
+public enum EnemyCardEffectClass
+{
+    None = 0,
+    CollectionConsumer = 1 << 0,
+    Control = 1 << 1,
+    Finisher = 1 << 2,
+    HeartWallConsumer = 1 << 3,
+    ImmediateAttackProducer = 1 << 4,
+    DelayedTokenProducer = 1 << 5
+}
+
+/// <summary>
 /// 保存敌人卡牌跨实例共享且不可变的完整语义模板。
 /// </summary>
 public sealed class EnemyCardDefinition
@@ -25,6 +40,8 @@ public sealed class EnemyCardDefinition
     /// <param name="effectProgramIds">在效果节点尚未构造时仍可显式提供的有序效果程序标识。</param>
     /// <param name="customExecutionTiming">兼容旧执行模板的自定义步骤时机。</param>
     /// <param name="descriptionOverride">只用于敌人 Intent 卡面的可信富文本描述；空串沿用原版描述。</param>
+    /// <param name="carryAcrossPhase">阶段迁移时是否保留实例身份与所在牌区。</param>
+    /// <param name="effectClasses">不参与 Tag 槽位匹配的效果分类。</param>
     public EnemyCardDefinition(
         EnemyCardId cardId,
         CardModel cardModel,
@@ -39,7 +56,9 @@ public sealed class EnemyCardDefinition
         IEnumerable<IEnemyCardEffectNode>? effects = null,
         IEnumerable<string>? effectProgramIds = null,
         EnemyCardCustomExecutionTiming customExecutionTiming = EnemyCardCustomExecutionTiming.AfterBaseEffects,
-        string descriptionOverride = "")
+        string descriptionOverride = "",
+        bool carryAcrossPhase = false,
+        EnemyCardEffectClass effectClasses = EnemyCardEffectClass.None)
     {
         DescriptionOverride = descriptionOverride ?? throw new ArgumentNullException(nameof(descriptionOverride));
 
@@ -61,6 +80,8 @@ public sealed class EnemyCardDefinition
         Effects = Array.AsReadOnly((effects ?? []).ToArray());
         EffectProgramIds = BuildEffectProgramIds(Effects, effectProgramIds);
         CustomExecutionTiming = customExecutionTiming;
+        CarryAcrossPhase = carryAcrossPhase;
+        EffectClasses = effectClasses;
 
         if (TokenTiming == EnemyCardTokenTiming.None && ComposeResultCardId is not null)
         {
@@ -120,6 +141,12 @@ public sealed class EnemyCardDefinition
 
     /// <summary>获取兼容旧卡牌模板的自定义执行时机。</summary>
     public EnemyCardCustomExecutionTiming CustomExecutionTiming { get; }
+
+    /// <summary>获取阶段迁移是否必须保留本定义的所有实例。</summary>
+    public bool CarryAcrossPhase { get; }
+
+    /// <summary>获取与规划 Tag 分离的效果与评分分类。</summary>
+    public EnemyCardEffectClass EffectClasses { get; }
 
     /// <summary>获取只用于敌人 Intent 卡面的可信富文本描述；空串表示沿用原版描述。</summary>
     public string DescriptionOverride { get; }
@@ -226,6 +253,8 @@ public sealed class EnemyCardDefinition
             TokenTiming,
             ComposeResultCardId?.Value ?? string.Empty,
             CustomExecutionTiming,
-            effects);
+            effects,
+            CarryAcrossPhase,
+            (int)EffectClasses);
     }
 }

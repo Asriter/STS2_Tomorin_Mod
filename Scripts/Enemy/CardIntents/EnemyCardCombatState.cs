@@ -62,7 +62,10 @@ public sealed class EnemyCardCombatState
     /// </summary>
     /// <param name="deckId">已注册牌组稳定标识。</param>
     /// <param name="initialCards">按模板槽位顺序排列的独立实例。</param>
-    internal EnemyCardCombatState(EnemyCardDeckId deckId, IEnumerable<BaseEnemyCard> initialCards)
+    internal EnemyCardCombatState(
+        EnemyCardDeckId deckId,
+        IEnumerable<BaseEnemyCard> initialCards,
+        EnemyCardPhase activePhase = EnemyCardPhase.None)
     {
         if (!deckId.IsValid)
         {
@@ -81,7 +84,13 @@ public sealed class EnemyCardCombatState
             throw new ArgumentException("战斗状态初始牌实例键必须唯一。", nameof(initialCards));
         }
 
+        if (!Enum.IsDefined(activePhase))
+        {
+            throw new ArgumentOutOfRangeException(nameof(activePhase), activePhase, "未知初始卡牌阶段。");
+        }
+
         DeckId = deckId;
+        ActivePhase = activePhase;
         TemplateSlots = Array.AsReadOnly(_drawPile.Select(card => card.TemplateSlot!.Value).ToArray());
         _drawView = _drawPile.AsReadOnly();
         _currentView = _currentCards.AsReadOnly();
@@ -96,7 +105,7 @@ public sealed class EnemyCardCombatState
     public EnemyCardDeckId DeckId { get; }
 
     /// <summary>获取保留模板顺序的初始槽位集合。</summary>
-    public IReadOnlyList<int> TemplateSlots { get; }
+    public IReadOnlyList<int> TemplateSlots { get; private set; }
 
     /// <summary>获取不可修改的抽牌堆视图。</summary>
     public IReadOnlyList<BaseEnemyCard> DrawPile => _drawView;
@@ -120,7 +129,7 @@ public sealed class EnemyCardCombatState
     public IReadOnlyList<EnemyCollectionInstance> ConsumedCollections => CollectionInventory.Consumed;
 
     /// <summary>获取收藏品可用队列和已消耗区的唯一写入口。</summary>
-    public EnemyCollectionInventory CollectionInventory { get; }
+    public EnemyCollectionInventory CollectionInventory { get; private set; }
 
     /// <summary>获取深度优先即时结算栈的只读视图。</summary>
     public IReadOnlyList<BaseEnemyCard> ImmediateResolutionStack => _immediateView;
@@ -142,6 +151,150 @@ public sealed class EnemyCardCombatState
 
     /// <summary>获取结构故障诊断；正常素材不足不会写入。</summary>
     public string? FaultDiagnostic { get; private set; }
+
+    /// <summary>获取当前使用的内容阶段。</summary>
+    public EnemyCardPhase ActivePhase { get; private set; }
+
+    /// <summary>获取已请求但尚未在安全点应用的下一阶段。</summary>
+    public EnemyCardPhase PendingPhase { get; private set; } = EnemyCardPhase.None;
+
+    /// <summary>获取已成功原子应用的阶段迁移修订号。</summary>
+    public long PhaseRevision { get; private set; }
+
+    /// <summary>在一次完整阶段候选成功应用后发布一次变更通知。</summary>
+    public event EventHandler? StateChanged;
+
+    /// <summary>
+    /// 记录一个只能在后续 Idle 安全点原子应用的更高阶段请求。
+    /// </summary>
+    public void RequestPhase(EnemyCardPhase phase)
+    {
+        if (!Enum.IsDefined(phase) || phase == EnemyCardPhase.None || ActivePhase == EnemyCardPhase.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(phase), phase, "只有显式阶段化牌组可请求 P1-P3 迁移。");
+        }
+
+        if (phase <= ActivePhase)
+        {
+            throw new InvalidOperationException($"阶段请求 {phase} 必须高于当前阶段 {ActivePhase}。");
+        }
+
+        if (PendingPhase != EnemyCardPhase.None && PendingPhase != phase)
+        {
+            throw new InvalidOperationException($"已存在待处理阶段 {PendingPhase}，禁止覆盖为 {phase}。");
+        }
+
+        PendingPhase = phase;
+    }
+
+    /// <summary>
+    /// 在不修改当前五区、收藏品或阶段字段的前提下构建完整迁移候选。
+    /// </summary>
+    public EnemyCardPhaseTransitionCandidate BuildPhaseTransitionCandidate(
+        EnemyCardPhaseTemplate nextPhase,
+        IEnemyCardRandomSource random)
+    {
+        ArgumentNullException.ThrowIfNull(nextPhase);
+        ArgumentNullException.ThrowIfNull(random);
+        if (RuntimePhase != EnemyCardRuntimePhase.Idle ||
+            PreparedAction is not null ||
+            _immediateResolutionStack.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "阶段迁移候选只能在 Idle、无冻结行动且无即时结算栈的安全点构建。");
+        }
+
+        if (PendingPhase == EnemyCardPhase.None || PendingPhase != nextPhase.Phase)
+        {
+            throw new InvalidOperationException(
+                $"阶段模板 {nextPhase.Phase} 与待处理阶段 {PendingPhase} 不一致。");
+        }
+
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(DeckId);
+        if (!ReferenceEquals(directory.GetPhase(nextPhase.Phase), nextPhase))
+        {
+            throw new InvalidOperationException(
+                $"阶段 {nextPhase.Phase} 必须使用牌组 {DeckId} 已注册的权威模板。");
+        }
+
+        List<BaseEnemyCard> newSources = EnemyCardDeckRegistry.CreatePhaseDeck(DeckId, nextPhase.Phase);
+        Shuffle(newSources, random);
+        EnemyCardCombatState candidate = new(DeckId, newSources, nextPhase.Phase);
+        candidate._drawPile.Clear();
+        candidate._drawPile.AddRange(_drawPile.Where(card => card.CarryAcrossPhase));
+        candidate._drawPile.AddRange(newSources);
+        CopyCarryCards(_currentCards, candidate._currentCards);
+        CopyCarryCards(_retainedCards, candidate._retainedCards);
+        CopyCarryCards(_discardPile, candidate._discardPile);
+        CopyCarryCards(_exhaustPile, candidate._exhaustPile);
+        candidate.TemplateSlots = Array.AsReadOnly(candidate.EnumerateMutableZones()
+            .SelectMany(zone => zone)
+            .Where(card => card.TemplateSlot.HasValue)
+            .Select(card => card.TemplateSlot!.Value)
+            .Order()
+            .ToArray());
+        candidate.CollectionInventory = CollectionInventory.CreateTransactionalClone();
+        candidate.NextGeneratedCardSequence = NextGeneratedCardSequence;
+        candidate.LastMetric = null;
+        candidate.PreparedAction = null;
+        candidate.RuntimePhase = EnemyCardRuntimePhase.Idle;
+        candidate.FaultDiagnostic = null;
+        candidate.ActivePhase = nextPhase.Phase;
+        candidate.PendingPhase = EnemyCardPhase.None;
+        candidate.PhaseRevision = checked(PhaseRevision + 1);
+        candidate.AssertUniqueOwnership();
+        return new EnemyCardPhaseTransitionCandidate(
+            ActivePhase,
+            nextPhase.Phase,
+            candidate.PhaseRevision,
+            candidate);
+    }
+
+    /// <summary>
+    /// 校验候选修订与阶段身份后一次性替换全部权威字段。
+    /// </summary>
+    public void ApplyPhaseTransition(EnemyCardPhaseTransitionCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        EnemyCardCombatState source = candidate.CandidateState ?? throw new ArgumentException(
+            "阶段迁移候选缺少完整状态。",
+            nameof(candidate));
+        long expectedRevision = checked(PhaseRevision + 1);
+        if (source.DeckId != DeckId ||
+            candidate.From != ActivePhase ||
+            candidate.To != PendingPhase ||
+            candidate.NextRevision != expectedRevision ||
+            source.ActivePhase != candidate.To ||
+            source.PendingPhase != EnemyCardPhase.None ||
+            source.PhaseRevision != candidate.NextRevision ||
+            source.RuntimePhase != EnemyCardRuntimePhase.Idle ||
+            source.PreparedAction is not null ||
+            source.ImmediateResolutionStack.Count != 0)
+        {
+            throw new InvalidOperationException("阶段迁移候选已过期、修订不连续或不是完整安全点状态。");
+        }
+
+        source.AssertUniqueOwnership();
+        EnemyCollectionInventory collectionInventory = source.CollectionInventory.CreateTransactionalClone();
+        TemplateSlots = Array.AsReadOnly(source.TemplateSlots.ToArray());
+        ReplaceZone(_drawPile, source._drawPile);
+        ReplaceZone(_currentCards, source._currentCards);
+        ReplaceZone(_retainedCards, source._retainedCards);
+        ReplaceZone(_discardPile, source._discardPile);
+        ReplaceZone(_exhaustPile, source._exhaustPile);
+        _immediateResolutionStack.Clear();
+        CollectionInventory = collectionInventory;
+        NextGeneratedCardSequence = source.NextGeneratedCardSequence;
+        LastMetric = source.LastMetric;
+        PreparedAction = source.PreparedAction;
+        RuntimePhase = source.RuntimePhase;
+        FaultDiagnostic = source.FaultDiagnostic;
+        ActivePhase = source.ActivePhase;
+        PendingPhase = source.PendingPhase;
+        PhaseRevision = source.PhaseRevision;
+        AssertUniqueOwnership();
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>
     /// 把已有实例原子移动到另一个权威牌区并保持实例身份不变。
@@ -171,6 +324,7 @@ public sealed class EnemyCardCombatState
     public void AddGeneratedCard(BaseEnemyCard card, EnemyCardZone destination)
     {
         ArgumentNullException.ThrowIfNull(card);
+        card.AssignSourcePhase(ActivePhase);
         card.AssignRuntimeInstanceId(NextGeneratedCardSequence++);
         GetMutableZone(destination).Add(card);
         AssertUniqueOwnership();
@@ -384,6 +538,37 @@ public sealed class EnemyCardCombatState
         }
 
         throw new KeyNotFoundException($"当前战斗状态不拥有敌人卡牌实例 {instanceKey}。");
+    }
+
+    /// <summary>保留来源区中 Carry 实例的原对象与相对顺序。</summary>
+    private static void CopyCarryCards(
+        IEnumerable<BaseEnemyCard> source,
+        ICollection<BaseEnemyCard> destination)
+    {
+        foreach (BaseEnemyCard card in source)
+        {
+            if (card.CarryAcrossPhase)
+            {
+                destination.Add(card);
+            }
+        }
+    }
+
+    /// <summary>只用权威随机源洗牌新阶段来源，不改变其他牌区或既有 Carry 顺序。</summary>
+    private static void Shuffle(List<BaseEnemyCard> cards, IEnemyCardRandomSource random)
+    {
+        for (int index = cards.Count - 1; index > 0; index--)
+        {
+            int swapIndex = random.NextIndex(index + 1);
+            (cards[index], cards[swapIndex]) = (cards[swapIndex], cards[index]);
+        }
+    }
+
+    /// <summary>以候选区域的完整顺序替换权威后备列表，不触发卡牌生命周期。</summary>
+    private static void ReplaceZone(List<BaseEnemyCard> destination, IEnumerable<BaseEnemyCard> source)
+    {
+        destination.Clear();
+        destination.AddRange(source);
     }
 
     /// <summary>

@@ -22,6 +22,7 @@ public abstract class BaseEnemyCard
 {
     private int _executionGate;
     private EnemyCardInstanceKey? _instanceKey;
+    private EnemyCardPhase? _sourcePhase;
 
     /// <summary>
     /// 创建一张无内部计数状态的敌人卡牌实例。
@@ -78,6 +79,16 @@ public abstract class BaseEnemyCard
 
     /// <summary>获取子类自定义效果相对统一基础攻防的执行时机。</summary>
     public EnemyCardCustomExecutionTiming CustomExecutionTiming => Definition.CustomExecutionTiming;
+
+    /// <summary>获取定义级跨阶段保留契约；该值不复制进实例可变状态。</summary>
+    public bool CarryAcrossPhase => Definition.CarryAcrossPhase;
+
+    /// <summary>获取定义级效果分类；该值不扩展规划 Tag。</summary>
+    public EnemyCardEffectClass EffectClasses => Definition.EffectClasses;
+
+    /// <summary>获取本实例创建时的活跃内容阶段。</summary>
+    public EnemyCardPhase SourcePhase => _sourcePhase ?? throw new InvalidOperationException(
+        $"敌人卡牌 {CardId} 尚未绑定创建阶段。");
 
     /// <summary>获取初始模板槽位；战斗生成牌返回空。</summary>
     public int? TemplateSlot { get; private set; }
@@ -139,6 +150,25 @@ public abstract class BaseEnemyCard
         EnsureIdentityUnbound();
         RuntimeInstanceId = runtimeInstanceId;
         _instanceKey = EnemyCardInstanceKey.FromRuntimeInstanceId(runtimeInstanceId);
+    }
+
+    /// <summary>
+    /// 在初始阶段来源或战斗生成实例创建时一次性绑定来源阶段。
+    /// </summary>
+    internal void AssignSourcePhase(EnemyCardPhase phase)
+    {
+        if (!Enum.IsDefined(phase))
+        {
+            throw new ArgumentOutOfRangeException(nameof(phase), phase, "未知敌人卡牌来源阶段。");
+        }
+
+        if (_sourcePhase.HasValue)
+        {
+            throw new InvalidOperationException(
+                $"敌人卡牌 {CardId} 已绑定来源阶段 {_sourcePhase.Value}，禁止改绑。");
+        }
+
+        _sourcePhase = phase;
     }
 
     /// <summary>

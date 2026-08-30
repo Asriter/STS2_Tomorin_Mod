@@ -1,3 +1,4 @@
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models.Cards;
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
@@ -102,6 +103,104 @@ public sealed class DomainIdentityTests
     }
 
     /// <summary>
+    /// 验证 Carry 契约和效果分类是定义指纹的一部分，但不会污染规划 Tag。
+    /// </summary>
+    [Fact]
+    public void RegistrationRejectsCarryAndEffectClassificationDrift()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_PHASE_METADATA_DRIFT");
+        StrikeTomorin model = new();
+        EnemyCardId cardId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_PHASE_METADATA_CARD");
+        EnemyCardScoreProfile score = new(attack: model.DynamicVars.Damage.BaseValue);
+        EnemyCardDefinition first = new(
+            cardId,
+            model,
+            EnemyCardTag.Attack,
+            score,
+            carryAcrossPhase: false,
+            effectClasses: EnemyCardEffectClass.Control);
+        EnemyCardDefinition second = new(
+            cardId,
+            model,
+            EnemyCardTag.Attack,
+            score,
+            carryAcrossPhase: true,
+            effectClasses: EnemyCardEffectClass.Control | EnemyCardEffectClass.Finisher);
+        int invocation = 0;
+
+        Assert.Throws<InvalidOperationException>(() => EnemyCardDeckRegistry.Register(
+            deckId,
+            [() => new HarnessEnemyCard(invocation++ == 0 ? first : second)]));
+        Assert.Equal(EnemyCardTag.Attack, first.Tags);
+        Assert.False(first.CarryAcrossPhase);
+        Assert.Equal(EnemyCardEffectClass.Control, first.EffectClasses);
+    }
+
+    /// <summary>
+    /// 验证旧两参注册仍会构造仅含模板定义的 None 阶段简单目录。
+    /// </summary>
+    [Fact]
+    public void LegacyRegistrationBuildsSingleNonePhaseDirectory()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_LEGACY_DIRECTORY");
+        EnemyCardDefinition first = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_LEGACY_FIRST");
+        EnemyCardDefinition second = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_LEGACY_SECOND");
+        EnsureRegistered(deckId, first, second);
+
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(deckId);
+        EnemyCardCombatState state = EnemyCardDeckRegistry.CreateCombatState(deckId);
+
+        Assert.Equal(EnemyCardPhase.None, directory.InitialPhase);
+        Assert.Equal(2, directory.GetPhase(EnemyCardPhase.None).SourceFactories.Count);
+        Assert.Equal(2, directory.DefinitionFactories.Count);
+        Assert.Empty(EnemyCardDeckRegistry.GetCollectionCatalog(deckId).Definitions);
+        Assert.All(state.DrawPile, card => Assert.Equal(EnemyCardPhase.None, card.SourcePhase));
+    }
+
+    /// <summary>
+    /// 验证完整目录可解析非阶段来源定义，且每次解析都返回新领域实例。
+    /// </summary>
+    [Fact]
+    public void PhaseDirectoryResolvesCompleteDefinitionsAndCollectionCatalog()
+    {
+        EnemyCardDeckId deckId = new("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_COMPLETE_DIRECTORY");
+        EnemyCardDefinition source = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_DIRECTORY_SOURCE");
+        EnemyCardDefinition generated = CreateDefinition("STS2_TOMORIN_MOD:DOMAIN_IDENTITY_DIRECTORY_GENERATED");
+        StrikeTomorin collectionModel = new();
+        EnemyCollectionDefinition collection = new(
+            "DOMAIN_IDENTITY_DIRECTORY_COLLECTION",
+            collectionModel.GetType(),
+            CardType.Status,
+            isEpiphany: false,
+            "DOMAIN_IDENTITY_DIRECTORY_EFFECT",
+            () => collectionModel);
+        Func<BaseEnemyCard> sourceFactory = () => new HarnessEnemyCard(source);
+        EnemyCardPlanningRules rules = CreateSingleSlotRules();
+        EnemyCardContentDirectory directory = new(
+            deckId,
+            EnemyCardPhase.Phase1,
+            [new EnemyCardPhaseTemplate(EnemyCardPhase.Phase1, [sourceFactory], rules, 1)],
+            new Dictionary<EnemyCardId, Func<BaseEnemyCard>>
+            {
+                [source.CardId] = sourceFactory,
+                [generated.CardId] = () => new HarnessEnemyCard(generated)
+            },
+            new EnemyCollectionCatalog([collection]));
+        EnemyCardDeckRegistry.Register(directory);
+
+        BaseEnemyCard first = EnemyCardDeckRegistry.ResolveDefinition(deckId, generated.CardId);
+        BaseEnemyCard second = EnemyCardDeckRegistry.ResolveDefinition(deckId, generated.CardId);
+        List<BaseEnemyCard> phaseDeck = EnemyCardDeckRegistry.CreatePhaseDeck(deckId, EnemyCardPhase.Phase1);
+
+        Assert.Equal(generated.CardId, first.CardId);
+        Assert.NotSame(first, second);
+        Assert.Same(directory, EnemyCardDeckRegistry.GetContentDirectory(deckId));
+        Assert.Same(directory.CollectionCatalog, EnemyCardDeckRegistry.GetCollectionCatalog(deckId));
+        Assert.Single(phaseDeck);
+        Assert.Equal(EnemyCardPhase.Phase1, phaseDeck[0].SourcePhase);
+    }
+
+    /// <summary>
     /// 创建不依赖固定平衡数值的测试卡牌定义。
     /// </summary>
     /// <param name="rawId">测试定义稳定标识。</param>
@@ -116,6 +215,17 @@ public sealed class DomainIdentityTests
             EnemyCardTag.Attack,
             new EnemyCardScoreProfile(attack: attack));
     }
+
+    /// <summary>创建只包含一个随机槽位的最小领域规则。</summary>
+    private static EnemyCardPlanningRules CreateSingleSlotRules() =>
+        new(
+            new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+            new EnemySoftLockLimits(decimal.MaxValue, decimal.MaxValue),
+            maxCandidateAttempts: 1,
+            stepLimit: 32,
+            [new EnemyWeightedActionRecipe(
+                new EnemyActionRecipe(EnemyActionMetric.Attack, [null]),
+                weight: 1)]);
 
     /// <summary>
     /// 幂等注册按输入顺序排列的测试定义工厂。

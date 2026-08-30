@@ -30,7 +30,23 @@ public static class CardIntentTestDeck
                 return;
             }
 
-            EnemyCardDeckRegistry.Register(DeckId, CardIntentTestCardCatalog.CreateInitialDeckFactories());
+            IReadOnlyList<Func<BaseEnemyCard>> sourceFactories =
+                CardIntentTestCardCatalog.CreateInitialDeckFactories();
+            IReadOnlyDictionary<EnemyCardId, Func<BaseEnemyCard>> definitionFactories =
+                CardIntentTestCardCatalog.AllDefinitions.Keys.ToDictionary(
+                    cardId => cardId,
+                    cardId => (Func<BaseEnemyCard>)(() => CardIntentTestCardCatalog.CreateCard(cardId)));
+            EnemyCardContentDirectory directory = new(
+                DeckId,
+                EnemyCardPhase.None,
+                [new EnemyCardPhaseTemplate(
+                    EnemyCardPhase.None,
+                    sourceFactories,
+                    CardIntentTestRules.Default,
+                    sourceFactories.Count)],
+                definitionFactories,
+                CardIntentTestCollectionCatalog.Catalog);
+            EnemyCardDeckRegistry.Register(directory);
         }
     }
 }

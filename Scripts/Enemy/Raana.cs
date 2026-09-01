@@ -19,6 +19,7 @@ using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Audio;
 using STS2_Tomorin_Mod.Cards.Collections;
+using STS2_Tomorin_Mod.Encounters;
 using STS2_Tomorin_Mod.Powers;
 using STS2_Tomorin_Mod.Relics;
 
@@ -89,9 +90,12 @@ public class Raana : CustomMonsterModel
 
     private void OnDeath(Creature creature)
     {
-        if (creature == Creature && ShouldGrantBossReward)
+        if (creature == Creature)
         {
-            BandBossRelicReward.Add<RaanaGuitar>((CombatRoom)creature.CombatState.RunState.CurrentRoom);
+            BandMemberRelicRewardLifecycle.RecordEarnedAndGrantBossReward<RaanaGuitar>(
+                creature,
+                BandMemberKind.Raana,
+                ShouldGrantBossReward);
         }
     }
 

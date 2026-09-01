@@ -21,9 +21,13 @@ public sealed class BandMemberEncounter : CustomEncounterModel
 
     private const string LeftMemberStateKey = "leftMember";
     private const string RightMemberStateKey = "rightMember";
+    private const string LeftRewardEarnedStateKey = "leftRewardEarned";
+    private const string RightRewardEarnedStateKey = "rightRewardEarned";
 
     private BandMemberKind? _leftMember;
     private BandMemberKind? _rightMember;
+    private bool _leftRewardEarned;
+    private bool _rightRewardEarned;
     private bool _warnedAboutMissingRunState;
 
     /// <summary>
@@ -37,11 +41,6 @@ public sealed class BandMemberEncounter : CustomEncounterModel
     /// 指示玩家队伍使用原生居中布局。
     /// </summary>
     public override bool FullyCenterPlayers => true;
-
-    /// <summary>
-    /// 允许 Encounter 接收战斗开始钩子以初始化夹击机制。
-    /// </summary>
-    public override bool ShouldReceiveCombatHooks => true;
 
     /// <summary>
     /// 指示 Encounter 使用独立的左右敌人槽位场景。
@@ -108,20 +107,6 @@ public sealed class BandMemberEncounter : CustomEncounterModel
     }
 
     /// <summary>
-    /// 在战斗开始时幂等应用原生夹击 Power。
-    /// </summary>
-    public override Task BeforeCombatStart()
-    {
-        if (SpawnedEnemies.Count != 2)
-        {
-            throw new InvalidOperationException(
-                $"{nameof(BandMemberEncounter)} 需要恰好两个已生成敌人，实际数量为 {SpawnedEnemies.Count}。");
-        }
-
-        return BandSurroundedCoordinator.Initialize(SpawnedEnemies[0].Creature, SpawnedEnemies[1].Creature);
-    }
-
-    /// <summary>
     /// 保存确定后的左右成员稳定名称。
     /// </summary>
     /// <returns>包含合法左右成员时的 Encounter 自定义状态。</returns>
@@ -134,6 +119,9 @@ public sealed class BandMemberEncounter : CustomEncounterModel
             state[RightMemberStateKey] = BandMemberSelector.GetStableName(_rightMember!.Value);
         }
 
+        state[LeftRewardEarnedStateKey] = _leftRewardEarned.ToString();
+        state[RightRewardEarnedStateKey] = _rightRewardEarned.ToString();
+
         return state;
     }
 
@@ -144,19 +132,120 @@ public sealed class BandMemberEncounter : CustomEncounterModel
     public override void LoadCustomState(Dictionary<string, string> state)
     {
         base.LoadCustomState(state);
-        if (state.TryGetValue(LeftMemberStateKey, out var leftName) &&
-            state.TryGetValue(RightMemberStateKey, out var rightName) &&
-            BandMemberSelector.TryParseStableName(leftName, out var left) &&
-            BandMemberSelector.TryParseStableName(rightName, out var right) &&
+        BandMemberSelection? selection = ParseSavedMemberSelection(state);
+        _leftMember = selection?.Left;
+        _rightMember = selection?.Right;
+
+        _leftRewardEarned = ParseSavedRewardFlag(state, LeftRewardEarnedStateKey);
+        _rightRewardEarned = ParseSavedRewardFlag(state, RightRewardEarnedStateKey);
+        if ((_leftRewardEarned || _rightRewardEarned) && !HasValidMemberSelection())
+        {
+            throw new InvalidOperationException(
+                $"{nameof(BandMemberEncounter)} 的存档包含奖励资格，但缺少合法的左右成员身份。");
+        }
+    }
+
+    /// <summary>
+    /// 严格恢复成对保存的成员身份；两个字段都缺失时保留尚未选择状态。
+    /// </summary>
+    private static BandMemberSelection? ParseSavedMemberSelection(IReadOnlyDictionary<string, string> state)
+    {
+        bool hasLeft = state.TryGetValue(LeftMemberStateKey, out string? leftName);
+        bool hasRight = state.TryGetValue(RightMemberStateKey, out string? rightName);
+        if (!hasLeft && !hasRight)
+        {
+            return null;
+        }
+
+        if (hasLeft && hasRight &&
+            BandMemberSelector.TryParseStableName(leftName, out BandMemberKind left) &&
+            BandMemberSelector.TryParseStableName(rightName, out BandMemberKind right) &&
             left != right)
         {
-            _leftMember = left;
-            _rightMember = right;
+            return new BandMemberSelection(left, right);
+        }
+
+        throw new InvalidOperationException(
+            $"{nameof(BandMemberEncounter)} 的存档包含不完整、未知或重复的左右成员身份。" );
+    }
+
+    /// <summary>
+    /// 在精英 Boss 自身原本的奖励触发点记录对应槽位的奖励资格。
+    /// </summary>
+    internal void MarkRelicRewardEarned(BandMemberKind member, string? slotName)
+    {
+        if (!HasValidMemberSelection())
+        {
+            throw new InvalidOperationException(
+                $"{nameof(BandMemberEncounter)} 尚未确定合法的左右成员，无法记录 {member} 的奖励资格。");
+        }
+
+        if (slotName == LeftMember && _leftMember == member)
+        {
+            _leftRewardEarned = true;
             return;
         }
 
-        _leftMember = null;
-        _rightMember = null;
+        if (slotName == RightMember && _rightMember == member)
+        {
+            _rightRewardEarned = true;
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"{nameof(BandMemberEncounter)} 奖励身份与槽位不匹配：成员 {member}，槽位 '{slotName ?? "<null>"}'。" );
+    }
+
+    /// <summary>
+    /// 整场战斗胜利后，按左右成员的真实奖励资格向每名玩家结算专属遗物。
+    /// </summary>
+    public override async Task AfterCombatEnd(CombatRoom room)
+    {
+        await base.AfterCombatEnd(room);
+        if (room.CombatState.HittableEnemies.Count > 0)
+        {
+            return;
+        }
+
+        BandMemberSelection selection = GetSelectedMembersForReward();
+        BandMemberEncounterRewardPolicy.AddEarnedRewards(
+            room,
+            selection,
+            _leftRewardEarned,
+            _rightRewardEarned);
+    }
+
+    /// <summary>
+    /// 读取战斗开始前已经确定的成员；奖励阶段不得根据变化后的历史重新选择。
+    /// </summary>
+    private BandMemberSelection GetSelectedMembersForReward()
+    {
+        if (!HasValidMemberSelection())
+        {
+            throw new InvalidOperationException(
+                $"{nameof(BandMemberEncounter)} 无法结算奖励：左右成员状态无效（左：{_leftMember?.ToString() ?? "<null>"}，右：{_rightMember?.ToString() ?? "<null>"}）。");
+        }
+
+        return new BandMemberSelection(_leftMember!.Value, _rightMember!.Value);
+    }
+
+    /// <summary>
+    /// 读取向后兼容的奖励资格字段；旧存档缺少字段时视为未获得，非法文本则拒绝载入。
+    /// </summary>
+    private static bool ParseSavedRewardFlag(IReadOnlyDictionary<string, string> state, string key)
+    {
+        if (!state.TryGetValue(key, out string? value))
+        {
+            return false;
+        }
+
+        if (bool.TryParse(value, out bool earned))
+        {
+            return earned;
+        }
+
+        throw new InvalidOperationException(
+            $"{nameof(BandMemberEncounter)} 的存档字段 '{key}' 不是合法布尔值：'{value}'。");
     }
 
     /// <summary>

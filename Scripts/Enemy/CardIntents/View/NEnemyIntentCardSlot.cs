@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.UI;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Pooling;
@@ -25,7 +26,8 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
     private readonly HBoxContainer _effectRow;
     private readonly List<EffectNodeBinding> _effectNodes = [];
     private NCard? _thumbnail;
-    private BaseEnemyCard? _card;
+    private CardModel? _cardModel;
+    private string _descriptionOverride = string.Empty;
     private Creature? _owner;
     private Creature[] _targets = [];
     private Action<string, Exception?>? _diagnosticSink;
@@ -63,10 +65,12 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
     }
 
     /// <summary>获取当前槽位绑定的稳定实例键。</summary>
-    public EnemyCardInstanceKey CardInstanceKey { get; private set; } = null!;
+    public EnemyIntentDisplayKey DisplayKey { get; private set; } = null!;
 
     /// <summary>获取当前槽位绑定的领域卡牌，供共享 Hover 预览换绑。</summary>
-    public BaseEnemyCard Card => _card ?? throw new InvalidOperationException("敌人 Intent 卡槽尚未绑定卡牌。");
+    public CardModel CardModel => _cardModel ?? throw new InvalidOperationException("敌人 Intent 卡槽尚未绑定卡面。");
+
+    public string DescriptionOverride => _descriptionOverride;
 
     /// <summary>
     /// 绑定一张逐牌展示；相同实例键只在效果结构变化时重建该槽的原版 Intent 节点。
@@ -86,18 +90,22 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(diagnosticSink);
 
-        if (_card is not null && !Equals(CardInstanceKey, presentation.CardInstanceKey))
+        if (_cardModel is not null && !Equals(DisplayKey, presentation.DisplayKey))
         {
             throw new InvalidOperationException("按实例键复用的敌人 Intent 卡槽禁止改绑到不同实例。");
         }
 
-        CardInstanceKey = presentation.CardInstanceKey;
-        _card = presentation.Card;
+        DisplayKey = presentation.DisplayKey;
+        _cardModel = presentation.CardModel;
+        _descriptionOverride = presentation.DescriptionOverride;
         _owner = owner;
         _targets = targets.ToArray();
         _diagnosticSink = diagnosticSink;
         EnsureThumbnail();
         BindThumbnail();
+        _thumbnail!.Modulate = presentation.IsDimmed
+            ? new Color(0.42f, 0.42f, 0.42f, 1f)
+            : Colors.White;
 
         if (!EffectsEqual(presentation.Effects))
         {
@@ -120,7 +128,7 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
             return false;
         }
 
-        return TryGetScaledGlobalRect(_thumbnail, out rect);
+        return TryGetCardGlobalRect(_thumbnail, out rect);
     }
 
     /// <summary>
@@ -149,7 +157,8 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
     {
         ReleaseThumbnail();
         ReleaseEffectNodes();
-        _card = null;
+        _cardModel = null;
+        _descriptionOverride = string.Empty;
         _owner = null;
         _targets = [];
         _diagnosticSink = null;
@@ -174,8 +183,8 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
             return;
         }
 
-        BaseEnemyCard card = _card ?? throw new InvalidOperationException("创建缩略牌前必须绑定领域卡牌。");
-        NCard thumbnail = NCard.Create(card.CardModel, ModelVisibility.Visible) ??
+        CardModel cardModel = _cardModel ?? throw new InvalidOperationException("创建缩略牌前必须绑定卡面。");
+        NCard thumbnail = NCard.Create(cardModel, ModelVisibility.Visible) ??
                           throw new InvalidOperationException("原版 NCard.Create 未返回缩略牌节点。");
         _thumbnail = thumbnail;
         _thumbnailHost.AddChild(thumbnail);
@@ -190,12 +199,12 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
     /// </summary>
     private void BindThumbnail()
     {
-        if (_thumbnail is null || _card is null)
+        if (_thumbnail is null || _cardModel is null)
         {
             throw new InvalidOperationException("缩略牌绑定上下文不完整。");
         }
 
-        _thumbnail.Model = _card.CardModel;
+        _thumbnail.Model = _cardModel;
         _thumbnail.UpdateVisuals(PileType.None, CardPreviewMode.None);
         _thumbnail.KillRarityGlow();
         if (GodotObject.IsInstanceValid(_thumbnail.CardHighlight))
@@ -203,7 +212,7 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
             _thumbnail.CardHighlight.Visible = false;
         }
 
-        ApplyDescriptionOverride(_thumbnail, _card);
+        ApplyDescriptionOverride(_thumbnail, _descriptionOverride);
     }
 
     /// <summary>
@@ -287,9 +296,9 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
     /// <summary>
     /// 在原版视觉更新后尝试写入描述覆写；单卡失败仅记录诊断并保留原版描述。
     /// </summary>
-    private void ApplyDescriptionOverride(NCard cardNode, BaseEnemyCard card)
+    private void ApplyDescriptionOverride(NCard cardNode, string descriptionOverride)
     {
-        string? overrideText = EnemyCardDescriptionPresenter.BuildOverrideText(card.DescriptionOverride);
+        string? overrideText = EnemyCardDescriptionPresenter.BuildOverrideText(descriptionOverride);
         if (overrideText is null)
         {
             return;
@@ -302,7 +311,7 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
         }
         catch (Exception exception)
         {
-            _diagnosticSink?.Invoke($"卡牌 {card.InstanceKey} 无法应用描述覆写，已保留原版描述。", exception);
+            _diagnosticSink?.Invoke($"展示槽 {DisplayKey} 无法应用描述覆写，已保留原版描述。", exception);
         }
     }
 
@@ -327,30 +336,38 @@ public partial class NEnemyIntentCardSlot : VBoxContainer
     }
 
     /// <summary>
-    /// 将 Control 的四个局部角点通过完整全局变换转换为轴对齐矩形，显式包含父子缩放。
+    /// 使用原版 NCard 的固有卡面尺寸计算全局命中矩形。
+    /// card.tscn 的根 Control 尺寸为零，实际卡面以根原点为中心绘制，因此不能使用 Control.Size。
     /// </summary>
-    internal static bool TryGetScaledGlobalRect(Control control, out Rect2 rect)
+    internal static bool TryGetCardGlobalRect(NCard card, out Rect2 rect)
     {
         rect = default;
-        if (!GodotObject.IsInstanceValid(control) || !control.IsInsideTree() ||
-            control.Size.X <= 0f || control.Size.Y <= 0f)
+        if (!GodotObject.IsInstanceValid(card) || !card.IsInsideTree())
         {
             return false;
         }
 
-        Transform2D transform = control.GetGlobalTransform();
-        Vector2 topLeft = transform * Vector2.Zero;
-        Vector2 topRight = transform * new Vector2(control.Size.X, 0f);
-        Vector2 bottomLeft = transform * new Vector2(0f, control.Size.Y);
-        Vector2 bottomRight = transform * control.Size;
+        rect = CalculateCardGlobalRect(NCard.defaultSize, card.GetGlobalTransform());
+        return rect.Size.X > 0f && rect.Size.Y > 0f;
+    }
+
+    /// <summary>
+    /// 将以原点为中心的固有卡面四角通过完整全局变换转换为轴对齐矩形。
+    /// </summary>
+    private static Rect2 CalculateCardGlobalRect(Vector2 intrinsicCardSize, Transform2D globalTransform)
+    {
+        Vector2 halfSize = intrinsicCardSize / 2f;
+        Vector2 topLeft = globalTransform * -halfSize;
+        Vector2 topRight = globalTransform * new Vector2(halfSize.X, -halfSize.Y);
+        Vector2 bottomLeft = globalTransform * new Vector2(-halfSize.X, halfSize.Y);
+        Vector2 bottomRight = globalTransform * halfSize;
         float minimumX = MathF.Min(MathF.Min(topLeft.X, topRight.X), MathF.Min(bottomLeft.X, bottomRight.X));
         float minimumY = MathF.Min(MathF.Min(topLeft.Y, topRight.Y), MathF.Min(bottomLeft.Y, bottomRight.Y));
         float maximumX = MathF.Max(MathF.Max(topLeft.X, topRight.X), MathF.Max(bottomLeft.X, bottomRight.X));
         float maximumY = MathF.Max(MathF.Max(topLeft.Y, topRight.Y), MathF.Max(bottomLeft.Y, bottomRight.Y));
-        rect = new Rect2(
+        return new Rect2(
             new Vector2(minimumX, minimumY),
             new Vector2(maximumX - minimumX, maximumY - minimumY));
-        return rect.Size.X > 0f && rect.Size.Y > 0f;
     }
 
     /// <summary>

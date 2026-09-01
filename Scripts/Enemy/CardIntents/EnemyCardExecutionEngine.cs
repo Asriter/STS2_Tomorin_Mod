@@ -5,19 +5,24 @@ namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 /// </summary>
 public sealed class EnemyCardExecutionEngine
 {
+    private static readonly TimeSpan EffectDisplayPause = TimeSpan.FromSeconds(0.5);
     private readonly IEnemyAbilityHookDispatcher _abilityHooks;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delayExecutor;
 
     /// <summary>
     /// 创建只读冻结计划的敌人牌结算引擎。
     /// </summary>
     /// <param name="materialResolver">保留给既有构造调用方的素材解析器；执行阶段不会使用。</param>
     /// <param name="abilityHooks">敌人版能力钩子分发器。</param>
+    /// <param name="delayExecutor">效果展示停顿执行器；为空时使用可取消的真实时间延时。</param>
     public EnemyCardExecutionEngine(
         EnemyCardMaterialResolver? materialResolver = null,
-        IEnemyAbilityHookDispatcher? abilityHooks = null)
+        IEnemyAbilityHookDispatcher? abilityHooks = null,
+        Func<TimeSpan, CancellationToken, Task>? delayExecutor = null)
     {
         _ = materialResolver;
         _abilityHooks = abilityHooks ?? new EnemyAbilityHookDispatcher();
+        _delayExecutor = delayExecutor ?? Task.Delay;
     }
 
     /// <summary>
@@ -64,9 +69,23 @@ public sealed class EnemyCardExecutionEngine
                     continue;
                 }
 
+                bool anyUnitSucceeded = false;
                 foreach (PreparedEnemyCardUnitPlan unit in source.Units)
                 {
-                    await ExecuteUnitPlanAsync(state, unit, context, session);
+                    if (!await ExecuteUnitPlanAsync(state, unit, context, session))
+                    {
+                        if (anyUnitSucceeded)
+                        {
+                            session.Publish(
+                                EnemyCardResolutionEventType.ReplayTruncated,
+                                source.SourceKey,
+                                replayIndex: unit.ReplayIndex);
+                        }
+
+                        break;
+                    }
+
+                    anyUnitSucceeded = true;
                     session.Publish(
                         EnemyCardResolutionEventType.CardResolved,
                         unit.ExecutingCardKey,
@@ -91,7 +110,7 @@ public sealed class EnemyCardExecutionEngine
                 await ApplySourceLifecycleAsync(
                     state,
                     source.SourceCard,
-                    successful: source.Units.Count > 0,
+                    successful: anyUnitSucceeded,
                     immediateFailure: false,
                     context);
             }
@@ -126,7 +145,7 @@ public sealed class EnemyCardExecutionEngine
     /// <param name="context">真实战斗命令上下文。</param>
     /// <param name="session">有限步骤与事件会话。</param>
     /// <returns>本单元全部步骤完成后的任务。</returns>
-    private async Task ExecuteUnitPlanAsync(
+    private async Task<bool> ExecuteUnitPlanAsync(
         EnemyCardCombatState state,
         PreparedEnemyCardUnitPlan unit,
         EnemyCardExecutionContext context,
@@ -146,27 +165,46 @@ public sealed class EnemyCardExecutionEngine
         bool requiresFrozenX = executing.Definition.Effects.Any(effect => effect is EnemyFrozenXAttackAllEffect);
         unit.ValidateFrozenEffectiveState(action, requiresFrozenX);
 
-        if (!executing.Definition.PlayCondition.CanExecute(context))
-        {
-            throw new InvalidOperationException(
-                $"执行牌 {unit.ExecutingCardKey} 的冻结出牌条件在真实结算时不再成立。 ");
-        }
-
         context.PushExecutingCard(unit.ExecutingCardKey);
         try
         {
+            if (!executing.Definition.PlayCondition.CanExecute(context))
+            {
+                session.Publish(
+                    EnemyCardResolutionEventType.CardMarkedUnplayable,
+                    unit.ExecutingCardKey,
+                    replayIndex: unit.ReplayIndex,
+                    diagnostic: "实时出牌条件不满足。 ");
+                return false;
+            }
+
             foreach (PreparedEnemyResolutionStep step in unit.OrderedSteps)
             {
                 await ExecuteStepAsync(state, executing, step, context, session, collectionProgram: null);
             }
 
             await _abilityHooks.AfterSuccessfulUnitAsync(context);
+            if (UnitProducesEffect(unit))
+            {
+                ThrowIfStopped(context);
+                await _delayExecutor(EffectDisplayPause, context.CancellationToken);
+            }
+
+            return true;
         }
         finally
         {
             context.PopExecutingCard(unit.ExecutingCardKey);
         }
     }
+
+    /// <summary>判断成功卡牌单元是否实际提交了至少一个可观察结算步骤。</summary>
+    private static bool UnitProducesEffect(PreparedEnemyCardUnitPlan unit) =>
+        unit.OrderedSteps.Any(step => step switch
+        {
+            PreparedDirectEffectsStep direct => direct.EffectProgramIds.Count > 0,
+            _ => true
+        });
 
     /// <summary>
     /// 按显式步骤种类验证预期区域并提交一个递归原子步骤。
@@ -204,7 +242,7 @@ public sealed class EnemyCardExecutionEngine
                 session.Publish(EnemyCardResolutionEventType.CardConsumed, material.InstanceKey);
                 if (consumedCard.ControlledChild is not null)
                 {
-                    await ExecuteUnitPlanAsync(state, consumedCard.ControlledChild, context, session);
+                    _ = await ExecuteUnitPlanAsync(state, consumedCard.ControlledChild, context, session);
                 }
 
                 break;
@@ -247,14 +285,11 @@ public sealed class EnemyCardExecutionEngine
                 }
 
                 EnemyCollectionCatalog registeredCatalog = EnemyCardDeckRegistry
-                    .GetContentDirectory(state.DeckId)
-                    .CollectionCatalog;
-                EnemyCollectionDefinition definition = registeredCatalog.Definitions.Any(item =>
-                        string.Equals(
-                            item.CollectionId,
-                            generatedCollection.CollectionId,
-                            StringComparison.Ordinal))
-                    ? registeredCatalog.GetRequired(generatedCollection.CollectionId)
+                    .GetCollectionCatalog(state.DeckId);
+                EnemyCollectionDefinition definition = registeredCatalog.TryGet(
+                    generatedCollection.CollectionId,
+                    out EnemyCollectionDefinition? registered)
+                    ? registered!
                     : Test.CardIntentTestCollectionCatalog.Catalog.GetRequired(
                         generatedCollection.CollectionId);
                 EnemyCollectionInstance generated = state.CollectionInventory.Append(definition);
@@ -359,7 +394,7 @@ public sealed class EnemyCardExecutionEngine
         if (compose.ImmediateChild is not null)
         {
             session.Publish(EnemyCardResolutionEventType.ImmediateCardQueued, generated.InstanceKey);
-            await ExecuteImmediateUnitsAsync(
+            bool immediateSucceeded = await ExecuteImmediateUnitsAsync(
                 state,
                 generated,
                 compose.ImmediateChild,
@@ -370,7 +405,7 @@ public sealed class EnemyCardExecutionEngine
             await ApplySourceLifecycleAsync(
                 state,
                 generated,
-                successful: true,
+                successful: immediateSucceeded,
                 immediateFailure: true,
                 context);
         }
@@ -401,7 +436,7 @@ public sealed class EnemyCardExecutionEngine
         BaseEnemyCard selected = RequireCardInZone(state.DrawPile, immediate.SelectedCardKey, "抽牌堆");
         state.MoveCard(selected.InstanceKey, EnemyCardZone.Current);
         session.Publish(EnemyCardResolutionEventType.ImmediateCardQueued, selected.InstanceKey);
-        await ExecuteImmediateUnitsAsync(
+        bool immediateSucceeded = await ExecuteImmediateUnitsAsync(
             state,
             selected,
             immediate.Child,
@@ -412,7 +447,7 @@ public sealed class EnemyCardExecutionEngine
         await ApplySourceLifecycleAsync(
             state,
             selected,
-            successful: true,
+            successful: immediateSucceeded,
             immediateFailure: true,
             context);
     }
@@ -446,7 +481,7 @@ public sealed class EnemyCardExecutionEngine
         BaseEnemyCard card = RequireCardInZone(state.ExhaustPile, key, "消耗牌区");
         state.MoveCard(card.InstanceKey, EnemyCardZone.Current);
         session.Publish(EnemyCardResolutionEventType.ImmediateCardQueued, card.InstanceKey);
-        await ExecuteImmediateUnitsAsync(
+        bool immediateSucceeded = await ExecuteImmediateUnitsAsync(
             state,
             card,
             recovery.ImmediateCardChild!,
@@ -457,7 +492,7 @@ public sealed class EnemyCardExecutionEngine
         await ApplySourceLifecycleAsync(
             state,
             card,
-            successful: true,
+            successful: immediateSucceeded,
             immediateFailure: true,
             context);
     }
@@ -465,7 +500,7 @@ public sealed class EnemyCardExecutionEngine
     /// <summary>
     /// 通过战斗状态的权威 LIFO 栈执行一个即时实例的首单元和全部冻结重放。
     /// </summary>
-    private async Task ExecuteImmediateUnitsAsync(
+    private async Task<bool> ExecuteImmediateUnitsAsync(
         EnemyCardCombatState state,
         BaseEnemyCard card,
         PreparedEnemyCardUnitPlan first,
@@ -476,11 +511,21 @@ public sealed class EnemyCardExecutionEngine
         state.PushImmediateResolution(card);
         try
         {
-            await ExecuteUnitPlanAsync(state, first, context, session);
+            bool anyUnitSucceeded = await ExecuteUnitPlanAsync(state, first, context, session);
+            if (!anyUnitSucceeded)
+            {
+                return false;
+            }
+
             foreach (PreparedEnemyCardUnitPlan replayUnit in additional)
             {
-                await ExecuteUnitPlanAsync(state, replayUnit, context, session);
+                if (!await ExecuteUnitPlanAsync(state, replayUnit, context, session))
+                {
+                    break;
+                }
             }
+
+            return true;
         }
         finally
         {

@@ -1,0 +1,171 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Rooms;
+using STS2_Tomorin_Mod.Encounters;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.Encounters;
+
+public sealed class BandMemberRewardStateTests
+{
+    [Fact]
+    public void EarnedFlagsAreRecordedByMatchingMemberAndSlotAndAreIdempotent()
+    {
+        var encounter = CreateEncounter(BandMemberKind.Anon, BandMemberKind.Taki);
+        MethodInfo markEarned = RequiredEncounterMethod("MarkRelicRewardEarned");
+
+        markEarned.Invoke(encounter, [BandMemberKind.Anon, BandMemberEncounter.LeftMember]);
+        markEarned.Invoke(encounter, [BandMemberKind.Anon, BandMemberEncounter.LeftMember]);
+
+        Assert.True(ReadFlag(encounter, "_leftRewardEarned"));
+        Assert.False(ReadFlag(encounter, "_rightRewardEarned"));
+
+        markEarned.Invoke(encounter, [BandMemberKind.Taki, BandMemberEncounter.RightMember]);
+
+        Assert.True(ReadFlag(encounter, "_leftRewardEarned"));
+        Assert.True(ReadFlag(encounter, "_rightRewardEarned"));
+    }
+
+    [Fact]
+    public void MemberOrSlotMismatchIsRejectedInsteadOfCreditingAnotherBoss()
+    {
+        var encounter = CreateEncounter(BandMemberKind.Soyo, BandMemberKind.Raana);
+        MethodInfo markEarned = RequiredEncounterMethod("MarkRelicRewardEarned");
+
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(
+            () => markEarned.Invoke(encounter, [BandMemberKind.Soyo, BandMemberEncounter.RightMember]));
+
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.False(ReadFlag(encounter, "_leftRewardEarned"));
+        Assert.False(ReadFlag(encounter, "_rightRewardEarned"));
+    }
+
+    [Fact]
+    public void MissingSavedRewardFlagIsBackwardCompatibleButMalformedFlagIsRejected()
+    {
+        MethodInfo parse = RequiredEncounterMethod("ParseSavedRewardFlag");
+        IReadOnlyDictionary<string, string> missing = new Dictionary<string, string>();
+
+        Assert.False((bool)parse.Invoke(null, [missing, "earned"])!);
+
+        IReadOnlyDictionary<string, string> malformed = new Dictionary<string, string>
+        {
+            ["earned"] = "not-a-boolean"
+        };
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(
+            () => parse.Invoke(null, [malformed, "earned"]));
+
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public void SavedMemberIdentityRejectsPartialMalformedAndDuplicatePairs()
+    {
+        MethodInfo parse = RequiredEncounterMethod("ParseSavedMemberSelection");
+
+        Assert.Null(parse.Invoke(null, [new Dictionary<string, string>()]));
+        AssertInvalid(new Dictionary<string, string> { ["leftMember"] = "Anon" });
+        AssertInvalid(new Dictionary<string, string>
+        {
+            ["leftMember"] = "Unknown",
+            ["rightMember"] = "Taki"
+        });
+        AssertInvalid(new Dictionary<string, string>
+        {
+            ["leftMember"] = "Soyo",
+            ["rightMember"] = "Soyo"
+        });
+
+        void AssertInvalid(IReadOnlyDictionary<string, string> state)
+        {
+            TargetInvocationException exception = Assert.Throws<TargetInvocationException>(
+                () => parse.Invoke(null, [state]));
+            Assert.IsType<InvalidOperationException>(exception.InnerException);
+        }
+    }
+
+    [Fact]
+    public async Task CombatEndAdapterActuallyDispatchesToTheBandEncounter()
+    {
+        Type patchType = typeof(BandMemberEncounter).Assembly.GetType(
+            "STS2_Tomorin_Mod.Patch.HookAfterCombatEndPatch",
+            throwOnError: true)!;
+        MethodInfo dispatch = patchType.GetMethod(
+            "DispatchBandMemberEncounterAfterCombatEnd",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Combat-end BandMemberEncounter adapter is missing.");
+        var encounter = (BandMemberEncounter)RuntimeHelpers.GetUninitializedObject(typeof(BandMemberEncounter));
+        var combatState = new CombatState();
+        typeof(CombatState).GetField("_encounter", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(combatState, encounter);
+        var room = (CombatRoom)RuntimeHelpers.GetUninitializedObject(typeof(CombatRoom));
+        typeof(CombatRoom).GetField(
+                "<CombatState>k__BackingField",
+                BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(room, combatState);
+
+        var task = Assert.IsAssignableFrom<Task>(dispatch.Invoke(null, [combatState, room]));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => task);
+    }
+
+    [Fact]
+    public void RewardPolicyReturnsOnlyEarnedRelicsMissingFromOwnedAndPendingCollections()
+    {
+        Type policyType = typeof(BandMemberEncounter).Assembly.GetType(
+            "STS2_Tomorin_Mod.Encounters.BandMemberEncounterRewardPolicy",
+            throwOnError: true)!;
+        MethodInfo method = policyType.GetMethod(
+            "DetermineMissingEarnedRewards",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Reward policy method is missing.");
+        MethodInfo genericMethod = method.MakeGenericMethod(typeof(string));
+        var selection = new BandMemberSelection(BandMemberKind.Anon, BandMemberKind.Taki);
+        Func<BandMemberKind, string> resolve = member => member.ToString();
+
+        var result = Assert.IsAssignableFrom<IReadOnlyList<string>>(genericMethod.Invoke(
+            null,
+            [selection, true, true, new[] { resolve(selection.Left) }, Array.Empty<string>(), resolve]));
+
+        Assert.Equal([resolve(selection.Right)], result);
+
+        var pendingResult = Assert.IsAssignableFrom<IReadOnlyList<string>>(genericMethod.Invoke(
+            null,
+            [selection, true, true, Array.Empty<string>(), new[] { resolve(selection.Right) }, resolve]));
+
+        Assert.Equal([resolve(selection.Left)], pendingResult);
+    }
+
+    private static BandMemberEncounter CreateEncounter(BandMemberKind left, BandMemberKind right)
+    {
+        var encounter = (BandMemberEncounter)RuntimeHelpers.GetUninitializedObject(typeof(BandMemberEncounter));
+        SetField(encounter, "_leftMember", left);
+        SetField(encounter, "_rightMember", right);
+        return encounter;
+    }
+
+    private static MethodInfo RequiredEncounterMethod(string name)
+    {
+        return typeof(BandMemberEncounter).GetMethod(
+                   name,
+                   BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ??
+               throw new InvalidOperationException($"BandMemberEncounter.{name} is missing.");
+    }
+
+    private static bool ReadFlag(BandMemberEncounter encounter, string name)
+    {
+        return (bool)(RequiredField(name).GetValue(encounter) ?? false);
+    }
+
+    private static void SetField(BandMemberEncounter encounter, string name, object value)
+    {
+        RequiredField(name).SetValue(encounter, value);
+    }
+
+    private static FieldInfo RequiredField(string name)
+    {
+        return typeof(BandMemberEncounter).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic) ??
+               throw new InvalidOperationException($"BandMemberEncounter field {name} is missing.");
+    }
+}

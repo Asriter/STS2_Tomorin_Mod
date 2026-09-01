@@ -1,5 +1,6 @@
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Intents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 
@@ -26,6 +27,9 @@ public sealed class CardIntentMoveRuntime
 
     /// <summary>获取绑定状态的唯一冻结手牌只读视图。</summary>
     internal IReadOnlyList<BaseEnemyCard> CardList => State.CardList;
+
+    /// <summary>获取冻结计划的真实结构展示顺序。</summary>
+    internal EnemyIntentTimeline IntentTimeline => State.IntentTimeline;
 
     /// <summary>获取绑定状态是否已进入安全故障模式。</summary>
     internal bool IsFaulted => State.IsFaulted;

@@ -1,4 +1,3 @@
-using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Events;
@@ -13,31 +12,15 @@ namespace STS2_Tomorin_Mod.Patch;
 [HarmonyPatch(typeof(Neow), "GenerateInitialOptions")]
 internal static class StageNeowCompatibilityPatch
 {
-    private static readonly PropertyInfo ModifiersProperty =
-        AccessTools.Property(typeof(RunState), nameof(RunState.Modifiers)) ??
-        throw new MissingMemberException(typeof(RunState).FullName, nameof(RunState.Modifiers));
-
     /// <summary>
     /// 在原版同步生成选项期间临时隐藏舞台进度状态；其他 Modifier 保持原顺序和行为。
     /// </summary>
     [HarmonyPrefix]
     private static void Prefix(Neow __instance, out ModifierViewState? __state)
     {
-        __state = null;
-        if (__instance.Owner?.RunState is not RunState runState)
-        {
-            return;
-        }
-
-        IReadOnlyList<ModifierModel> original = runState.Modifiers;
-        IReadOnlyList<ModifierModel> filtered = StageRunCompatibilityPolicy.FilterNeowModifiers(original);
-        if (filtered.Count == original.Count)
-        {
-            return;
-        }
-
-        __state = new ModifierViewState(runState, original);
-        ModifiersProperty.SetValue(runState, filtered);
+        IRunState? runState = __instance.Owner?.RunState;
+        IReadOnlyList<ModifierModel>? original = StageRunModifierVisibilityScope.Hide(runState);
+        __state = runState != null && original != null ? new ModifierViewState(runState, original) : null;
     }
 
     /// <summary>
@@ -48,11 +31,11 @@ internal static class StageNeowCompatibilityPatch
     {
         if (__state != null)
         {
-            ModifiersProperty.SetValue(__state.RunState, __state.Modifiers);
+            StageRunModifierVisibilityScope.Restore(__state.RunState, __state.Modifiers);
         }
 
         return __exception;
     }
 
-    private sealed record ModifierViewState(RunState RunState, IReadOnlyList<ModifierModel> Modifiers);
+    private sealed record ModifierViewState(IRunState RunState, IReadOnlyList<ModifierModel> Modifiers);
 }

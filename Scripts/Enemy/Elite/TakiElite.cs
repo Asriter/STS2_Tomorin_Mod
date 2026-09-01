@@ -39,6 +39,15 @@ public sealed class TakiElite : Taki
     protected override bool ShouldEndRoomAfterEscape => false;
 
     /// <summary>
+    /// 保留原 Boss 入场逻辑后，按 Encounter 槽位初始化原生夹击 Power。
+    /// </summary>
+    public override async Task AfterAddedToRoom()
+    {
+        await base.AfterAddedToRoom();
+        await BandSurroundedCoordinator.InitializeFor(Creature);
+    }
+
+    /// <summary>
     /// 立希逃跑后刷新所有玩家的夹击方向，而不提前结束仍有敌人的房间。
     /// </summary>
     /// <param name="room">当前战斗房间。</param>

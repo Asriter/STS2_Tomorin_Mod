@@ -75,6 +75,19 @@ Flow: `Mayoiuta.OnPlay()` → `ComposeCmd.Compose<MayoiutaToken>()` → exhausts
 3. Add localization entries in `STS2_Tomorin_Mod/localization/eng/cards.json` (and `zhs/cards.json`).
 4. Add card image at `STS2_Tomorin_Mod/images/card_portraits/{slug}.png` and `big/{slug}.png`.
 
+### Adding Enemy Intent Cards and Collection Displays
+
+Enemy Intent domain cards and game `CardModel` objects have different lifecycles:
+
+- `BaseEnemyCard` is an enemy-combat domain object. Its registered deck factory must return a fresh `BaseEnemyCard` instance every time.
+- `CardModel` derives from `AbstractModel` and is registered in `ModelDb`. After `ModelDb` initialization, never create a display/template model with `new TCardModel()` or `Activator.CreateInstance(typeof(TCardModel))`; doing so attempts duplicate registration and throws `DuplicateModelException`, often while `CardListIntent.AssetPaths` is being initialized.
+- Enemy-card definitions must reuse `ModelDb.Card<TCardModel>()` for their `CardModel`. A real player-owned combat copy, when actually required, must be created through the run/combat-state card creation API instead of a constructor.
+- Collection display definitions must use the typed `Definition<TCardModel>(...)` registration in `CardIntentTestCollectionCatalog`. It stores a resolver backed by `ModelDb.Card<TCardModel>()`; both asset preloading and `EnemyIntentTimeline` must call `EnemyCollectionDefinition.ResolveCardModel()`.
+- Preload every card model that can appear in the intent timeline, including source cards, immediate cards, compose tokens, consumed cards, and consumed collections. Derive paths from the canonical ModelDb model through `EnemyCardDeckRegistry.GetCardModelAssetPaths`; do not duplicate portrait-path rules by hand.
+- When adding a new enemy Intent card or collection, extend the normal timeline tests and the real-ModelDb regression in `tests/CardIntentModelDbHarness/CardIntentCatalogModelDbTests.testcs`. The latter must verify that asset preloading and consumed-collection timeline construction reuse the exact registered `ModelDb.Card<T>()` object without constructing another model.
+
+If only C# definitions change, run `dotnet build`. Run `dotnet publish` as well when the new card adds or changes Godot resources such as portraits or scenes.
+
 ### Localization
 
 Key format: `STS2_TOMORIN_MOD-{SLUG}.{field}` where `SLUG` is the class name uppercased with underscores.

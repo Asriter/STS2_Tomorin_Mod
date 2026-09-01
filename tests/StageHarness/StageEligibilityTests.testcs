@@ -1,0 +1,83 @@
+using STS2_Tomorin_Mod.Stage;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.Stage;
+
+public sealed class StageEligibilityTests
+{
+    private static readonly IReadOnlySet<string> Required = new HashSet<string>
+    {
+        "Anon",
+        "Taki",
+        "Soyo",
+        "Raana"
+    };
+
+    private static readonly string[] CandidatePair = ["Anon", "Taki"];
+
+    [Fact]
+    public void AnyCandidatePairMeetsTheMinimumRequirement()
+    {
+        bool result = StageEligibility.CoversMinimumRequiredRelics(
+            CandidatePair,
+            Required,
+            CandidatePair.Length);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void OwnershipBelowThePairRequirementDoesNotQualify()
+    {
+        IEnumerable<string> belowRequirement = CandidatePair.Take(CandidatePair.Length - 1);
+
+        bool result = StageEligibility.CoversMinimumRequiredRelics(
+            belowRequirement,
+            Required,
+            CandidatePair.Length);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void DuplicateOwnershipDoesNotCountAsDifferentRequiredRelics()
+    {
+        string[] duplicatedSingleCandidate = [CandidatePair[0], CandidatePair[0]];
+
+        bool result = StageEligibility.CoversMinimumRequiredRelics(
+            duplicatedSingleCandidate,
+            Required,
+            CandidatePair.Length);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void AdditionalRequiredOrUnrelatedRelicsDoNotInvalidateAQualifyingPair()
+    {
+        IEnumerable<string> superset = CandidatePair.Concat([Required.Last(), "Unrelated"]);
+
+        bool result = StageEligibility.CoversMinimumRequiredRelics(
+            superset,
+            Required,
+            CandidatePair.Length);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void InvalidMinimumRequirementsAreRejected()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            StageEligibility.CoversMinimumRequiredRelics(
+                CandidatePair,
+                Required,
+                Array.Empty<string>().Length));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            StageEligibility.CoversMinimumRequiredRelics(
+                CandidatePair,
+                Required,
+                Required.Count + 1));
+    }
+}

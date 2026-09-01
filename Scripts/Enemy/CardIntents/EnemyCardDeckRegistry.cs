@@ -226,6 +226,10 @@ public static class EnemyCardDeckRegistry
     public static IReadOnlyList<string> GetAssetPaths(EnemyCardDeckId deckId) =>
         GetDefinition(deckId).AssetPaths;
 
+    /// <summary>枚举任意已知展示 CardModel 的牌面资源，供 Token 与收藏品预加载复用。</summary>
+    internal static IEnumerable<string> GetCardModelAssetPaths(MegaCrit.Sts2.Core.Models.CardModel cardModel) =>
+        EnumerateCardModelAssetPaths(cardModel);
+
     /// <summary>
     /// 查询指定牌组模板是否能够解析给定稳定卡牌标识。
     /// </summary>

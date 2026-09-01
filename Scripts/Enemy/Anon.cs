@@ -18,6 +18,7 @@ using MegaCrit.Sts2.Core.Nodes.Vfx;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Cards;
+using STS2_Tomorin_Mod.Encounters;
 using STS2_Tomorin_Mod.Powers;
 using STS2_Tomorin_Mod.Relics;
 
@@ -45,7 +46,6 @@ public class Anon : CustomMonsterModel
     //是否触发语音
     private bool _isSpeak = false;
     private bool _isSecondPhase = false;
-    private bool _isAddReward = false;
 
     /// <summary>
     /// 是否发放爱音首领战专属遗物奖励。
@@ -98,7 +98,6 @@ public class Anon : CustomMonsterModel
         CombatManager.Instance.CombatEnded += OnAfterCombatEnd;
         _isSpeak = false;
         _isSecondPhase = false;
-        _isAddReward = false;
     }
 
     /// <summary>
@@ -110,8 +109,10 @@ public class Anon : CustomMonsterModel
     {
         if (_isSecondPhase)
         {
-            _isAddReward = ShouldGrantBossReward;
-            AddReward((CombatRoom)creature.CombatState.RunState.CurrentRoom);
+            BandMemberRelicRewardLifecycle.RecordEarnedAndGrantBossReward<AnonGuitar>(
+                creature,
+                BandMemberKind.Anon,
+                ShouldGrantBossReward);
 
             TalkCmd.Play(_die, Creature, _anonColor);
         }
@@ -127,16 +128,6 @@ public class Anon : CustomMonsterModel
         CombatManager.Instance.CombatEnded -= OnAfterCombatEnd;
         base.Creature.Died -= AfterDeath;
     }
-
-
-    public void AddReward(CombatRoom room)
-    {
-        if (_isAddReward && ShouldGrantBossReward)
-        {
-            BandBossRelicReward.Add<AnonGuitar>(room);
-        }
-    }
-
     protected override MonsterMoveStateMachine GenerateMoveStateMachine()
     {
         List<MonsterState> list = new List<MonsterState>();

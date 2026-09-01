@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents;
@@ -21,13 +22,16 @@ public sealed class CardIntentMoveState : MoveState
     private readonly Func<Type, decimal, Task>? _enemyPowerExecutor;
     private readonly Func<Type, decimal, Task>? _targetPowerExecutor;
     private readonly Func<IReadOnlyList<string>, Task>? _collectionPowerExecutor;
-    private readonly Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle>? _createPreparationCycle;
+    private readonly Func<EnemyCardCombatState, IEnemyCardRandomSource, EnemyPreparationCycle>?
+        _createPreparationCycle;
     private readonly EnemyPlanningProjectionInputFactory? _createPlanningProjectionInput;
     private readonly ICombatState? _combatStateOverride;
     private readonly EnemyCardPlanningRules _rules;
     private readonly EnemyCardExecutionEngine _executionEngine;
     private readonly EnemyActionProjectionService _projectionService = new();
     private LiveActionProjection? _liveProjection;
+    private PreparedEnemyCardAction? _timelineAction;
+    private EnemyIntentTimeline? _intentTimeline;
 
     /// <summary>
     /// 通过两阶段 runtime 创建原版行动状态与全新权威逻辑状态。
@@ -172,6 +176,29 @@ public sealed class CardIntentMoveState : MoveState
         ? action.RetainedPrefix.Concat(action.MetricCards).ToArray()
         : Array.Empty<BaseEnemyCard>();
 
+    public EnemyIntentTimeline IntentTimeline
+    {
+        get
+        {
+            PreparedEnemyCardAction? action = CombatState.PreparedAction;
+            if (action is null)
+            {
+                _timelineAction = null;
+                return _intentTimeline = new EnemyIntentTimeline([]);
+            }
+
+            if (!ReferenceEquals(action, _timelineAction) || _intentTimeline is null)
+            {
+                _timelineAction = action;
+                _intentTimeline = EnemyIntentTimelineBuilder.Build(
+                    action,
+                    EnemyCardDeckRegistry.GetContentDirectory(DeckId));
+            }
+
+            return _intentTimeline;
+        }
+    }
+
     /// <summary>获取弃牌堆实时只读视图。</summary>
     public IReadOnlyList<BaseEnemyCard> DiscardList => CombatState.DiscardPile;
 
@@ -229,10 +256,17 @@ public sealed class CardIntentMoveState : MoveState
                     .Prepare(CombatState, planningContext);
             _liveProjection = planningContext.AcceptedProjection ?? throw new InvalidOperationException(
                 "规划器已提交行动但没有保留提交前的完整投影。");
+            EnemyIntentTimeline timeline = EnemyIntentTimelineBuilder.Build(
+                action,
+                EnemyCardDeckRegistry.GetContentDirectory(DeckId));
+            _timelineAction = action;
+            _intentTimeline = timeline;
             string cardOrder = string.Join(
                 " -> ",
-                action.Sources.Select((source, index) =>
-                    $"{index + 1}:{source.SourceCard.CardId}[{source.SourceKey}]"));
+                timeline.Entries.Select((entry, index) =>
+                    $"{index + 1}:{entry.CardId?.ToString() ?? entry.CollectionId}" +
+                    $"[{entry.CardInstanceKey?.ToString() ?? entry.CollectionInstanceId}]" +
+                    $"[{entry.Role}]"));
             Log.Info(
                 $"[CardIntentOrder] StateId={StateId}; DeckId={DeckId}; " +
                 $"Metric={action.Metric}; Cards={cardOrder}");
@@ -278,6 +312,19 @@ public sealed class CardIntentMoveState : MoveState
         ArgumentNullException.ThrowIfNull(targets);
         PreparedEnemyCardAction action = CombatState.PreparedAction ??
                                          throw new InvalidOperationException("没有冻结行动时不能读取显示投影。");
+        EnemyCardPlanningRules activeRules = ResolveRules(action.Phase);
+        EnemyProjectionInitialState structuralState = EnemyProjectionInitialState.FromCombatState(CombatState);
+        if (_createPlanningProjectionInput is not null)
+        {
+            return _projectionService.Project(
+                action,
+                _createPlanningProjectionInput(
+                    CombatState,
+                    action,
+                    structuralState,
+                    activeRules.StepLimit));
+        }
+
         EnemySimulationTarget[] projectionTargets = targets
             .Select((_, index) => new EnemySimulationTarget(
                 $"TARGET:{index}",
@@ -288,8 +335,8 @@ public sealed class CardIntentMoveState : MoveState
             action,
             new EnemyActionProjectionInput(
                 projectionTargets,
-                ResolveRules(action.Phase).StepLimit,
-                initialState: EnemyProjectionInitialState.FromCombatState(CombatState),
+                activeRules.StepLimit,
+                initialState: structuralState,
                 contentDirectory: EnemyCardDeckRegistry.GetContentDirectory(DeckId)));
     }
 
@@ -422,6 +469,8 @@ public sealed class CardIntentMoveState : MoveState
 
         CombatState = validatedState;
         _liveProjection = null;
+        _timelineAction = null;
+        _intentTimeline = null;
         if (validatedState.RuntimePhase == EnemyCardRuntimePhase.Faulted)
         {
             ReportFaultDiagnostic(

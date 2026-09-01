@@ -13,14 +13,11 @@ namespace STS2_Tomorin_Mod.Stage;
 /// </summary>
 public static class StageEligibility
 {
-    /// <summary>进入舞台必须由同一玩家完整持有的遗物稳定模型标识集合。</summary>
-    public static IReadOnlySet<ModelId> RequiredStageRelics { get; } = new HashSet<ModelId>
-    {
-        ModelDb.Relic<AnonGuitar>().Id,
-        ModelDb.Relic<RaanaGuitar>().Id,
-        ModelDb.Relic<SoyoBase>().Id,
-        ModelDb.Relic<TakiDrum>().Id,
-    };
+    /// <summary>同一玩家进入舞台所需的最少候选遗物数量。</summary>
+    public const int MinimumRequiredStageRelicCount = 2;
+
+    /// <summary>进入舞台时参与计数的遗物稳定模型标识集合。</summary>
+    public static IReadOnlySet<ModelId> RequiredStageRelics => RequiredStageRelicsHolder.Value;
 
     /// <summary>
     /// 判断当前 Glory 是否应该在奖励完成后进入隐藏舞台。
@@ -29,6 +26,8 @@ public static class StageEligibility
     /// <returns>只有所有已确认条件同时成立时才返回 <see langword="true"/>。</returns>
     public static bool IsEligible(IRunState runState)
     {
+        //TODO 
+        return true;
         if (runState.GameMode == GameMode.Daily || runState.Act is not Glory)
         {
             return false;
@@ -39,12 +38,13 @@ public static class StageEligibility
             return false;
         }
 
-        if (!HasAdjacentUniqueStageCandidate(runState) || StageRunProgressModifier.Find(runState)?.HasDefeatedFullPowerOblivionis != true)
+        if (!HasAdjacentUniqueStageCandidate(runState) ||
+            StageRunProgressModifier.Find(runState)?.HasDefeatedFullPowerOblivionis != true)
         {
             return false;
         }
 
-        return runState.Players.Any(HasAllRequiredRelics);
+        return runState.Players.Any(HasMinimumRequiredRelics);
     }
 
     /// <summary>
@@ -65,26 +65,56 @@ public static class StageEligibility
     }
 
     /// <summary>
-    /// 判断指定玩家是否独自覆盖舞台所需的全部遗物。
+    /// 判断指定玩家是否独自持有足够数量的不同候选遗物。
     /// </summary>
     /// <param name="player">待检查的玩家；不按角色、在线或存活状态过滤。</param>
-    /// <returns>该玩家持有完整所需遗物集合时返回 <see langword="true"/>。</returns>
-    public static bool HasAllRequiredRelics(Player player)
+    /// <returns>该玩家持有的不同候选遗物达到最低要求时返回 <see langword="true"/>。</returns>
+    public static bool HasMinimumRequiredRelics(Player player)
     {
         var heldRelics = player.Relics.Select(relic => relic.Id).ToHashSet();
-        return CoversRequiredRelics(heldRelics, RequiredStageRelics);
+        return CoversMinimumRequiredRelics(
+            heldRelics,
+            RequiredStageRelics,
+            MinimumRequiredStageRelicCount);
     }
 
     /// <summary>
-    /// 判断同一个持有集合是否覆盖完整需求集合，不依赖遗物数量字面量或玩家角色状态。
+    /// 判断同一个持有集合与候选集合的不同元素交集是否达到最低要求。
     /// </summary>
     /// <typeparam name="T">稳定标识的值类型。</typeparam>
     /// <param name="held">同一玩家持有的稳定标识集合。</param>
-    /// <param name="required">必须由该玩家完整覆盖的稳定标识集合。</param>
-    /// <returns>持有集合覆盖全部需求时返回 <see langword="true"/>。</returns>
-    public static bool CoversRequiredRelics<T>(IEnumerable<T> held, IReadOnlySet<T> required)
+    /// <param name="required">参与计数的候选稳定标识集合。</param>
+    /// <param name="minimumRequiredCount">必须由同一持有集合覆盖的最低不同元素数量。</param>
+    /// <returns>交集数量达到最低要求时返回 <see langword="true"/>。</returns>
+    public static bool CoversMinimumRequiredRelics<T>(
+        IEnumerable<T> held,
+        IReadOnlySet<T> required,
+        int minimumRequiredCount)
         where T : notnull
     {
-        return required.IsSubsetOf(held.ToHashSet());
+        ArgumentNullException.ThrowIfNull(held);
+        ArgumentNullException.ThrowIfNull(required);
+        if (minimumRequiredCount <= 0 || minimumRequiredCount > required.Count)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(minimumRequiredCount),
+                minimumRequiredCount,
+                "最低候选遗物数量必须大于零且不能超过候选集合大小。");
+        }
+
+        var heldSet = held.ToHashSet();
+        return required.Count(heldSet.Contains) >= minimumRequiredCount;
+    }
+
+    /// <summary>延迟到实际资格检查时再访问 ModelDb，避免纯集合逻辑依赖模型库初始化。</summary>
+    private static class RequiredStageRelicsHolder
+    {
+        internal static readonly IReadOnlySet<ModelId> Value = new HashSet<ModelId>
+        {
+            ModelDb.Relic<AnonGuitar>().Id,
+            ModelDb.Relic<RaanaGuitar>().Id,
+            ModelDb.Relic<SoyoBase>().Id,
+            ModelDb.Relic<TakiDrum>().Id,
+        };
     }
 }

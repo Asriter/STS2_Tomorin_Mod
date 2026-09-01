@@ -42,6 +42,9 @@ function Assert-NotMatches([string]$content, [string]$pattern, [string]$message)
 
 $selectorPath = "Scripts/Encounters/BandMemberSelector.cs"
 $encounterPath = "Scripts/Encounters/BandMemberEncounter.cs"
+$rewardPolicyPath = "Scripts/Encounters/BandMemberEncounterRewardPolicy.cs"
+$rewardLifecyclePath = "Scripts/Enemy/BandMemberRelicRewardLifecycle.cs"
+$combatEndPatchPath = "Scripts/Patch/HookAfterCombatEndPatch.cs"
 $coordinatorPath = "Scripts/Encounters/BandSurroundedCoordinator.cs"
 $scalerPath = "Scripts/Enemy/Elite/EliteStatScaler.cs"
 $elitePaths = @(
@@ -58,9 +61,15 @@ $scenePath = "STS2_Tomorin_Mod/scenes/encounters/band_member_encounter.tscn"
 $engEncountersPath = "STS2_Tomorin_Mod/localization/eng/encounters.json"
 $zhsEncountersPath = "STS2_Tomorin_Mod/localization/zhs/encounters.json"
 $designPath = "docs/2026-08-20-band-member-encounter-design.md"
+$lifecycleHarnessPaths = @(
+    "tests/BandMemberEncounterHarness/BandMemberEncounterHarness.csproj",
+    "tests/BandMemberEncounterHarness/Directory.Build.props",
+    "tests/BandMemberEncounterHarness/BandMemberEncounterLifecycleTests.testcs")
 
-foreach ($path in @($selectorPath, $encounterPath, $coordinatorPath, $scalerPath, $scenePath,
-        $engEncountersPath, $zhsEncountersPath, $designPath) + $elitePaths + $baseBossPaths) {
+foreach ($path in @($selectorPath, $encounterPath, $rewardPolicyPath, $rewardLifecyclePath, $combatEndPatchPath,
+        $coordinatorPath, $scalerPath, $scenePath,
+        $engEncountersPath, $zhsEncountersPath, $designPath) + $elitePaths + $baseBossPaths +
+        $lifecycleHarnessPaths) {
     Assert-FileExists $path
 }
 
@@ -191,11 +200,11 @@ Assert-Matches $takiElite "ShouldGrantBossReward\s*=>\s*false" "TakiElite 必须
 Assert-Matches $takiElite "ShouldEndRoomAfterEscape\s*=>\s*false" "TakiElite 不得单独结束整个房间。"
 
 $encounter = Get-RepositoryContent $encounterPath
+$combatEndPatch = Get-RepositoryContent $combatEndPatchPath
 Assert-Matches $encounter "class\s+BandMemberEncounter\s*:\s*CustomEncounterModel" `
     "BandMemberEncounter 必须继承 CustomEncounterModel。"
 Assert-Matches $encounter "base\(RoomType\.Elite,\s*true\)" "Encounter 必须启用原生精英奖励。"
 Assert-Matches $encounter "FullyCenterPlayers\s*=>\s*true" "Encounter 必须居中玩家队伍。"
-Assert-Matches $encounter "ShouldReceiveCombatHooks\s*=>\s*true" "Encounter 必须接收开战夹击钩子。"
 Assert-Matches $encounter "return\s+false" "Encounter 必须拒绝自然 Act 合法性检查。"
 foreach ($eliteName in @("AnonElite", "TakiElite", "SoyoElite", "RaanaElite")) {
     Assert-Matches $encounter "ModelDb\.Monster<$eliteName>" "AllPossibleMonsters 或生成映射缺少 $eliteName。"
@@ -203,6 +212,17 @@ foreach ($eliteName in @("AnonElite", "TakiElite", "SoyoElite", "RaanaElite")) {
 Assert-Matches $encounter "SaveCustomState\s*\(" "Encounter 必须保存左右成员。"
 Assert-Matches $encounter "LoadCustomState\s*\(" "Encounter 必须恢复左右成员。"
 Assert-Matches $encounter "TryParseStableName" "恢复必须严格解析稳定成员名称。"
+Assert-Matches $encounter "leftRewardEarned" "Encounter 必须持久化左侧奖励资格。"
+Assert-Matches $encounter "rightRewardEarned" "Encounter 必须持久化右侧奖励资格。"
+Assert-Matches $encounter "MarkRelicRewardEarned" "Encounter 必须按 Boss 原生死亡点记录奖励资格。"
+Assert-Matches $encounter "override\s+(?:async\s+)?Task\s+AfterCombatEnd\s*\(" "Encounter 必须在整场胜利后结算遗物。"
+Assert-Matches $encounter "GetSelectedMembersForReward" "奖励阶段必须读取既有成员状态。"
+Assert-NotMatches ([regex]::Match($encounter, 'AfterCombatEnd[\s\S]*?(?=private\s+BandMemberSelection\s+GetSelectedMembersForReward)').Value) `
+    "EnsureMemberSelection" "奖励阶段不得重新选择成员。"
+Assert-Matches $combatEndPatch "DispatchBandMemberEncounterAfterCombatEnd" `
+    "Hook.AfterCombatEnd 适配层必须显式派发 BandMemberEncounter 结算。"
+Assert-Matches $combatEndPatch "await\s+DispatchBandMemberEncounterAfterCombatEnd" `
+    "Hook.AfterCombatEnd 必须等待 BandMemberEncounter 奖励结算完成。"
 Assert-Matches $encounter "MapPointHistory" "选择过程必须读取当前局地图历史。"
 Assert-Matches $encounter "\.Rooms" "历史读取必须遍历 MapPointHistoryEntry 的房间记录。"
 Assert-NotMatches $encounter "\bRng\b|Random" "成员选择不得依赖随机数。"
@@ -232,4 +252,15 @@ Assert-True ($zhs.'STS2_TOMORIN_MOD-BAND_MEMBER_ENCOUNTER.title' -eq "乐队") "
 $design = Get-RepositoryContent $designPath
 Assert-NotMatches $design "\bTODO\b" "当前任务设计文档不得保留 TODO 标志。"
 
-Write-Host "BandMemberEncounter selection, scaling, encounter, flanking, scene and localization checks passed."
+$mainProject = Resolve-RepositoryPath "STS2_Tomorin_Mod.csproj"
+$sts2DataDirOutput = @(& dotnet msbuild $mainProject -nologo -getProperty:Sts2DataDir)
+Assert-True ($LASTEXITCODE -eq 0) "无法从主项目取得 Sts2DataDir。"
+$sts2DataDir = ($sts2DataDirOutput | Select-Object -Last 1).Trim()
+$testModsPath = (Join-Path ([System.IO.Path]::GetTempPath()) "STS2_Tomorin_Mod_BandMemberHarness_Mods") + `
+    [System.IO.Path]::DirectorySeparatorChar
+& dotnet test (Resolve-RepositoryPath "tests/BandMemberEncounterHarness/BandMemberEncounterHarness.csproj") `
+    --no-build --no-restore --nologo --verbosity minimal `
+    "-p:Sts2DataDir=$sts2DataDir" "-p:ModsPath=$testModsPath"
+Assert-True ($LASTEXITCODE -eq 0) "BandMemberEncounter 生命周期集成 Harness 未通过。"
+
+Write-Host "BandMemberEncounter selection, scaling, encounter, flanking lifecycle, scene and localization checks passed."

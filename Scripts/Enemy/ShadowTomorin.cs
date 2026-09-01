@@ -12,7 +12,7 @@ public sealed class ShadowTomorin : BaseCardIntentMonsterModel
     public const string StateId = "SHADOW_TOMORIN_CARD_LOOP";
 
     private CardIntentMoveState? _cardState;
-    private ShadowTomorinDamageGatePower? _damageGate;
+    private EnemyMaxDamageReceivedPower? _damageGate;
 
     public override int MinInitialHp => ShadowTomorinBalance.MaxHp;
     public override int MaxInitialHp => ShadowTomorinBalance.MaxHp;
@@ -32,6 +32,7 @@ public sealed class ShadowTomorin : BaseCardIntentMonsterModel
             ShadowTomorinDeck.DeckId,
             ShadowTomorinBalance.MaxEffectiveCards,
             createPreparationCycle: CreatePreparationCycle,
+            createPlanningProjectionInput: CreatePlanningProjectionInput,
             rules: ShadowTomorinRules.ForPhase(EnemyCardPhase.Phase1)));
         _cardState.FollowUpState = _cardState;
         return new MonsterMoveStateMachine([_cardState], _cardState);
@@ -104,9 +105,9 @@ public sealed class ShadowTomorin : BaseCardIntentMonsterModel
         {
             case (EnemyCardPhase.Phase1, EnemyCardPhase.Phase2):
             {
-                ShadowTomorinDamageGatePower oldGate = _damageGate ??
+                EnemyMaxDamageReceivedPower oldGate = _damageGate ??
                     throw new InvalidOperationException("P1→P2 迁移缺少仍在生效的零额度伤害门。");
-                ShadowTomorinDamageGatePower nextGate = await ApplyDamageGateAsync(
+                EnemyMaxDamageReceivedPower nextGate = await ApplyDamageGateAsync(
                     ShadowTomorinBalance.Phase2DamageAllowance,
                     EnemyCardPhase.Phase3);
                 await PowerCmd.Apply<ShadowTomoriFormPower>(
@@ -159,13 +160,13 @@ public sealed class ShadowTomorin : BaseCardIntentMonsterModel
         return decimal.Round(baseAllowance * scale, 0, MidpointRounding.AwayFromZero);
     }
 
-    private async Task<ShadowTomorinDamageGatePower> ApplyDamageGateAsync(
+    private async Task<EnemyMaxDamageReceivedPower> ApplyDamageGateAsync(
         decimal baseAllowance,
         EnemyCardPhase nextPhase)
     {
         decimal allowance = ScaleDamageAllowance(baseAllowance, Creature.MaxHp);
-        ShadowTomorinDamageGatePower power =
-            await PowerCmd.Apply<ShadowTomorinDamageGatePower>(
+        EnemyMaxDamageReceivedPower power =
+            await PowerCmd.Apply<EnemyMaxDamageReceivedPower>(
                 new ThrowingPlayerChoiceContext(),
                 Creature,
                 allowance,
@@ -192,5 +193,50 @@ public sealed class ShadowTomorin : BaseCardIntentMonsterModel
             state,
             randomSource,
             ShadowTomorinCollectionCatalog.WeightedDefinitions);
+    }
+
+    /// <summary>把准备与显示投影绑定到影灯及存活玩家的实时格挡和 Power 快照。</summary>
+    private EnemyActionProjectionInput CreatePlanningProjectionInput(
+        EnemyCardCombatState state,
+        PreparedEnemyCardAction action,
+        EnemyProjectionInitialState structuralState,
+        int stepLimit)
+    {
+        static IReadOnlyDictionary<string, decimal> SnapshotPowers(
+            MegaCrit.Sts2.Core.Entities.Creatures.Creature creature) =>
+            creature.Powers
+                .GroupBy(power => power.GetType().FullName ?? power.GetType().Name, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Sum(power => (decimal)power.Amount),
+                    StringComparer.Ordinal);
+
+        MegaCrit.Sts2.Core.Entities.Creatures.Creature[] players = CombatState.Players
+            .Select(player => player.Creature)
+            .Where(creature => creature.IsAlive)
+            .ToArray();
+        EnemySimulationTarget[] targets = players.Length == 0
+            ? [new EnemySimulationTarget("PLANNING_TARGET", decimal.One, decimal.One)]
+            : players.Select((_, index) =>
+                new EnemySimulationTarget($"TARGET:{index}", decimal.One, decimal.One)).ToArray();
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, decimal>> targetPowers = players
+            .Select((creature, index) => (Id: $"TARGET:{index}", Powers: SnapshotPowers(creature)))
+            .ToDictionary(item => item.Id, item => item.Powers, StringComparer.Ordinal);
+        EnemyProjectionInitialState liveState = new(
+            structuralState.ActivePhase,
+            Creature.Block,
+            SnapshotPowers(Creature),
+            targetPowers,
+            structuralState.Cards,
+            structuralState.AvailableCollections,
+            structuralState.ConsumedCollections);
+        EnemyCardContentDirectory directory = EnemyCardDeckRegistry.GetContentDirectory(state.DeckId);
+        int initialTemplateCount = directory.GetPhase(action.Phase).InitialSourceInstanceCount;
+        return new EnemyActionProjectionInput(
+            targets,
+            stepLimit,
+            initialState: liveState,
+            contentDirectory: directory,
+            riskContext: new EnemyActionRiskContext(action.Phase, initialTemplateCount, directory));
     }
 }

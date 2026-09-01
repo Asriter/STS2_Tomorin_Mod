@@ -23,7 +23,7 @@ public sealed class CardIntentTestMonster : BaseCardIntentMonsterModel
     /// 复用仓库现有 Crychic 幻影敌人视觉，不引入新的 Godot 资源。
     /// </summary>
     public override string? CustomVisualPath =>
-        "res://STS2_Tomorin_Mod/scenes/creature_visuals/enemies/crychic_phatom.tscn";
+        "res://STS2_Tomorin_Mod/scenes/creature_visuals/enemies/ShadowTomorin.tscn";
 
     /// <summary>
     /// 显式注册测试牌组，并生成唯一且循环到自身的卡牌行动状态。

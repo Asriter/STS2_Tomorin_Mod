@@ -1,0 +1,182 @@
+{
+  "format": 1,
+  "restore": {
+    "G:\\MyGame\\STS2_Tomorin_Mod\\tests\\CardIntentHarness\\CardIntentHarness.csproj": {}
+  },
+  "projects": {
+    "G:\\MyGame\\STS2_Tomorin_Mod\\STS2_Tomorin_Mod.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "G:\\MyGame\\STS2_Tomorin_Mod\\STS2_Tomorin_Mod.csproj",
+        "projectName": "STS2_Tomorin_Mod",
+        "projectPath": "G:\\MyGame\\STS2_Tomorin_Mod\\STS2_Tomorin_Mod.csproj",
+        "packagesPath": "G:\\MyGame\\STS2_Tomorin_Mod\\packages",
+        "outputPath": "G:\\MyGame\\STS2_Tomorin_Mod\\.godot\\mono\\temp\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "G:\\MyGame\\STS2_Tomorin_Mod\\NuGet.Config",
+          "C:\\Users\\Administrator\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "targetAlias": "net9.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "dependencies": {
+            "Alchyr.Sts2.BaseLib": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[*, )"
+            },
+            "Alchyr.Sts2.ModAnalyzers": {
+              "target": "Package",
+              "version": "[*, )"
+            },
+            "BepInEx.AssemblyPublicizer.MSBuild": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[0.4.3, )"
+            },
+            "Godot.SourceGenerators": {
+              "target": "Package",
+              "version": "[4.5.1, )",
+              "autoReferenced": true
+            },
+            "GodotSharp": {
+              "target": "Package",
+              "version": "[4.5.1, )",
+              "autoReferenced": true
+            },
+            "GodotSharpEditor": {
+              "target": "Package",
+              "version": "[4.5.1, )",
+              "autoReferenced": true
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.312/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "G:\\MyGame\\STS2_Tomorin_Mod\\tests\\CardIntentHarness\\CardIntentHarness.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "G:\\MyGame\\STS2_Tomorin_Mod\\tests\\CardIntentHarness\\CardIntentHarness.csproj",
+        "projectName": "CardIntentHarness",
+        "projectPath": "G:\\MyGame\\STS2_Tomorin_Mod\\tests\\CardIntentHarness\\CardIntentHarness.csproj",
+        "packagesPath": "G:\\MyGame\\STS2_Tomorin_Mod\\packages",
+        "outputPath": "G:\\MyGame\\STS2_Tomorin_Mod\\.codex-task6-harness\\/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "G:\\MyGame\\STS2_Tomorin_Mod\\NuGet.Config",
+          "C:\\Users\\Administrator\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "targetAlias": "net9.0",
+            "projectReferences": {
+              "G:\\MyGame\\STS2_Tomorin_Mod\\STS2_Tomorin_Mod.csproj": {
+                "projectPath": "G:\\MyGame\\STS2_Tomorin_Mod\\STS2_Tomorin_Mod.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "dependencies": {
+            "Alchyr.Sts2.BaseLib": {
+              "target": "Package",
+              "version": "[*, )"
+            },
+            "Microsoft.NET.Test.Sdk": {
+              "target": "Package",
+              "version": "[17.12.0, )"
+            },
+            "xunit": {
+              "target": "Package",
+              "version": "[2.9.2, )"
+            },
+            "xunit.runner.visualstudio": {
+              "target": "Package",
+              "version": "[2.8.2, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.312/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

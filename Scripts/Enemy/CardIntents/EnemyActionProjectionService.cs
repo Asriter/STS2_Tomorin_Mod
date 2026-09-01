@@ -130,7 +130,8 @@ public sealed class EnemyActionProjectionService
             simulation.ApplyProjectedLifecycle(
                 source.SourceKey,
                 source.SourceCard.Definition,
-                successful: source.Units.Count > 0);
+                successful: source.Units.Any(unit =>
+                    !simulation.IsCardUnavailable(unit.ExecutingCardKey)));
         }
 
         LiveActionProjection projection = simulation.BuildProjection();
@@ -195,11 +196,11 @@ public sealed class EnemyActionProjectionService
 
             if (!definition.PlayCondition.CanSimulate(simulation))
             {
-                simulation.MarkIncomplete(
-                    $"执行牌 {unit.ExecutingCardKey} 的冻结出牌条件在投影时不再成立。");
+                simulation.MarkCardUnavailable(unit.ExecutingCardKey);
             }
             else
             {
+                simulation.MarkCardAvailable(unit.ExecutingCardKey);
                 ProjectSteps(
                     action,
                     unit,
@@ -370,11 +371,19 @@ public sealed class EnemyActionProjectionService
             step.CollectionInstanceId,
             step.CollectionId);
         EnemyCollectionEffectProgram program = EnemyCollectionEffectResolver.GetRequired(definition);
-        simulation.AddCollectionDelta(new EnemyCollectionProjection(
-            step.CollectionInstanceId,
-            step.CollectionId,
-            EnemyCollectionProjectionKind.Consumed));
-        ProjectSteps(action, ownerUnit, step.Children, program.DirectEffects, simulation, contentDirectory);
+        simulation.BeginCollectionEffectScope(step.CollectionInstanceId);
+        try
+        {
+            simulation.AddCollectionDelta(new EnemyCollectionProjection(
+                step.CollectionInstanceId,
+                step.CollectionId,
+                EnemyCollectionProjectionKind.Consumed));
+            ProjectSteps(action, ownerUnit, step.Children, program.DirectEffects, simulation, contentDirectory);
+        }
+        finally
+        {
+            simulation.EndCollectionEffectScope();
+        }
     }
 
     /// <summary>

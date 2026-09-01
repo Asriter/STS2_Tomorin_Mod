@@ -459,3 +459,73 @@ Verification expectation:
 - 新增测试不固定攻击、格挡、阈值、牌组份数、UI 尺寸等具体配置数值，只验证身份、关系、顺序、集合与状态不变量。
 - 本次未修改 Godot 资源，无需执行 `dotnet publish`。
 - 尚待实机：单机动态布局与 Hover、输入穿透、Power 刷新、多人本地伤害差异、真实断线重连、池化生命周期和三类故障降级。同步 API 已实现，但没有新增实际网络传输补丁。
+
+# FateGuidance（命运所指）共享事件
+
+## 需求与当前版本规则
+
+在隐藏章节 Stage 的固定第二事件位置加入 `FateGuidance`。事件使用游戏本体共享事件流程，由原生 `EventSynchronizer` 收集并同步最终选项，不增加自定义投票协调器、网络消息或专用存档 Modifier。
+
+当前版本展示 Crychic、Oblivionis、Taki 三个具名选项，但只有 `ChooseCrychic` 可选择；`ChooseOblivionis` 与 `ChooseTaki` 通过 BaseLib `LockedOption(...)` 生成原生锁定 `EventOption`，输入和视觉均沿用游戏本体。三个处理器和三个结果页均保留，便于未来仅改变解锁条件而不改 Boss 路由接口。
+
+Stage 的确定性路线为：
+
+```text
+GiraffeAncient → StageSupplyEvent → BandMemberEncounter → Shop → FateGuidance → RestSite → Act.BossEncounter
+```
+
+## 事件接口
+
+- `FateGuidance : CustomEventModel`：`IsShared` 为真，`IsAllowed` 仅接受当前 Act 为 Stage 的 Run，复用 `res://STS2_Tomorin_Mod/images/events/Giraffe.png`。
+- `GenerateInitialOptions()`：按 Crychic、Oblivionis、Taki 的稳定业务顺序返回一个普通选项和两个原生锁定选项。
+- `ChooseCrychic()`／`ChooseOblivionis()`／`ChooseTaki()`：解析对应 `ModelDb.Encounter<T>()`，调用统一 Boss 路线服务，并进入 `CRYCHIC`／`OBLIVIONIS`／`TAKI` 独立结果页。
+
+## Boss 路线接口
+
+```csharp
+internal enum PrimaryBossChangeResult
+{
+    AlreadySelected,
+    PrimaryBossChanged,
+}
+
+internal static PrimaryBossChangeResult ChangePrimaryBoss(
+    IRunState runState,
+    EncounterModel targetBoss);
+```
+
+接口规则：
+
+- 拒绝空 Run、空目标、非 Boss Encounter 和缺少第一 Boss 的损坏章节状态。
+- 使用 `ModelId` 比较目标与 `Act.BossEncounter`、`Act.SecondBossEncounter`，不使用引用相等。
+- 目标已在任一槽位时返回 `AlreadySelected`，不写状态、不刷新 UI。
+- 目标不存在时仅执行 `Act.SetBossEncounter(targetBoss.CanonicalInstance.ToMutable())`，随后刷新地图视觉并返回 `PrimaryBossChanged`。
+- 不调用 `SetSecondBossEncounter`，第二 Boss 的身份和顺序始终不变。
+
+## 地图视觉接口
+
+```csharp
+internal static void RefreshCurrentBossVisuals(IRunState runState);
+```
+
+`BossMapVisualSynchronizer` 只负责把 Act 权威状态投影到已经创建的地图 UI，不修改 Run 状态。它验证当前 `NMapScreen` 的 Run 与 Map，集中检查 `_bossPointNode`、`_secondBossPointNode` 以及 `NBossMapPoint` 的版本敏感字段：
+
+- PNG Boss：重新加载 `BossNodePath + ".png"` 与 `BossNodePath + "_outline.png"`，显示正文／描边并隐藏 Spine。
+- Spine Boss：重新绑定 `BossNodeSpineResource` 和原版默认动画，显示 Spine 并隐藏 PNG。
+- 存在第二 Boss 节点时从 `Act.SecondBossEncounter` 重新投影，保证第一 Boss 改动不会污染第二 Boss 显示。
+- UI 尚未创建或不属于传入 Run 时安全返回；反射字段或资源失效时只记录一次上下文错误，不回滚 Boss 状态、不让共享事件卡住。
+
+## Stage 接入与持久化
+
+- `StageRouteNodeKind.FateGuidance` 替换旧的泛化第二事件枚举值。
+- `StageRoomResolver` 将该节点固定解析为 `ModelDb.Event<FateGuidance>().ToMutable()`；Boss 节点读取 `runState.Act.BossEncounter`，不再硬编码 Crychic。
+- `Stage.BossDiscoveryOrder` 只包含 Crychic，维持默认第一 Boss；`GenerateAllEncounters()` 包含 BandMemberEncounter 与三个候选 Boss，保证模型校验和存档恢复能够解析最终身份。
+- Boss 身份由原版 `SerializableRoomSet.BossId` 持久化，不新增第二份权威字段。
+
+## 本地化与验证边界
+
+中英文 `events.json` 使用 `STS2_TOMORIN_MOD-FATE_GUIDANCE` 键空间，覆盖标题、初始描述、三个选项标题／描述和三个结果页。两个语言文件键集合一致且值非空。
+
+聚焦 PowerShell 测试、StageHarness、编译和发布均已通过；新本地化已导出到游戏 mods 目录的 `.pck`。尚需游戏内验证单机／多人原生锁定表现、共享事件收敛、双 Boss 去重、PNG／Spine 切换、保存恢复和最终实际 Encounter。
+
+仓库全量回归的现有阻塞不属于 FateGuidance：当前 Card Intent 工作树静态软锁断言失败、BandMemberEncounter 脚本需要本机缺失的 `pwsh`、CardIntentHarness 在无 Godot 运行时初始化日志时发生原生测试宿主崩溃。FateGuidance 实现未修改这些无关模块。

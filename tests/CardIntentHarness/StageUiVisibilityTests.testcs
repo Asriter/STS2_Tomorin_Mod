@@ -1,0 +1,55 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Modifiers;
+using MegaCrit.Sts2.Core.Runs;
+using STS2_Tomorin_Mod.Stage;
+using Xunit;
+
+namespace CardIntentHarness;
+
+public sealed class StageUiVisibilityTests
+{
+    [Fact]
+    public void FilterUiModifiers_HidesOnlyInternalStageProgress()
+    {
+        ModifierModel visibleModifier = Uninitialized<Midas>();
+        ModifierModel stageProgress = Uninitialized<StageRunProgressModifier>();
+
+        IReadOnlyList<ModifierModel> filtered = StageRunCompatibilityPolicy.FilterUiModifiers(
+            [visibleModifier, stageProgress]);
+
+        Assert.Same(visibleModifier, Assert.Single(filtered));
+    }
+
+    [Fact]
+    public void TopBarPatch_HidesStageProgressOnlyWhileUiIsBuilt()
+    {
+        ModifierModel visibleModifier = Uninitialized<Midas>();
+        ModifierModel stageProgress = Uninitialized<StageRunProgressModifier>();
+        IReadOnlyList<ModifierModel> original = [visibleModifier, stageProgress];
+        RunState runState = Uninitialized<RunState>();
+        typeof(RunState).GetProperty(nameof(RunState.Modifiers))!.SetValue(runState, original);
+
+        Type patchType = typeof(StageRunCompatibilityPolicy).Assembly.GetType(
+            "STS2_Tomorin_Mod.Patch.StageTopBarCompatibilityPatch",
+            throwOnError: true)!;
+        MethodInfo prefix = patchType.GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)!;
+        MethodInfo finalizer = patchType.GetMethod("Finalizer", BindingFlags.Static | BindingFlags.NonPublic)!;
+        object?[] prefixArguments = [runState, null];
+
+        prefix.Invoke(null, prefixArguments);
+
+        Assert.Same(visibleModifier, Assert.Single(runState.Modifiers));
+        Assert.Same(original, prefixArguments[1]);
+
+        InvalidOperationException expectedException = new("UI construction failed");
+        object? finalizerResult = finalizer.Invoke(null, [runState, prefixArguments[1], expectedException]);
+
+        Assert.Same(expectedException, finalizerResult);
+        Assert.Same(original, runState.Modifiers);
+    }
+
+    private static T Uninitialized<T>() where T : class =>
+        (T)RuntimeHelpers.GetUninitializedObject(typeof(T));
+}

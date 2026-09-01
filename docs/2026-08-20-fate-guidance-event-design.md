@@ -1,15 +1,15 @@
 # FateGuidance 多人共享事件设计
 
-**状态：** 已完成对话设计确认，等待书面 Spec 审阅与后续 Agent 实现  
+**状态：** 已完成实现与聚焦自动化验证，等待游戏内集成验收
 **设计日期：** 2026-08-20  
 **节点/类名：** `FateGuidance`  
 **英文标题：** `Fate's Guidance`  
 **中文标题：** `命运所指`  
-**关联待办：** [TODO.md](./TODO.md)
+**实现计划：** [2026-08-30-fate-guidance-event-implementation-plan.md](./2026-08-30-fate-guidance-event-implementation-plan.md)
 
 ## 1. 目标
 
-在隐藏章节 Stage 的固定路线中，将第二个事件节点替换为多人共享事件 `FateGuidance`。每名玩家从三个具名 Boss 中提交一个选择，最终结果完全使用游戏原生共享事件规则裁决并同步。结果确定后，修改当前章节的第一 Boss、立即刷新地图上的 Boss 图标，并保证实际遭遇、多人状态和存档恢复一致。
+在隐藏章节 Stage 的固定路线中，将第二个事件节点替换为多人共享事件 `FateGuidance`。事件展示三个具名 Boss；当前版本只开放第一选项，第二、第三选项使用游戏原生锁定功能。最终结果完全使用游戏原生共享事件规则裁决并同步。结果确定后，修改当前章节的第一 Boss、立即刷新地图上的 Boss 图标，并保证实际遭遇、多人状态和存档恢复一致。
 
 三个选项按以下顺序展示：
 
@@ -26,7 +26,7 @@
 `FateGuidance` 固定放在 Stage 的第二事件位置。路线保持：
 
 ```text
-Ancient → FeedTheCat → Elite → Shop → FateGuidance → RestSite → Boss
+Ancient → StageSupplyEvent → BandMemberEncounter → Shop → FateGuidance → RestSite → Boss
 ```
 
 事件不进入普通随机事件池，不改变 Stage 地图拓扑或节点数量。
@@ -35,8 +35,9 @@ Ancient → FeedTheCat → Elite → Shop → FateGuidance → RestSite → Boss
 
 事件声明 `IsShared => true`，使用原生 `EventSynchronizer`：
 
-- 每名玩家提交一个选项。
-- 全部选择到齐后，主机从所有玩家提交的选择中等权随机抽取最终结果。
+- 当前版本每名玩家只能提交第一选项 `ChooseCrychic`。
+- `ChooseOblivionis` 与 `ChooseTaki` 通过 `CustomEventModel.LockedOption(...)` 创建原生锁定 `EventOption`，不注册空回调或自定义按钮禁用状态。
+- 全部选择到齐后，主机按当前游戏本体的共享事件最高票规则裁决最终结果；当前版本因只有第一选项可选，结果稳定为 `ChooseCrychic`。
 - 最终选项通过原生 `SharedEventOptionChosenMessage` 同步。
 - 不实现多数票、房主指定、自定义 VoteCoordinator、额外 Choice ID 或专用同步消息。
 
@@ -57,7 +58,7 @@ Ancient → FeedTheCat → Elite → Shop → FateGuidance → RestSite → Boss
 res://STS2_Tomorin_Mod/images/events/Giraffe.png
 ```
 
-专属事件立绘作为明确的后续任务登记在项目 TODO 中。
+专属事件立绘不属于本次交付，后续作为独立美术任务处理。
 
 ## 3. 方案选择
 
@@ -84,7 +85,7 @@ res://STS2_Tomorin_Mod/images/events/Giraffe.png
 - 声明 `IsShared => true`。
 - `IsAllowed(IRunState)` 只允许当前 Act 为 `STS2_Tomorin_Mod.Acts.Stage`。
 - `CustomInitialPortraitPath` 返回已确认的 Giraffe 占位图片。
-- `GenerateInitialOptions()` 按已确认顺序创建三个选项。
+- `GenerateInitialOptions()` 按已确认顺序创建三个选项；第一项为普通 `EventOption`，第二、第三项使用原生 `LockedOption`。
 - 每个选项处理器取得 `Owner.RunState` 与对应的 `ModelDb.Encounter<T>()`，调用通用服务。
 - 处理器在首次异步等待之前完成同步状态修改，随后调用 `SetEventFinished(...)` 进入对应结果页。
 - 不直接调用 `SetBossEncounter`、`SetSecondBossEncounter`，也不访问地图 UI。
@@ -171,7 +172,7 @@ internal static void RefreshCurrentBossVisuals(IRunState runState);
 
 ### 4.5 修改 `Scripts/Stage/StageRoomResolver.cs`
 
-- `FirstEvent` 继续解析为 `ModelDb.Event<FeedTheCat>().ToMutable()`。
+- `FirstEvent` 继续解析为 `ModelDb.Event<StageSupplyEvent>().ToMutable()`。
 - `FateGuidance` 解析为 `ModelDb.Event<FateGuidance>().ToMutable()`。
 - Boss 节点改为读取 `runState.Act.BossEncounter` 并创建其可变实例。
 - Boss 缺失时抛出包含章节、地图节点和楼层上下文的 `InvalidOperationException`，不静默回退到 Crychic。
@@ -181,7 +182,7 @@ internal static void RefreshCurrentBossVisuals(IRunState runState);
 将“合法 Boss 集合”与“默认 Boss”分离：
 
 - 覆盖 `BossDiscoveryOrder`，只返回 `CrychicPhatomBoss`，保证默认第一 Boss 不变。
-- `GenerateAllEncounters()` 继续包含固定精英，并包含三个目标 Boss，使替换后的 Encounter 能通过模型校验和存档恢复。
+- `GenerateAllEncounters()` 继续包含 `BandMemberEncounter`，并包含三个目标 Boss，使替换后的 Encounter 能通过模型校验和存档恢复。
 - `AllEvents` 继续为空；固定路线解析器直接创建 FateGuidance。
 
 ### 4.7 修改本地化
@@ -210,9 +211,9 @@ Stage 初始化
        ↓
 玩家进入 FateGuidance
        ↓
-每名玩家通过原生共享事件提交一个选项
+每名玩家通过原生共享事件提交当前唯一可用的 ChooseCrychic
        ↓
-主机从已提交选择中等权随机抽取最终索引
+主机按原生共享事件最高票规则裁决最终索引
        ↓
 SharedEventOptionChosenMessage 同步最终索引
        ↓
@@ -313,7 +314,7 @@ STS2_TOMORIN_MOD-FATE_GUIDANCE.pages.TAKI.description
 - 通用服务不得调用 `SetSecondBossEncounter`。
 - 去重使用 `ModelId`。
 - `StageRouteNodeKind.FateGuidance` 与固定房间映射存在；旧 `SecondEvent` 映射被移除。
-- 第一事件仍为 FeedTheCat。
+- 第一事件仍为 StageSupplyEvent，固定精英仍为 BandMemberEncounter。
 - Boss 房间读取 `runState.Act.BossEncounter`，不硬编码 Crychic。
 - Stage 默认 Boss 仍为 Crychic，合法 Encounter 集合包含三个目标 Boss。
 - 视觉同步器覆盖第一、第二 Boss 节点，并同时包含 PNG 与 Spine 绑定路径。
@@ -338,7 +339,8 @@ STS2_TOMORIN_MOD-FATE_GUIDANCE.pages.TAKI.description
 ### 8.3 单机事件验收
 
 - 进入事件前默认第一 Boss 为 Crychic。
-- 分别完成三个具名选项，结果页与最终选项一致。
+- 当前可用的 Crychic 选项进入 Crychic 结果页，另外两个具名选项显示为原生锁定且无法选择。
+- 通过结构测试保留 Oblivionis 与 Taki 处理器、Boss 映射和独立结果页，供未来解锁。
 - 选择已经存在的 Boss 时事件完成且 Boss 顺序不变。
 - 选择未出现的 Boss 时，返回地图后第一 Boss 图标与模型一致。
 - 到达 Boss 节点后，实际 Encounter 与第一 Boss 状态一致。
@@ -347,7 +349,7 @@ STS2_TOMORIN_MOD-FATE_GUIDANCE.pages.TAKI.description
 ### 8.4 多人同步验收
 
 - 所有玩家选择同一目标时，所有端得到相同 Boss、图标和结果页。
-- 玩家选择不同时，最终结果必须属于某位玩家实际提交的选项；不预先断言抽中哪个 Boss。
+- 所有玩家只能提交 Crychic，所有端得到相同 Crychic 结果；锁定选项不得产生投票或额外选择轮次。
 - 所有端的第一 Boss、第二 Boss、地图图标和结果页一致。
 - 不出现额外选择轮次或客户端停留。
 - 同一端的多个事件实例只产生一次实际状态写入。
@@ -381,7 +383,7 @@ dotnet publish
 5. 写入中英文本地化。
 6. 运行聚焦测试、`dotnet build` 与 `dotnet publish`。
 7. 完成单机、多人、图标切换和存档恢复验收。
-8. 验证全部通过后更新实现记录和 [TODO.md](./TODO.md) 的完成状态。
+8. 验证全部通过后更新实现记录，并从本地实施清单移除本次任务。
 
 ## 10. 范围外事项
 
@@ -396,7 +398,7 @@ dotnet publish
 
 - FateGuidance 只出现在 Stage 固定第二事件节点。
 - 原生共享事件完成投票、裁决与同步，不存在自定义协调器。
-- 三个具名结果均能使所有联机端收敛到同一状态。
+- 当前开放的 Crychic 结果能使所有联机端收敛到同一状态；另外两个具名结果保留实现但当前不可选择。
 - 目标已存在于任一 Boss 槽位时完全不改 Boss 顺序。
 - 目标不存在时只改变第一 Boss。
 - 返回地图时第一 Boss 图标与权威状态一致，第二 Boss 不变。
@@ -407,12 +409,12 @@ dotnet publish
 
 ## 12. Spec 自审结论
 
-本节按照 `superpowers:brainstorming` 的 Spec Self-Review 清单完成。
+本节按照项目通用的 Spec Self-Review 检查项完成。
 
 ### 12.1 占位符检查
 
 - Spec 不包含未定义占位符、缺失页面或未指定错误处理。
-- [TODO.md](./TODO.md) 中的复选项是已经定义完成条件的实施与后续任务，不是方案占位符。
+- 实施任务已经移出本地待办；专属美术、Boss 重做和第二 Boss 写入仍属于未来独立范围。
 - 占位 Boss、占位文案和占位立绘均明确标注当前来源、使用边界和后续替换任务。
 
 ### 12.2 内部一致性检查

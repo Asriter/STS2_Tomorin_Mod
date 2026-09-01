@@ -94,6 +94,7 @@
     <Compile Remove="shaders/**" />
     <Compile Remove="images/**" />
     <Compile Remove="local-tests/**" />
+    <Compile Remove="tests/**" />
     <EmbeddedResource Remove="STS2_Tomorin_Mod/**" />
     <EmbeddedResource Remove="content/**" />
     <EmbeddedResource Remove="materials/**" />

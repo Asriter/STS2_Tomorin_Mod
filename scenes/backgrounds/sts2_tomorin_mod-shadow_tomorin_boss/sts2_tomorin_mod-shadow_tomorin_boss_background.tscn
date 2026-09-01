@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3 uid="uid://dtfom7kw2m6xa"]
+
+[ext_resource type="Script" uid="uid://dsppfiyxcatga" path="res://src/Core/Nodes/Rooms/NCombatBackground.cs" id="1_5sia4"]
+[ext_resource type="Texture2D" uid="uid://5mjcabspfpps" path="res://STS2_Tomorin_Mod/images/rooms/OblvnsBg.png" id="2_ljmoa"]
+
+[node name="Sts2TomorinModTakiBossBackground" type="TextureRect"]
+script = ExtResource("1_5sia4")
+
+[node name="OblvnsBg" type="Sprite2D" parent="."]
+position = Vector2(39, 22)
+scale = Vector2(8.160156, 8.0859375)
+texture = ExtResource("2_ljmoa")
+
+[node name="Layer_00" type="Control" parent="."]
+unique_name_in_owner = true
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0

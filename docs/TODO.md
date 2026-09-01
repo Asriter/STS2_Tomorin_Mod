@@ -39,29 +39,13 @@ UI 修订规格：[2026-08-29-card-list-intent-ui-revision-design.md](./2026-08-
 - [ ] 需要敌人行动逐张消失、素材动画或回放表现时，设计独立执行动画层。
 - [ ] 游戏版本更新后复核战斗 RNG、伤害/格挡修正、MoveState、Power Hook、NIntent/NCard 和联机同步接入点。
 
-## FateGuidance 多人共享事件
+## FateGuidance 后续独立事项
 
-设计依据：[2026-08-20-fate-guidance-event-design.md](./2026-08-20-fate-guidance-event-design.md)
-
-### 待实现
-
-- [ ] 新增 `Scripts/Services/BossMapRouteService.cs`，实现通用第一 Boss 去重、替换和结果返回。
-- [ ] 新增 `Scripts/Services/BossMapVisualSynchronizer.cs`，实现第一、第二 Boss 地图节点的 PNG/Spine 通用重新绑定。
-- [ ] 新增 `Scripts/Events/FateGuidance.cs`，使用原生共享事件规则和三个独立结算页。
-- [ ] 将 Stage 固定第二事件节点语义改为 `StageRouteNodeKind.FateGuidance`。
-- [ ] 让 `StageRoomResolver` 在 FateGuidance 节点创建新事件，并在 Boss 节点读取当前第一 Boss。
-- [ ] 让 Stage 保持 Crychic 为默认 Boss，同时把 Crychic、Oblivionis、Taki 纳入合法 Boss Encounter 集合。
-- [ ] 在中英文 `events.json` 写入已确认的 FateGuidance 本地化。
-- [ ] 新增 `tests/FateGuidance.Tests.ps1` 并更新 `tests/Stage.Tests.ps1`。
-- [ ] 执行 FateGuidance 与 Stage 聚焦测试。
-- [ ] 执行 `dotnet build` 与 `dotnet publish`。
-- [ ] 完成单机、多人分歧选择、双 Boss 去重、PNG/Spine 图标切换和存档恢复验收。
-- [ ] 验证完成后记录结果，并勾选本节已完成任务。
-
-### 后续另行设计或替换
+核心事件、Boss 路线服务、地图视觉同步、Stage 接入、本地化和自动化测试已经实现。设计依据：[2026-08-20-fate-guidance-event-design.md](./2026-08-20-fate-guidance-event-design.md)。
 
 - [ ] 后续重新设计 `CrychicPhatomBoss`、`OblivionisBoss` 与 `TakiBoss` 占位实现。
 - [ ] Boss 重做后复核 FateGuidance 的选项与三个结算页占位文案。
 - [ ] 为 FateGuidance 制作并替换专属事件立绘；当前复用 `Giraffe.png`。
+- [ ] 在游戏内完成单机、多人、双 Boss 去重、PNG/Spine 图标切换和存档恢复集成验收。
 - [ ] 出现明确的第二 Boss 修改需求时，单独设计第二 Boss 的创建、替换、去重、地图节点和存档规则。
 - [ ] 游戏版本更新后复核 `NMapScreen`、`NBossMapPoint` 私有字段以及 PNG/Spine 重新绑定流程。

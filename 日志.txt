@@ -174,3 +174,17 @@
 - 新增冻结计划、执行、同步、投影、描述和展示测试；`CardIntentHarness` 54/54 通过，`tests/CardIntent.Tests.ps1` 通过，`dotnet build` 0 错误。测试仅断言身份、关系、顺序、集合和状态不变量，不固定游戏平衡配置数值。
 - 仓库其余 Windows PowerShell 回归脚本 9/9 通过；`BandMemberEncounter.Tests.ps1` 启动器明确要求当前机器未安装的 PowerShell 7 `pwsh`，本次无法从其正常入口重复执行，既有日志中的兼容验证结论未被改写。
 - 本次没有新增或修改 Godot 资源，未执行 `dotnet publish`。单机布局／Hover／点击穿透、多人本地伤害差异、真实断线重连、池化生命周期和故障注入仍待实机人工验收。
+
+## 2026-08-30：FateGuidance 共享事件与 Boss 路线切换
+
+- 新增 `FateGuidance` 原生共享事件，固定接入 Stage 第二事件节点；当前只开放 Crychic，Oblivionis 与 Taki 使用 BaseLib `LockedOption` 创建游戏本体原生锁定选项，保留未来解锁处理器和独立结果页。
+- 新增 `BossMapRouteService.ChangePrimaryBoss(...)`，按稳定 `ModelId` 对第一、第二 Boss 去重；目标不存在时只替换第一 Boss，绝不创建、换位或覆盖第二 Boss。
+- 新增 `BossMapVisualSynchronizer.RefreshCurrentBossVisuals(...)`，从 Act 权威状态刷新现存第一／第二 Boss 地图节点，兼容 PNG 与 Spine 双向重绑；UI 失败按 Boss 和异常去重记录，不回滚真实状态。
+- Stage 路线更新为 `GiraffeAncient → StageSupplyEvent → BandMemberEncounter → Shop → FateGuidance → RestSite → Act.BossEncounter`；Stage 默认发现顺序仍以 Crychic 开始，合法 Encounter 集合包含三个候选 Boss。
+- 新增中英 FateGuidance 标题、初始页、三个选项及三个结果页文案；事件继续复用 `Giraffe.png`，未新增专属美术。
+- 新增 `tests/FateGuidance.Tests.ps1`，并更新 Stage 与 StageSupplyEvent 聚焦回归。新增断言只验证身份、顺序、集合、调用边界与状态不变量，不固定概率、票数、配置数量或 Boss 数值。
+- 聚焦验证通过：`FateGuidance.Tests.ps1`、`Stage.Tests.ps1`、`StageSupplyEvent.Tests.ps1`；`dotnet build --no-restore` 为 0 错误（173 个既有警告）。
+- `dotnet publish --no-restore` 为 0 错误（189 个既有警告）；游戏 mods 目录中的 `STS2_Tomorin_Mod.dll` 与 `STS2_Tomorin_Mod.pck` 已重新生成。
+- 额外回归通过：Band Boss 遗物奖励、FeedTheCat、FixedFirstEvent、GiraffeAncient、Raana、Soyo、StageDeviceEnchantments 等 PowerShell 脚本；BandMemberEncounterHarness 11/11、CardIntentModelDbHarness 1/1、StageHarness 5/5。
+- 仓库全量测试当前仍有三个与本需求无关的既有阻塞：`CardIntent.Tests.ps1` 在当前未提交 Card Intent 工作树上缺少“双软锁”静态结构；`BandMemberEncounter.Tests.ps1` 的正常入口需要本机未安装的 PowerShell 7 `pwsh`；CardIntentHarness 已通过 66 项后在无 Godot 运行时环境初始化 `Log` 时发生测试宿主原生崩溃。本次未越权修改这些模块或安装系统工具。
+- 设计文档已改为实现状态，本任务已从 `docs/TODO.md` 的实施清单移除；仅保留游戏内单机／多人、双 Boss、PNG／Spine 和存档恢复验收，以及 Boss 重做和专属美术等后续独立事项。

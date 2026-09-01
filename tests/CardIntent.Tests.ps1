@@ -202,7 +202,8 @@ $shadowDeck = Get-RepositoryContent "$featureRoot/ShadowTomorin/ShadowTomorinDec
 Assert-Matches $shadowDeck "EnemyCardContentDirectory" "影灯必须注册正式阶段内容目录。"
 Assert-Matches $shadowMonster "CardIntentMoveState\.Create" "影灯必须使用 CardIntent 行动状态。"
 Assert-Matches $shadowMonster "FollowUpState\s*=\s*_cardState" "影灯唯一状态必须稳定自循环。"
-Assert-NotMatches $shadowMonster "SetMoveImmediate" "影灯阶段切换不得立即替换当前行动。"
+Assert-NotMatches $shadowMonster "SetMoveImmediate" `
+    "影灯阶段切换不得立即替换当前行动。"
 Assert-NotMatches $shadowCatalog "Utakotoba" "影灯正式卡池不得包含 Utakotoba。"
 Assert-Matches $sync "EnemyCardDeckRegistry\.GetContentDirectory\(expectedDeckId\)[\s\S]*directory\.CreateDefinition" `
     "重连必须按同步 DeckId 从注册目录解析正式卡牌。"
@@ -213,8 +214,8 @@ $slotView = Get-RepositoryContent "$featureRoot/View/NEnemyIntentCardSlot.cs"
 $hoverView = Get-RepositoryContent "$featureRoot/View/NEnemyCardHoverPreview.cs"
 $cardListIntent = Get-RepositoryContent "$featureRoot/Intents/CardListIntent.cs"
 Assert-NotMatches $listView "CardSlotCount|MaxDesignWidth" "动态卡列不得保留固定槽位或总宽缩放。"
-Assert-Matches $listView "Dictionary<EnemyCardInstanceKey,\s*NEnemyIntentCardSlot>" `
-    "动态卡列必须按实例键复用槽位。"
+Assert-Matches $listView "Dictionary<EnemyIntentDisplayKey,\s*NEnemyIntentCardSlot>" `
+    "动态卡列必须按稳定展示键复用槽位。"
 foreach ($layoutName in @("CenterAnchor", "CardRow", "ProjectionStatusHost", "HoverLayer")) {
     Assert-Matches $listView $layoutName "动态卡列缺少节点：$layoutName"
 }

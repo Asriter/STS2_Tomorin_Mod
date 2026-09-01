@@ -4,6 +4,8 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Cards.Collections;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Intents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
 using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 using STS2_Tomorin_Mod.Powers;
 using Xunit;
@@ -12,6 +14,9 @@ namespace STS2_Tomorin_Mod.Tests.CardIntents;
 
 public sealed class CardIntentCatalogModelDbTests
 {
+    private static readonly EnemyCardDeckId TimelineDeckId =
+        new("STS2_TOMORIN_MOD:MODELDB_COLLECTION_TIMELINE_TEST");
+
     [Fact]
     public void CatalogAndCollectionResolverReuseRegisteredCardModelsAfterModelDbInitialization()
     {
@@ -141,6 +146,48 @@ public sealed class CardIntentCatalogModelDbTests
         Assert.Equal(6, collectionDefinitions.Count);
         Assert.All(collectionDefinitions, definition =>
             Assert.Same(registeredCards[definition.CardModelType], definition.ResolveCardModel()));
+
+        FieldInfo timelineAssetPathsField = typeof(CardListIntent).GetField(
+            "TimelineCardAssetPaths",
+            BindingFlags.NonPublic | BindingFlags.Static) ??
+            throw new InvalidOperationException("CardListIntent 缺少时间线资源缓存字段。");
+        string[] timelineAssetPaths = Assert.IsType<string[]>(timelineAssetPathsField.GetValue(null));
+        Assert.NotEmpty(timelineAssetPaths);
+
+        EnemyCardDefinition attackDefinition = CardIntentTestCardCatalog.AllDefinitions.Values
+            .Single(definition => definition.CardId.Value.EndsWith("_ATTACK", StringComparison.Ordinal));
+        if (!EnemyCardDeckRegistry.IsRegistered(TimelineDeckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                TimelineDeckId,
+                [() => CardIntentTestCardCatalog.CreateCard(attackDefinition.CardId)]);
+        }
+
+        BaseEnemyCard consumer = Assert.Single(
+            EnemyCardDeckRegistry.CreateCombatState(TimelineDeckId).DrawPile);
+        const string collectionInstanceId = "COLLECTION:MODELDB:0";
+        PreparedEnemyCardUnitPlan unit = new(
+            consumer.InstanceKey,
+            consumer.InstanceKey,
+            consumer.CardId,
+            0,
+            EnemyPreparedExecutionMode.Normal,
+            [],
+            [new PreparedConsumedCollectionStep(
+                collectionInstanceId,
+                CardIntentTestCollectionCatalog.BrokenNoteId,
+                [])]);
+        PreparedEnemyCardAction action = new(
+            EnemyActionMetric.Attack,
+            [],
+            [consumer],
+            [new PreparedEnemyCardSource(consumer, 1, [unit])],
+            new EnemySoftLockDiagnostic(new EnemyCardScore(0m, 0m), 0m, 0m, 1, 0, false));
+
+        EnemyIntentTimelineEntry collectionEntry = Assert.Single(
+            EnemyIntentTimelineBuilder.Build(action).Entries,
+            entry => entry.Role == EnemyIntentTimelineRole.ConsumedCollection);
+        Assert.Same(ModelDb.Card<BrokenNote>(), collectionEntry.CardModel);
 
         EnemyCollectionEffectProgram brokenNoteProgram = EnemyCollectionEffectResolver.GetRequired(
             CardIntentTestCollectionCatalog.Catalog.GetRequired(CardIntentTestCollectionCatalog.BrokenNoteId));

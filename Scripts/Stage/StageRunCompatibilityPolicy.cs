@@ -9,14 +9,24 @@ namespace STS2_Tomorin_Mod.Stage;
 public static class StageRunCompatibilityPolicy
 {
     /// <summary>
+    /// 从 UI 可见的 Modifier 中排除仅用于舞台内部持久化的进度状态。
+    /// </summary>
+    /// <param name="modifiers">当前 Run 的完整 Modifier 集合。</param>
+    /// <returns>保留全部游戏规则 Modifier、但不包含舞台进度状态的新只读集合。</returns>
+    public static IReadOnlyList<ModifierModel> FilterUiModifiers(IEnumerable<ModifierModel> modifiers)
+    {
+        ArgumentNullException.ThrowIfNull(modifiers);
+        return modifiers.Where(modifier => modifier is not StageRunProgressModifier).ToArray();
+    }
+
+    /// <summary>
     /// 从 Neow 可见的 Modifier 中排除仅用于舞台内部持久化的进度状态。
     /// </summary>
     /// <param name="modifiers">当前 Run 的完整 Modifier 集合。</param>
     /// <returns>保留全部游戏规则 Modifier、但不包含舞台进度状态的新只读集合。</returns>
     public static IReadOnlyList<ModifierModel> FilterNeowModifiers(IEnumerable<ModifierModel> modifiers)
     {
-        ArgumentNullException.ThrowIfNull(modifiers);
-        return modifiers.Where(modifier => modifier is not StageRunProgressModifier).ToArray();
+        return FilterUiModifiers(modifiers);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Models;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using Xunit;
 
@@ -236,5 +237,11 @@ public sealed class MaterialResolverTests
     /// <param name="isEpiphany">是否为灵光。</param>
     /// <returns>不可变收藏品定义。</returns>
     private static EnemyCollectionDefinition Collection(string id, bool isEpiphany) =>
-        new(id, typeof(MaterialResolverTests), CardType.Status, isEpiphany, $"effect:{id}");
+        new(
+            id,
+            typeof(CardModel),
+            CardType.Status,
+            isEpiphany,
+            $"effect:{id}",
+            static () => throw new InvalidOperationException("素材解析测试不使用收藏品卡面模型。"));
 }

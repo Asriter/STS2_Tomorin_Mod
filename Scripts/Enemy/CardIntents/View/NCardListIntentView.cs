@@ -20,7 +20,7 @@ public partial class NCardListIntentView : Control
     private const float CardSpacing = 6f;
     private const float GlobalStatusHeight = 72f;
 
-    private readonly Dictionary<EnemyCardInstanceKey, NEnemyIntentCardSlot> _slotsByKey = [];
+    private readonly Dictionary<EnemyIntentDisplayKey, NEnemyIntentCardSlot> _slotsByKey = [];
     private readonly List<NEnemyIntentCardSlot> _orderedSlots = [];
     private readonly HashSet<string> _reportedProjectionFingerprints = new(StringComparer.Ordinal);
     private Control? _centerAnchor;
@@ -41,7 +41,7 @@ public partial class NCardListIntentView : Control
     /// 获取当前绑定是否拥有可显示的非故障公开卡列；投影不完整仍保留已知逐牌显示。
     /// </summary>
     public bool HasDisplayableCards =>
-        _boundIntent is { IsFaulted: false } && _boundIntent.CardList.Count > 0;
+        _boundIntent is { IsFaulted: false } && _boundIntent.IntentTimeline.Entries.Count > 0;
 
     /// <summary>
     /// 创建保持鼠标点击穿透的复合视图根，并启用中央 Hover 与延迟刷新帧循环。
@@ -223,21 +223,21 @@ public partial class NCardListIntentView : Control
         try
         {
             projection = intent.GetLiveProjectionForDisplay(_targets);
-            presentation = EnemyCardIntentPresentationBuilder.Build(intent.CardList, projection);
+            presentation = EnemyCardIntentPresentationBuilder.Build(intent.IntentTimeline, projection);
         }
         catch (Exception exception)
         {
             string diagnostic = $"状态 {intent.StateId} 无法从冻结计划构建逐牌展示：{exception.Message}";
-            ReportProjectionFailureOnce($"BUILD|{intent.StateId}|{string.Join(',', intent.CardList.Select(card => card.InstanceKey))}",
+            ReportProjectionFailureOnce($"BUILD|{intent.StateId}|{string.Join(',', intent.IntentTimeline.Entries.Select(entry => entry.DisplayKey))}",
                 diagnostic, exception);
-            presentation = CreateUnknownFallbackPresentation(intent.CardList, diagnostic);
+            presentation = CreateUnknownFallbackPresentation(intent.IntentTimeline, diagnostic);
         }
 
         ReconcileSlots(presentation, owner);
         SetGlobalUnknownVisible(presentation.RequiresGlobalUnknown);
         if (presentation.RequiresGlobalUnknown)
         {
-            string sourceKeys = string.Join(',', presentation.Cards.Select(card => card.CardInstanceKey));
+            string sourceKeys = string.Join(',', presentation.Cards.Select(card => card.DisplayKey));
             string fingerprint = $"INCOMPLETE|{intent.StateId}|{sourceKeys}|{string.Join('|', presentation.Diagnostics)}";
             ReportProjectionFailureOnce(
                 fingerprint,
@@ -250,13 +250,12 @@ public partial class NCardListIntentView : Control
     /// 投影构建异常时仍为所有公开牌保留缩略牌、单卡 Unknown 和全局 Unknown。
     /// </summary>
     private static EnemyCardListPresentation CreateUnknownFallbackPresentation(
-        IReadOnlyList<BaseEnemyCard> cards,
+        EnemyIntentTimeline timeline,
         string diagnostic)
     {
         return new EnemyCardListPresentation(
-            cards.Select(card => new EnemyCardIntentPresentation(
-                card.InstanceKey,
-                card,
+            timeline.Entries.Select(entry => new EnemyCardIntentPresentation(
+                entry,
                 [new EnemyUnknownPresentation(diagnostic)])),
             requiresGlobalUnknown: true,
             [diagnostic]);
@@ -272,10 +271,10 @@ public partial class NCardListIntentView : Control
             throw new InvalidOperationException("动态 CardRow 尚未创建。");
         }
 
-        HashSet<EnemyCardInstanceKey> retainedKeys = presentation.Cards
-            .Select(card => card.CardInstanceKey)
+        HashSet<EnemyIntentDisplayKey> retainedKeys = presentation.Cards
+            .Select(card => card.DisplayKey)
             .ToHashSet();
-        foreach (EnemyCardInstanceKey removedKey in _slotsByKey.Keys.Where(key => !retainedKeys.Contains(key)).ToArray())
+        foreach (EnemyIntentDisplayKey removedKey in _slotsByKey.Keys.Where(key => !retainedKeys.Contains(key)).ToArray())
         {
             NEnemyIntentCardSlot removedSlot = _slotsByKey[removedKey];
             _slotsByKey.Remove(removedKey);
@@ -288,10 +287,10 @@ public partial class NCardListIntentView : Control
         for (int index = 0; index < presentation.Cards.Count; index++)
         {
             EnemyCardIntentPresentation cardPresentation = presentation.Cards[index];
-            if (!_slotsByKey.TryGetValue(cardPresentation.CardInstanceKey, out NEnemyIntentCardSlot? slot))
+            if (!_slotsByKey.TryGetValue(cardPresentation.DisplayKey, out NEnemyIntentCardSlot? slot))
             {
                 slot = new NEnemyIntentCardSlot();
-                _slotsByKey.Add(cardPresentation.CardInstanceKey, slot);
+                _slotsByKey.Add(cardPresentation.DisplayKey, slot);
                 _cardRow.AddChild(slot);
             }
 
@@ -389,7 +388,12 @@ public partial class NCardListIntentView : Control
         {
             if (slot.TryGetThumbnailGlobalRect(out Rect2 thumbnailRect) && thumbnailRect.HasPoint(mousePosition))
             {
-                _hoverPreview!.ShowCard(slot.Card, thumbnailRect, ReportUiDiagnostic);
+                _hoverPreview!.ShowCard(
+                    slot.CardModel,
+                    slot.DescriptionOverride,
+                    slot.DisplayKey,
+                    thumbnailRect,
+                    ReportUiDiagnostic);
                 return;
             }
         }

@@ -1,5 +1,7 @@
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents.Intents;
 
@@ -18,6 +20,15 @@ public sealed class CardListIntent : UnknownIntent
         "res://scenes/cards/card_canvas_group_mask_material.tres"
     ];
 
+    private static readonly string[] TimelineCardAssetPaths = CardIntentTestCardCatalog.AllDefinitions.Values
+        .Select(definition => definition.CardModel)
+        .Concat(CardIntentTestCollectionCatalog.Catalog.Definitions
+            .Select(definition => definition.ResolveCardModel()))
+        .SelectMany(EnemyCardDeckRegistry.GetCardModelAssetPaths)
+        .Where(path => !string.IsNullOrWhiteSpace(path))
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
+
     private readonly CardIntentMoveRuntime _runtime;
 
     /// <summary>
@@ -32,6 +43,9 @@ public sealed class CardListIntent : UnknownIntent
     /// 获取当前冻结手牌的只读顺序，显示与攻击预览必须共同读取该顺序。
     /// </summary>
     public IReadOnlyList<BaseEnemyCard> CardList => _runtime.CardList;
+
+    /// <summary>获取包含素材、收藏品与即时 Token 的真实展示时间线。</summary>
+    public EnemyIntentTimeline IntentTimeline => _runtime.IntentTimeline;
 
     /// <summary>
     /// 获取所属牌组稳定标识，用于无副作用地查询预加载资源。
@@ -79,6 +93,7 @@ public sealed class CardListIntent : UnknownIntent
     public override IEnumerable<string> AssetPaths => base.AssetPaths
         .Concat(CompositeUiAssetPaths)
         .Concat(EnemyCardDeckRegistry.GetAssetPaths(DeckId))
+        .Concat(TimelineCardAssetPaths)
         .Concat(new SingleAttackIntent(0).AssetPaths)
         .Concat(new MultiAttackIntent(0, 1).AssetPaths)
         .Concat(new DefendIntent().AssetPaths)

@@ -367,6 +367,52 @@ public sealed class LiveProjectionTests
         Assert.Same(card, state.CurrentCards.Single());
     }
 
+    /// <summary>验证重放中后续条件失效只截断该次效果；已有一次成功时整张牌仍保持可用。</summary>
+    [Fact]
+    public void LaterReplayConditionFailureDoesNotDimPreviouslySuccessfulCard()
+    {
+        EnemyCardDefinition definition = ShadowTomorinCardCatalog.Get("WANT_TO_BEING_HUMAN");
+        EnemyCardCombatState state = CreateState("PARTIAL_REPLAY_CONDITION", definition);
+        BaseEnemyCard card = MoveOnlyCardToCurrent(state);
+        card.IncreaseReplayCount();
+        PreparedEnemyCardUnitPlan[] units = Enumerable.Range(0, 2)
+            .Select(replayIndex => new PreparedEnemyCardUnitPlan(
+                card.InstanceKey,
+                card.InstanceKey,
+                card.CardId,
+                replayIndex,
+                EnemyPreparedExecutionMode.Normal,
+                [],
+                [new PreparedDirectEffectsStep(definition.EffectProgramIds)]))
+            .ToArray();
+        EnemyCardScore score = new EnemyCardScoreCalculator().Calculate([card], EnemyCardScoreContext.Identity);
+        PreparedEnemyCardSource source = new(card, maximumAttempts: 2, units);
+        PreparedEnemyCardAction action = new(
+            EnemyActionMetric.Gain,
+            [],
+            [card],
+            [source],
+            new EnemySoftLockDiagnostic(score, score.Attack, score.Total, 1, 0, false));
+        string heartWallId = typeof(STS2_Tomorin_Mod.Powers.AtFieldPower).FullName!;
+        EnemyActionProjectionInput input = new(
+            [new EnemySimulationTarget("TARGET", decimal.One, decimal.One)],
+            64,
+            initialState: EnemyProjectionInitialState.FromCombatState(
+                state,
+                enemyPowers: new Dictionary<string, decimal> { [heartWallId] = 4m }),
+            contentDirectory: EnemyCardDeckRegistry.GetContentDirectory(state.DeckId));
+
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(action, input);
+
+        Assert.True(projection.IsComplete);
+        Assert.DoesNotContain(card.InstanceKey, projection.UnavailableCardKeys);
+        Assert.Equal(decimal.Zero, projection.EndState.GetEnemyPower(heartWallId));
+        Assert.Equal(
+            1m,
+            projection.EndState.GetEnemyPower(
+                typeof(MegaCrit.Sts2.Core.Models.Powers.StrengthPower).FullName!));
+    }
+
     /// <summary>创建包含一个标准全体攻击效果的测试定义。</summary>
     private static EnemyCardDefinition CreateDefinition(string scope, decimal attack) =>
         new(

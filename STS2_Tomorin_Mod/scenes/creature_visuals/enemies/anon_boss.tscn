@@ -1,13 +1,10 @@
 [gd_scene load_steps=3 format=3 uid="uid://d2dum3x07c804"]
 
-[ext_resource type="Script" uid="uid://c2yrfx7bd5gc2" path="res://src/Core/Nodes/Combat/NCreatureVisuals.cs" id="1_lgimf"]
+[ext_resource type="Script" uid="uid://drnpxx4p2723s" path="res://src/Core/Nodes/Combat/NCreatureVisuals.cs" id="1_lgimf"]
 [ext_resource type="Texture2D" uid="uid://cdd1glq1i0ei2" path="res://STS2_Tomorin_Mod/Enemies/Anon/Anon.png" id="2_q7ehj"]
 
 [node name="AnonBoss" type="Node2D"]
 script = ExtResource("1_lgimf")
-
-[node name="Visuals1" type="SpineSprite" parent="."]
-unique_name_in_owner = true
 
 [node name="Visuals" type="Sprite2D" parent="."]
 unique_name_in_owner = true

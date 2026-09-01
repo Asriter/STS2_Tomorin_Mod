@@ -3,6 +3,8 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.UI;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Pooling;
+using MegaCrit.Sts2.Core.Models;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
 
 namespace STS2_Tomorin_Mod.Enemy.CardIntents.View;
 
@@ -13,7 +15,8 @@ public partial class NEnemyCardHoverPreview : Control
 {
     private const float PreviewScale = 0.72f;
     private NCard? _previewCard;
-    private BaseEnemyCard? _boundCard;
+    private CardModel? _boundCardModel;
+    private EnemyIntentDisplayKey? _boundDisplayKey;
     private Action<string, Exception?>? _diagnosticSink;
 
     /// <summary>
@@ -34,7 +37,7 @@ public partial class NEnemyCardHoverPreview : Control
     public bool IsShowing => GodotObject.IsInstanceValid(_previewCard) && _previewCard!.Visible;
 
     /// <summary>获取当前放大预览绑定的稳定实例键；未显示时为空。</summary>
-    public EnemyCardInstanceKey? HoveredCardKey => _boundCard?.InstanceKey;
+    public EnemyIntentDisplayKey? HoveredDisplayKey => _boundDisplayKey;
 
     /// <summary>
     /// 懒取得或换绑共享放大牌，并将其中心定位到命中的缩略牌中心。
@@ -43,26 +46,30 @@ public partial class NEnemyCardHoverPreview : Control
     /// <param name="thumbnailRect">缩略牌全局命中矩形。</param>
     /// <param name="diagnosticSink">单卡描述兼容错误接收器。</param>
     public void ShowCard(
-        BaseEnemyCard card,
+        CardModel cardModel,
+        string descriptionOverride,
+        EnemyIntentDisplayKey displayKey,
         Rect2 thumbnailRect,
         Action<string, Exception?> diagnosticSink)
     {
-        ArgumentNullException.ThrowIfNull(card);
+        ArgumentNullException.ThrowIfNull(cardModel);
+        ArgumentNullException.ThrowIfNull(displayKey);
         ArgumentNullException.ThrowIfNull(diagnosticSink);
         _diagnosticSink = diagnosticSink;
-        EnsurePreviewCard(card);
+        EnsurePreviewCard(cardModel);
 
-        if (!ReferenceEquals(_boundCard, card))
+        if (!ReferenceEquals(_boundCardModel, cardModel) || !Equals(_boundDisplayKey, displayKey))
         {
-            _boundCard = card;
-            BindVisuals(card);
+            _boundCardModel = cardModel;
+            _boundDisplayKey = displayKey;
+            BindVisuals(cardModel, descriptionOverride);
         }
 
         _previewCard!.Visible = true;
-        _previewCard.PivotOffset = _previewCard.Size / 2f;
+        // 原版 NCard 根尺寸为零，卡面以根原点为中心绘制；直接把根原点放到缩略牌中心。
+        _previewCard.PivotOffset = Vector2.Zero;
         _previewCard.Scale = Vector2.One * PreviewScale;
-        // Godot Control 围绕 PivotOffset 缩放；未缩放尺寸的一半才是保持视觉中心不偏移的原点补偿。
-        _previewCard.GlobalPosition = thumbnailRect.GetCenter() - _previewCard.Size / 2f;
+        _previewCard.GlobalPosition = thumbnailRect.GetCenter();
     }
 
     /// <summary>
@@ -76,7 +83,7 @@ public partial class NEnemyCardHoverPreview : Control
             return false;
         }
 
-        return NEnemyIntentCardSlot.TryGetScaledGlobalRect(_previewCard, out rect);
+        return NEnemyIntentCardSlot.TryGetCardGlobalRect(_previewCard, out rect);
     }
 
     /// <summary>
@@ -92,7 +99,8 @@ public partial class NEnemyCardHoverPreview : Control
         }
 
         _previewCard = null;
-        _boundCard = null;
+        _boundCardModel = null;
+        _boundDisplayKey = null;
         _diagnosticSink = null;
     }
 
@@ -108,41 +116,43 @@ public partial class NEnemyCardHoverPreview : Control
     /// <summary>
     /// 首次悬停时从原版池取得 NCard，并关闭其全部交互与高亮。
     /// </summary>
-    private void EnsurePreviewCard(BaseEnemyCard card)
+    private void EnsurePreviewCard(CardModel cardModel)
     {
         if (GodotObject.IsInstanceValid(_previewCard))
         {
             return;
         }
 
-        NCard previewCard = NCard.Create(card.CardModel, ModelVisibility.Visible) ??
+        NCard previewCard = NCard.Create(cardModel, ModelVisibility.Visible) ??
                             throw new InvalidOperationException("原版 NCard.Create 未返回 Hover 预览节点。");
         _previewCard = previewCard;
         AddChild(previewCard);
         previewCard.SetAnchorsAndOffsetsPreset(LayoutPreset.TopLeft, LayoutPresetMode.KeepSize);
         NEnemyIntentCardSlot.DisableInteractionRecursive(previewCard);
-        _boundCard = null;
+        _boundCardModel = null;
+        _boundDisplayKey = null;
     }
 
     /// <summary>
     /// 先执行原版视觉刷新以清理池化状态，再在描述非空时覆写专用标签。
     /// </summary>
-    private void BindVisuals(BaseEnemyCard card)
+    private void BindVisuals(CardModel cardModel, string descriptionOverride)
     {
         if (_previewCard is null)
         {
             throw new InvalidOperationException("共享 Hover 卡牌尚未创建。");
         }
 
-        _previewCard.Model = card.CardModel;
+        _previewCard.Model = cardModel;
         _previewCard.UpdateVisuals(PileType.None, CardPreviewMode.None);
+        _previewCard.Modulate = Colors.White;
         _previewCard.KillRarityGlow();
         if (GodotObject.IsInstanceValid(_previewCard.CardHighlight))
         {
             _previewCard.CardHighlight.Visible = false;
         }
 
-        string? overrideText = EnemyCardDescriptionPresenter.BuildOverrideText(card.DescriptionOverride);
+        string? overrideText = EnemyCardDescriptionPresenter.BuildOverrideText(descriptionOverride);
         if (overrideText is null)
         {
             return;
@@ -155,7 +165,7 @@ public partial class NEnemyCardHoverPreview : Control
         }
         catch (Exception exception)
         {
-            _diagnosticSink?.Invoke($"卡牌 {card.InstanceKey} 的 Hover 预览无法应用描述覆写，已保留原版描述。", exception);
+            _diagnosticSink?.Invoke($"展示槽 {_boundDisplayKey} 的 Hover 预览无法应用描述覆写，已保留原版描述。", exception);
         }
     }
 }

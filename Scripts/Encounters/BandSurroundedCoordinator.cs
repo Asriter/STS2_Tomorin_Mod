@@ -12,32 +12,42 @@ namespace STS2_Tomorin_Mod.Encounters;
 internal static class BandSurroundedCoordinator
 {
     /// <summary>
-    /// 幂等初始化玩家与左右敌人的原生夹击 Power。
+    /// 按敌人的 Encounter 槽位幂等初始化其原生夹击 Power。
     /// </summary>
-    /// <param name="leftEnemy">位于玩家左侧的敌人。</param>
-    /// <param name="rightEnemy">位于玩家右侧的敌人。</param>
-    public static async Task Initialize(Creature leftEnemy, Creature rightEnemy)
+    /// <param name="enemy">刚加入战斗房间的乐队精英敌人。</param>
+    public static async Task InitializeFor(Creature enemy)
     {
         var context = new ThrowingPlayerChoiceContext();
-        var combatState = rightEnemy.CombatState ??
-                          throw new InvalidOperationException("乐队夹击初始化时右侧敌人尚未绑定战斗状态。");
-        foreach (var player in combatState.Players)
+        var combatState = enemy.CombatState ??
+                          throw new InvalidOperationException("乐队夹击初始化时敌人尚未绑定战斗状态。");
+
+        if (enemy.SlotName == BandMemberEncounter.LeftMember)
         {
-            var surrounded = player.Creature.GetPower<SurroundedPower>();
-            if (surrounded == null)
+            if (!enemy.HasPower<BackAttackLeftPower>())
             {
-                await PowerCmd.Apply<SurroundedPower>(context, player.Creature, 1m, rightEnemy, null);
+                await PowerCmd.Apply<BackAttackLeftPower>(context, enemy, 1m, enemy, null);
+            }
+
+            return;
+        }
+
+        if (enemy.SlotName != BandMemberEncounter.RightMember)
+        {
+            throw new InvalidOperationException(
+                $"乐队夹击初始化收到未知敌人槽位：{enemy.SlotName ?? "<null>"}。");
+        }
+
+        foreach (var opponent in combatState.GetOpponentsOf(enemy))
+        {
+            if (!opponent.HasPower<SurroundedPower>())
+            {
+                await PowerCmd.Apply<SurroundedPower>(context, opponent, 1m, enemy, null);
             }
         }
 
-        if (!leftEnemy.HasPower<BackAttackLeftPower>())
+        if (!enemy.HasPower<BackAttackRightPower>())
         {
-            await PowerCmd.Apply<BackAttackLeftPower>(context, leftEnemy, 1m, leftEnemy, null);
-        }
-
-        if (!rightEnemy.HasPower<BackAttackRightPower>())
-        {
-            await PowerCmd.Apply<BackAttackRightPower>(context, rightEnemy, 1m, rightEnemy, null);
+            await PowerCmd.Apply<BackAttackRightPower>(context, enemy, 1m, enemy, null);
         }
     }
 

@@ -1,0 +1,286 @@
+{
+  "version": 3,
+  "targets": {
+    "net9.0": {
+      "Alchyr.Sts2.BaseLib/3.4.5": {
+        "type": "package",
+        "compile": {
+          "lib/net9.0/BaseLib.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net9.0/BaseLib.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Alchyr.Sts2.ModAnalyzers/0.1.9": {
+        "type": "package"
+      },
+      "BepInEx.AssemblyPublicizer.MSBuild/0.4.3": {
+        "type": "package",
+        "compile": {
+          "lib/netstandard2.1/_._": {}
+        },
+        "runtime": {
+          "lib/netstandard2.1/AsmResolver.DotNet.dll": {},
+          "lib/netstandard2.1/AsmResolver.PE.File.dll": {},
+          "lib/netstandard2.1/AsmResolver.PE.dll": {},
+          "lib/netstandard2.1/AsmResolver.dll": {},
+          "lib/netstandard2.1/BepInEx.AssemblyPublicizer.MSBuild.dll": {},
+          "lib/netstandard2.1/BepInEx.AssemblyPublicizer.dll": {}
+        },
+        "contentFiles": {
+          "contentFiles/cs/any/IgnoresAccessChecksToAttribute.cs": {
+            "buildAction": "Compile",
+            "codeLanguage": "cs",
+            "copyToOutput": false
+          }
+        },
+        "build": {
+          "build/BepInEx.AssemblyPublicizer.MSBuild.props": {}
+        }
+      },
+      "Godot.SourceGenerators/4.5.1": {
+        "type": "package",
+        "build": {
+          "build/Godot.SourceGenerators.props": {}
+        }
+      },
+      "GodotSharp/4.5.1": {
+        "type": "package",
+        "compile": {
+          "lib/net8.0/GodotSharp.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/GodotSharp.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "GodotSharpEditor/4.5.1": {
+        "type": "package",
+        "dependencies": {
+          "GodotSharp": "4.5.1"
+        },
+        "compile": {
+          "lib/net8.0/GodotSharpEditor.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/GodotSharpEditor.dll": {
+            "related": ".xml"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Alchyr.Sts2.BaseLib/3.4.5": {
+      "sha512": "pq2xvR2LTkaLhMglkN+kAe/uUxEYx0cWPeJGAOUPtlbwMQf42hcStVf1TJrCKQD9iQ3IN+ukAKhclIkGXLTACA==",
+      "type": "package",
+      "path": "alchyr.sts2.baselib/3.4.5",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Content/BaseLib.json",
+        "Content/BaseLib.pck",
+        "Content/BaseLib.props",
+        "README.md",
+        "alchyr.sts2.baselib.3.4.5.nupkg.sha512",
+        "alchyr.sts2.baselib.nuspec",
+        "lib/net9.0/BaseLib.dll",
+        "lib/net9.0/BaseLib.xml"
+      ]
+    },
+    "Alchyr.Sts2.ModAnalyzers/0.1.9": {
+      "sha512": "teENiNx0cUVhjLevWBsdZfvhnipwyD6tz3ibFD0s+1b10ABC2dWErjXZS0q5ei3RCe+5PWkwLaBdO3+mHjkykw==",
+      "type": "package",
+      "path": "alchyr.sts2.modanalyzers/0.1.9",
+      "hasTools": true,
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README.md",
+        "alchyr.sts2.modanalyzers.0.1.9.nupkg.sha512",
+        "alchyr.sts2.modanalyzers.nuspec",
+        "analyzers/dotnet/cs/Sts2ModAnalyzers.dll",
+        "tools/tools/install.ps1",
+        "tools/tools/uninstall.ps1"
+      ]
+    },
+    "BepInEx.AssemblyPublicizer.MSBuild/0.4.3": {
+      "sha512": "Z8Qs3JTTHZG1q0DCqY+HFJ8xp92tkEXWyQ7roeWgUvn20tjv0ZNfAdyy13XrRS1jeEoN/weJc81747TbvvwaDg==",
+      "type": "package",
+      "path": "bepinex.assemblypublicizer.msbuild/0.4.3",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "bepinex.assemblypublicizer.msbuild.0.4.3.nupkg.sha512",
+        "bepinex.assemblypublicizer.msbuild.nuspec",
+        "build/BepInEx.AssemblyPublicizer.MSBuild.props",
+        "contentFiles/cs/any/IgnoresAccessChecksToAttribute.cs",
+        "lib/net472/AsmResolver.DotNet.dll",
+        "lib/net472/AsmResolver.PE.File.dll",
+        "lib/net472/AsmResolver.PE.dll",
+        "lib/net472/AsmResolver.dll",
+        "lib/net472/BepInEx.AssemblyPublicizer.MSBuild.dll",
+        "lib/net472/BepInEx.AssemblyPublicizer.dll",
+        "lib/netstandard2.1/AsmResolver.DotNet.dll",
+        "lib/netstandard2.1/AsmResolver.PE.File.dll",
+        "lib/netstandard2.1/AsmResolver.PE.dll",
+        "lib/netstandard2.1/AsmResolver.dll",
+        "lib/netstandard2.1/BepInEx.AssemblyPublicizer.MSBuild.dll",
+        "lib/netstandard2.1/BepInEx.AssemblyPublicizer.dll"
+      ]
+    },
+    "Godot.SourceGenerators/4.5.1": {
+      "sha512": "HOHYJQO5A/kzf5CUobeTPOX+JawSvjkDE0v/Fyo4EMYEC2MvCTGUvpJFjqQQmHYLNsiiB7RLVilcnup+jiVfdA==",
+      "type": "package",
+      "path": "godot.sourcegenerators/4.5.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "analyzers/dotnet/cs/Godot.SourceGenerators.dll",
+        "build/Godot.SourceGenerators.props",
+        "godot.sourcegenerators.4.5.1.nupkg.sha512",
+        "godot.sourcegenerators.nuspec"
+      ]
+    },
+    "GodotSharp/4.5.1": {
+      "sha512": "5CFnEHT+FByv5desNHMipz/209SCrWR9CGWFZjGHnXupl1Rw8U8q4nf65/unqZVL97Rx+3J5hskPMoDGaiZL9g==",
+      "type": "package",
+      "path": "godotsharp/4.5.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "godotsharp.4.5.1.nupkg.sha512",
+        "godotsharp.nuspec",
+        "lib/net8.0/GodotSharp.dll",
+        "lib/net8.0/GodotSharp.xml"
+      ]
+    },
+    "GodotSharpEditor/4.5.1": {
+      "sha512": "8CM49047b0Us3qPJo6L7kdldreOvR7JCoXlKoSHzpA0TQP6+Qnoxz/26GZ1ONg2wW4vV9uzor0AHXSGUFP9XSw==",
+      "type": "package",
+      "path": "godotsharpeditor/4.5.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "godotsharpeditor.4.5.1.nupkg.sha512",
+        "godotsharpeditor.nuspec",
+        "lib/net8.0/GodotSharpEditor.dll",
+        "lib/net8.0/GodotSharpEditor.xml"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net9.0": [
+      "Alchyr.Sts2.BaseLib >= *",
+      "Alchyr.Sts2.ModAnalyzers >= *",
+      "BepInEx.AssemblyPublicizer.MSBuild >= 0.4.3",
+      "Godot.SourceGenerators >= 4.5.1",
+      "GodotSharp >= 4.5.1",
+      "GodotSharpEditor >= 4.5.1"
+    ]
+  },
+  "packageFolders": {
+    "G:\\MyGame\\STS2_Tomorin_Mod\\packages": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "G:\\MyGame\\STS2_Tomorin_Mod\\STS2_Tomorin_Mod.csproj",
+      "projectName": "STS2_Tomorin_Mod",
+      "projectPath": "G:\\MyGame\\STS2_Tomorin_Mod\\STS2_Tomorin_Mod.csproj",
+      "packagesPath": "G:\\MyGame\\STS2_Tomorin_Mod\\packages",
+      "outputPath": "G:\\MyGame\\STS2_Tomorin_Mod\\.codex-task9-harness\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "G:\\MyGame\\STS2_Tomorin_Mod\\NuGet.Config",
+        "C:\\Users\\Administrator\\AppData\\Roaming\\NuGet\\NuGet.Config"
+      ],
+      "originalTargetFrameworks": [
+        "net9.0"
+      ],
+      "sources": {
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "9.0.300"
+    },
+    "frameworks": {
+      "net9.0": {
+        "targetAlias": "net9.0",
+        "dependencies": {
+          "Alchyr.Sts2.BaseLib": {
+            "suppressParent": "All",
+            "target": "Package",
+            "version": "[*, )"
+          },
+          "Alchyr.Sts2.ModAnalyzers": {
+            "target": "Package",
+            "version": "[*, )"
+          },
+          "BepInEx.AssemblyPublicizer.MSBuild": {
+            "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+            "suppressParent": "All",
+            "target": "Package",
+            "version": "[0.4.3, )"
+          },
+          "Godot.SourceGenerators": {
+            "target": "Package",
+            "version": "[4.5.1, )",
+            "autoReferenced": true
+          },
+          "GodotSharp": {
+            "target": "Package",
+            "version": "[4.5.1, )",
+            "autoReferenced": true
+          },
+          "GodotSharpEditor": {
+            "target": "Package",
+            "version": "[4.5.1, )",
+            "autoReferenced": true
+          }
+        },
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.312/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}

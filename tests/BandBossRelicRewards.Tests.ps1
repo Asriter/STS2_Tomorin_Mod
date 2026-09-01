@@ -22,6 +22,8 @@ $relicPaths = @(
     "Scripts/Relics/SoyoBase.cs",
     "Scripts/Relics/RaanaGuitar.cs")
 $tomorinPool = Get-RepositoryContent "Scripts/RelicPools/TomorinRelicPool.cs"
+$lifecycle = Get-RepositoryContent "Scripts/Enemy/BandMemberRelicRewardLifecycle.cs"
+$encounterRewards = Get-RepositoryContent "Scripts/Encounters/BandMemberEncounterRewardPolicy.cs"
 
 foreach ($relicPath in $relicPaths) {
     $relic = Get-RepositoryContent $relicPath
@@ -62,11 +64,53 @@ foreach ($entry in $bossRewards.GetEnumerator()) {
     $boss = Get-RepositoryContent $entry.Key
     Assert-Matches $boss "ShouldGrantBossReward\s*=>\s*true" `
         "$($entry.Key) must enable its boss-only relic reward by default."
-    Assert-Matches $boss "BandBossRelicReward\.Add<$($entry.Value)>\s*\(" `
-        "$($entry.Key) must grant $($entry.Value)."
+    Assert-Matches $boss "BandMemberRelicRewardLifecycle\.RecordEarnedAndGrantBossReward<$($entry.Value)>\s*\(" `
+        "$($entry.Key) must route $($entry.Value) through the original boss reward trigger."
     Assert-NotMatches $boss "new\s+RelicReward\(RelicRarity\." `
         "$($entry.Key) must not generate a random relic reward."
 }
+
+$anonBoss = Get-RepositoryContent "Scripts/Enemy/Anon.cs"
+$anonEscapeBlock = [regex]::Match(
+    $anonBoss,
+    'private\s+async\s+Task\s+RunState[\s\S]*?(?=protected\s+virtual\s+Task\s+AfterEscapeCompleted)').Value
+Assert-Matches $anonBoss "if\s*\(_isSecondPhase\)[\s\S]*?RecordEarnedAndGrantBossReward<AnonGuitar>" `
+    "Anon must record its relic only from the second-phase death branch."
+Assert-Matches $anonEscapeBlock "CreatureCmd\.Escape" `
+    "The Anon escape regression check could not locate the escape path."
+Assert-NotMatches $anonEscapeBlock "RecordEarnedAndGrantBossReward" `
+    "Anon escape must not earn AnonGuitar."
+
+$takiBoss = Get-RepositoryContent "Scripts/Enemy/Taki.cs"
+$takiDeathBlock = [regex]::Match(
+    $takiBoss,
+    'private\s+void\s+PhaseThreeClearCallBack[\s\S]*?(?=private\s+async\s+Task\s+RunCallBack)').Value
+$takiEscapeBlock = [regex]::Match(
+    $takiBoss,
+    'private\s+async\s+Task\s+RunCallBack[\s\S]*?(?=protected\s+virtual\s+Task\s+AfterEscapeCompleted)').Value
+Assert-Matches $takiDeathBlock "RecordEarnedAndGrantBossReward<TakiDrum>" `
+    "Taki must record its relic from the actual Creature.Died callback."
+Assert-Matches $takiEscapeBlock "CreatureCmd\.Escape" `
+    "The Taki escape regression check could not locate the escape path."
+Assert-NotMatches $takiEscapeBlock "RecordEarnedAndGrantBossReward" `
+    "Taki's third-phase HP-lock escape must not earn TakiDrum."
+
+Assert-Matches $lifecycle "BandMemberEncounter" `
+    "The shared boss lifecycle must record earned rewards for BandMemberEncounter."
+Assert-Matches $lifecycle "BandBossRelicReward\.Add<TRelic>" `
+    "The shared lifecycle must preserve direct rewards for original boss rooms."
+Assert-Matches $encounterRewards "player\.Relics" `
+    "Encounter rewards must filter relics each player already owns."
+Assert-Matches $encounterRewards "room\.ExtraRewards" `
+    "Encounter rewards must filter duplicate pending relic rewards."
+Assert-Matches $encounterRewards "BandMemberKind\.Anon[\s\S]*AnonGuitar" `
+    "Anon must map to AnonGuitar."
+Assert-Matches $encounterRewards "BandMemberKind\.Taki[\s\S]*TakiDrum" `
+    "Taki must map to TakiDrum."
+Assert-Matches $encounterRewards "BandMemberKind\.Soyo[\s\S]*SoyoBase" `
+    "Soyo must map to SoyoBase."
+Assert-Matches $encounterRewards "BandMemberKind\.Raana[\s\S]*RaanaGuitar" `
+    "Raana must map to RaanaGuitar."
 
 foreach ($elitePath in @(
         "Scripts/Enemy/Elite/AnonElite.cs",

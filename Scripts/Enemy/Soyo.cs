@@ -18,6 +18,7 @@ using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Nodes.Vfx;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
+using STS2_Tomorin_Mod.Encounters;
 using STS2_Tomorin_Mod.Powers;
 using STS2_Tomorin_Mod.Relics;
 
@@ -128,9 +129,12 @@ public class Soyo : CustomMonsterModel
 
     private void OnDeath(Creature creature)
     {
-        if (creature == Creature && ShouldGrantBossReward)
+        if (creature == Creature)
         {
-            BandBossRelicReward.Add<SoyoBase>((CombatRoom)creature.CombatState.RunState.CurrentRoom);
+            BandMemberRelicRewardLifecycle.RecordEarnedAndGrantBossReward<SoyoBase>(
+                creature,
+                BandMemberKind.Soyo,
+                ShouldGrantBossReward);
         }
     }
 

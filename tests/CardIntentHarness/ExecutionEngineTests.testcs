@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -214,7 +215,9 @@ public sealed class ExecutionEngineTests
                 return Task.CompletedTask;
             },
             collectionPowerExecutor: _ => Task.CompletedTask);
-        EnemyCardExecutionEngine engine = new(abilityHooks: new NoOpAbilityHooks());
+        EnemyCardExecutionEngine engine = new(
+            abilityHooks: new NoOpAbilityHooks(),
+            delayExecutor: (_, _) => Task.CompletedTask);
 
         await engine.ExecutePreparedActionAsync(
             combatState,
@@ -227,9 +230,9 @@ public sealed class ExecutionEngineTests
         Assert.NotEqual(EnemyCardRuntimePhase.Faulted, combatState.RuntimePhase);
     }
 
-    /// <summary>验证投影与真实执行只重验冻结条件，失败时报告损坏而不执行另一个分支。</summary>
+    /// <summary>验证实时条件失效只置灰并跳过该牌，不污染投影完整性或整轮执行。</summary>
     [Fact]
-    public async Task FrozenConditionFailureMarksProjectionIncompleteAndExecutionFaulted()
+    public async Task FrozenConditionFailureMarksOnlyCardUnavailableAndExecutionContinues()
     {
         decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
         EnemyCardDefinition definition = new(
@@ -256,10 +259,167 @@ public sealed class ExecutionEngineTests
             new EnemyActionProjectionInput([new EnemySimulationTarget("TARGET", 1m, 1m)], 64));
         await fixture.State.ExecuteCardsAsync([]);
 
-        Assert.False(projection.IsComplete);
+        Assert.True(projection.IsComplete);
+        Assert.Contains(action.Sources.Single().SourceKey, projection.UnavailableCardKeys);
         Assert.Empty(attacks);
-        Assert.Equal(EnemyCardRuntimePhase.Faulted, combatState.RuntimePhase);
-        Assert.Contains("冻结出牌条件", combatState.FaultDiagnostic, StringComparison.Ordinal);
+        Assert.Equal(EnemyCardRuntimePhase.Idle, combatState.RuntimePhase);
+        Assert.Null(combatState.FaultDiagnostic);
+    }
+
+    /// <summary>验证真实条件检查发生在当前执行实例入栈之后，ThisNoNeed 能排除自身并消费另一来源。</summary>
+    [Fact]
+    public async Task ThisNoNeedConditionCanReadCurrentExecutingCardBeforeEffects()
+    {
+        EnemyCardDefinition sourceDefinition = ShadowTomorinCardCatalog.Get("THIS_NO_NEED");
+        EnemyCardDefinition expendableDefinition = CreateDefinition(
+            "THIS_NO_NEED_EXPENDABLE",
+            attack: 1m,
+            block: decimal.Zero,
+            EnemyCardLifecycle.Discard);
+        ExecutionFixture fixture = CreateFixture(
+            "THIS_NO_NEED_CONDITION",
+            sourceDefinition,
+            attackAllExecutor: (_, _) => Task.CompletedTask,
+            defendExecutor: _ => Task.CompletedTask);
+        EnemyCardCombatState combatState = PrepareSingleUnitAction(fixture.State, sourceDefinition);
+        ExecutionEnemyCard expendable = new(expendableDefinition);
+        combatState.AddGeneratedCard(expendable, EnemyCardZone.Current);
+
+        await fixture.State.ExecuteCardsAsync([]);
+
+        Assert.False(
+            combatState.RuntimePhase == EnemyCardRuntimePhase.Faulted,
+            combatState.FaultDiagnostic);
+        Assert.Equal(EnemyCardRuntimePhase.Idle, combatState.RuntimePhase);
+        Assert.Null(combatState.FaultDiagnostic);
+        Assert.Contains(combatState.ExhaustPile, card => card.InstanceKey == expendable.InstanceKey);
+        Assert.DoesNotContain(combatState.CurrentCards, card => card.InstanceKey == expendable.InstanceKey);
+    }
+
+    /// <summary>
+    /// 验证生产执行引擎在有效卡牌效果完成后保留两秒展示时间。
+    /// </summary>
+    [Fact]
+    public async Task EffectfulCardUnitPausesForTwoSecondsAfterResolving()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition(
+            "PACING",
+            attack,
+            decimal.Zero,
+            EnemyCardLifecycle.Discard);
+        Stopwatch stopwatch = new();
+        TimeSpan? effectCompletedAt = null;
+        ExecutionFixture fixture = CreateFixture("PACING", definition);
+        EnemyCardCombatState combatState = PrepareSingleUnitAction(fixture.State, definition);
+        EnemyCardExecutionContext context = new(
+            fixture.Owner,
+            fixture.State,
+            new ThrowingPlayerChoiceContext(),
+            [],
+            DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
+            shouldStopExecution: () => false,
+            attackAllExecutor: (_, _) =>
+            {
+                effectCompletedAt = stopwatch.Elapsed;
+                return Task.CompletedTask;
+            },
+            collectionPowerExecutor: _ => Task.CompletedTask);
+        EnemyCardExecutionEngine engine = new(abilityHooks: new NoOpAbilityHooks());
+
+        stopwatch.Start();
+        await engine.ExecutePreparedActionAsync(
+            combatState,
+            context,
+            new EnemyCardRandomSource(_ => 0),
+            stepLimit: 16);
+        stopwatch.Stop();
+
+        Assert.NotNull(effectCompletedAt);
+        Assert.InRange(effectCompletedAt.Value, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
+        Assert.InRange(stopwatch.Elapsed, TimeSpan.FromMilliseconds(1800), TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>验证没有提交任何卡牌效果的成功单元不会产生展示停顿。</summary>
+    [Fact]
+    public async Task EmptyCardUnitDoesNotPause()
+    {
+        EnemyCardDefinition definition = new(
+            new EnemyCardId("STS2_TOMORIN_MOD:EXECUTION_EMPTY_PACING_CARD"),
+            new StrikeTomorin(),
+            EnemyCardTag.Ability,
+            EnemyCardScoreProfile.Zero,
+            effects: []);
+        ExecutionFixture fixture = CreateFixture("EMPTY_PACING", definition);
+        EnemyCardCombatState combatState = PrepareSingleUnitAction(fixture.State, definition);
+        EnemyCardExecutionContext context = new(
+            fixture.Owner,
+            fixture.State,
+            new ThrowingPlayerChoiceContext(),
+            [],
+            DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
+            shouldStopExecution: () => false,
+            collectionPowerExecutor: _ => Task.CompletedTask);
+        List<TimeSpan> pauses = [];
+        EnemyCardExecutionEngine engine = new(
+            abilityHooks: new NoOpAbilityHooks(),
+            delayExecutor: (duration, _) =>
+            {
+                pauses.Add(duration);
+                return Task.CompletedTask;
+            });
+
+        await engine.ExecutePreparedActionAsync(
+            combatState,
+            context,
+            new EnemyCardRandomSource(_ => 0),
+            stepLimit: 16);
+
+        Assert.Empty(pauses);
+    }
+
+    /// <summary>验证同一牌的每次成功重放都在效果后独立停顿。</summary>
+    [Fact]
+    public async Task ReplayUnitsEachPauseAfterTheirEffects()
+    {
+        decimal attack = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        EnemyCardDefinition definition = CreateDefinition(
+            "REPLAY_PACING",
+            attack,
+            decimal.Zero,
+            EnemyCardLifecycle.Discard);
+        ExecutionFixture fixture = CreateFixture("REPLAY_PACING", definition);
+        EnemyCardCombatState combatState = PrepareAction(fixture.State, definition, successfulUnitCount: 2);
+        List<string> sequence = [];
+        EnemyCardExecutionContext context = new(
+            fixture.Owner,
+            fixture.State,
+            new ThrowingPlayerChoiceContext(),
+            [],
+            DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
+            shouldStopExecution: () => false,
+            attackAllExecutor: (_, _) =>
+            {
+                sequence.Add("effect");
+                return Task.CompletedTask;
+            },
+            collectionPowerExecutor: _ => Task.CompletedTask);
+        EnemyCardExecutionEngine engine = new(
+            abilityHooks: new NoOpAbilityHooks(),
+            delayExecutor: (duration, _) =>
+            {
+                Assert.Equal(TimeSpan.FromSeconds(2), duration);
+                sequence.Add("pause");
+                return Task.CompletedTask;
+            });
+
+        await engine.ExecutePreparedActionAsync(
+            combatState,
+            context,
+            new EnemyCardRandomSource(_ => 0),
+            stepLimit: 16);
+
+        Assert.Equal(["effect", "pause", "effect", "pause"], sequence);
     }
 
     /// <summary>
@@ -684,7 +844,16 @@ public sealed class ExecutionEngineTests
                 totalScoreLock: decimal.Zero,
                 candidateAttemptCount: 1,
                 rejectedCandidateCount: 0,
-                wasForcedByAttemptLimit: false));
+                wasForcedByAttemptLimit: false),
+            effectiveCardStates:
+            [
+                new EnemyFrozenEffectiveCardState(
+                    card.InstanceKey,
+                    frozenN: 0,
+                    frozenX: null,
+                    multiplier: 1,
+                    wasCounted: true)
+            ]);
         typeof(EnemyCardCombatState)
             .GetProperty(nameof(EnemyCardCombatState.PreparedAction))!
             .SetValue(state, action);
@@ -730,7 +899,9 @@ public sealed class ExecutionEngineTests
             collectionPowerExecutor: _ => Task.CompletedTask,
             combatStateOverride: DispatchProxy.Create<ICombatState, NullCombatStateProxy>(),
             rules: rules,
-            executionEngine: new EnemyCardExecutionEngine(abilityHooks: new NoOpAbilityHooks()));
+            executionEngine: new EnemyCardExecutionEngine(
+                abilityHooks: new NoOpAbilityHooks(),
+                delayExecutor: (_, _) => Task.CompletedTask));
         return new ExecutionFixture(state, owner, rules, resolvedRandomIndexSelector);
     }
 

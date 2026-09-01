@@ -1,0 +1,209 @@
+using STS2_Tomorin_Mod.Enemy.CardIntents;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
+using STS2_Tomorin_Mod.Enemy.CardIntents.Test;
+using Xunit;
+
+namespace CardIntentHarness;
+
+public sealed class IntentTimelineTests
+{
+    private static readonly EnemyCardDeckId DeckId = new("STS2_TOMORIN_MOD:TIMELINE_TEST_DECK");
+
+    [Fact]
+    public void TimelinePlacesConsumedCardAndTokenAfterConsumerAndSuppressesConsumedSourceDuplicate()
+    {
+        IReadOnlyList<BaseEnemyCard> deck = CreateDeck();
+        BaseEnemyCard haruhikage = Find(deck, "HARUHIKAGE", 0);
+        BaseEnemyCard attack = Find(deck, "ATTACK", 0);
+        BaseEnemyCard consumer = Find(deck, "HITOSHIZUKU", 0);
+        BaseEnemyCard hope = Find(deck, "HOPE", 0);
+        BaseEnemyCard material = Find(deck, "HITOSHIZUKU", 1);
+        EnemyCardDefinition tokenDefinition = CardIntentTestCardCatalog.AllDefinitions.Values
+            .Single(definition => definition.CardId.Value.EndsWith("HITOSHIZUKU_TOKEN", StringComparison.Ordinal));
+        EnemyCardInstanceKey tokenKey = EnemyCardInstanceKey.FromRuntimeInstanceId(71);
+        PreparedEnemyCardUnitPlan tokenUnit = Unit(
+            consumer.InstanceKey, tokenKey, tokenDefinition.CardId, []);
+        PreparedEnemyCardUnitPlan consumerUnit = Unit(
+            consumer.InstanceKey,
+            consumer.InstanceKey,
+            consumer.CardId,
+            [
+                new PreparedConsumedCardStep(material.InstanceKey, null),
+                new PreparedDirectEffectsStep(consumer.Definition.Effects.Select(effect => effect.ProgramId)),
+                new PreparedComposeResultStep(
+                    tokenDefinition.CardId,
+                    tokenKey,
+                    EnemyCardTokenTiming.Immediate,
+                    false,
+                    tokenUnit)
+            ]);
+        PreparedEnemyCardAction action = Action(
+            [haruhikage, attack, consumer, hope, material],
+            [
+                new PreparedEnemyCardSource(haruhikage, 1, [], 0),
+                Success(attack),
+                new PreparedEnemyCardSource(consumer, 1, [consumerUnit]),
+                Success(hope),
+                new PreparedEnemyCardSource(material, 1, [], 0)
+            ]);
+
+        EnemyIntentTimeline timeline = EnemyIntentTimelineBuilder.Build(action);
+
+        Assert.Equal(
+            [
+                EnemyIntentTimelineRole.InsufficientMaterial,
+                EnemyIntentTimelineRole.Source,
+                EnemyIntentTimelineRole.Source,
+                EnemyIntentTimelineRole.ConsumedCard,
+                EnemyIntentTimelineRole.ComposeToken,
+                EnemyIntentTimelineRole.Source
+            ],
+            timeline.Entries.Select(entry => entry.Role));
+        Assert.Equal(
+            [haruhikage.InstanceKey, attack.InstanceKey, consumer.InstanceKey, material.InstanceKey, tokenKey, hope.InstanceKey],
+            timeline.Entries.Select(entry => entry.CardInstanceKey));
+        Assert.True(timeline.Entries[0].IsDimmed);
+        Assert.True(timeline.Entries[3].IsDimmed);
+        Assert.False(timeline.Entries[4].IsDimmed);
+    }
+
+    [Fact]
+    public void PresentationKeepsInsufficientMaterialEmptyAndAttributesParentAndTokenAttacksSeparately()
+    {
+        IReadOnlyList<BaseEnemyCard> deck = CreateDeck();
+        BaseEnemyCard haruhikage = Find(deck, "HARUHIKAGE", 0);
+        BaseEnemyCard consumer = Find(deck, "HITOSHIZUKU", 0);
+        BaseEnemyCard material = Find(deck, "HITOSHIZUKU", 1);
+        BaseEnemyCard hope = Find(deck, "HOPE", 0);
+        EnemyCardDefinition tokenDefinition = CardIntentTestCardCatalog.AllDefinitions.Values
+            .Single(definition => definition.CardId.Value.EndsWith("HITOSHIZUKU_TOKEN", StringComparison.Ordinal));
+        EnemyCardInstanceKey tokenKey = EnemyCardInstanceKey.FromRuntimeInstanceId(72);
+        PreparedEnemyCardUnitPlan tokenUnit = Unit(consumer.InstanceKey, tokenKey, tokenDefinition.CardId, []);
+        PreparedEnemyCardUnitPlan consumerUnit = Unit(
+            consumer.InstanceKey, consumer.InstanceKey, consumer.CardId,
+            [new PreparedConsumedCardStep(material.InstanceKey, null),
+             new PreparedComposeResultStep(tokenDefinition.CardId, tokenKey, EnemyCardTokenTiming.Immediate, false, tokenUnit)]);
+        PreparedEnemyCardAction action = Action(
+            [haruhikage, consumer, hope, material],
+            [new PreparedEnemyCardSource(haruhikage, 1, [], 0),
+             new PreparedEnemyCardSource(consumer, 1, [consumerUnit]),
+             Success(hope),
+             new PreparedEnemyCardSource(material, 1, [], 0)]);
+        EnemyIntentTimeline timeline = EnemyIntentTimelineBuilder.Build(action);
+        LiveActionProjection projection = new(
+            [], true, timelineEffects:
+            [
+                Effect(consumer.InstanceKey, consumer.InstanceKey, consumer.CardId, 6m),
+                Effect(consumer.InstanceKey, tokenKey, tokenDefinition.CardId, 9m, 9m),
+                Effect(hope.InstanceKey, hope.InstanceKey, hope.CardId, targetPower: true)
+            ]);
+
+        EnemyCardListPresentation presentation = EnemyCardIntentPresentationBuilder.Build(timeline, projection);
+
+        EnemyCardIntentPresentation insufficient = presentation.Cards.Single(card =>
+            card.Entry.Role == EnemyIntentTimelineRole.InsufficientMaterial);
+        Assert.True(insufficient.IsDimmed);
+        Assert.Empty(insufficient.Effects);
+        EnemyAttackPresentation parentAttack = Assert.Single(presentation.Cards.Single(card =>
+            card.CardInstanceKey == consumer.InstanceKey).Effects.OfType<EnemyAttackPresentation>());
+        Assert.Equal((6m, 1), (parentAttack.BaseDamage, parentAttack.HitCount));
+        EnemyAttackPresentation tokenAttack = Assert.Single(presentation.Cards.Single(card =>
+            card.CardInstanceKey == tokenKey).Effects.OfType<EnemyAttackPresentation>());
+        Assert.Equal((9m, 2), (tokenAttack.BaseDamage, tokenAttack.HitCount));
+        Assert.Single(presentation.Cards.Single(card =>
+            card.CardInstanceKey == hope.InstanceKey).Effects.OfType<EnemyDebuffPresentation>());
+        Assert.Empty(presentation.Cards.Single(card =>
+            card.CardInstanceKey == material.InstanceKey).Effects);
+    }
+
+    [Fact]
+    public void ConsumedCollectionGetsDimmedSlotAndOwnProjectedEffects()
+    {
+        BaseEnemyCard consumer = Find(CreateDeck(), "ATTACK", 0);
+        const string instanceId = "COLLECTION:0";
+        EnemyCollectionEffectProgram program = EnemyCollectionEffectResolver.GetRequired(
+            CardIntentTestCollectionCatalog.Catalog.GetRequired(CardIntentTestCollectionCatalog.BrokenNoteId));
+        PreparedConsumedCollectionStep collectionStep = new(
+            instanceId,
+            CardIntentTestCollectionCatalog.BrokenNoteId,
+            [new PreparedDirectEffectsStep(program.DirectEffects.Select(effect => effect.ProgramId))]);
+        PreparedEnemyCardUnitPlan unit = Unit(
+            consumer.InstanceKey, consumer.InstanceKey, consumer.CardId, [collectionStep]);
+        PreparedEnemyCardAction action = Action(
+            [consumer], [new PreparedEnemyCardSource(consumer, 1, [unit])]);
+
+        EnemyIntentTimeline timeline = EnemyIntentTimelineBuilder.Build(action);
+        LiveActionProjection projection = new EnemyActionProjectionService().Project(
+            action,
+            new EnemyActionProjectionInput([new EnemySimulationTarget("TARGET", 1m, 1m)], 100));
+        EnemyCardListPresentation presentation = EnemyCardIntentPresentationBuilder.Build(timeline, projection);
+
+        EnemyCardIntentPresentation collection = presentation.Cards.Single(card =>
+            card.Entry.Role == EnemyIntentTimelineRole.ConsumedCollection);
+        Assert.True(collection.IsDimmed);
+        Assert.Single(collection.Effects.OfType<EnemyDefendPresentation>());
+        Assert.Single(collection.Effects.OfType<EnemyBuffPresentation>());
+        Assert.Empty(presentation.Cards.Single(card => card.CardInstanceKey == consumer.InstanceKey).Effects);
+    }
+
+    private static IReadOnlyList<BaseEnemyCard> CreateDeck()
+    {
+        if (!EnemyCardDeckRegistry.IsRegistered(DeckId))
+        {
+            EnemyCardDeckRegistry.Register(
+                DeckId,
+                CardIntentTestCardCatalog.AllDefinitions.Keys
+                    .SelectMany(id => Enumerable.Range(0, 2)
+                        .Select(_ => (Func<BaseEnemyCard>)(() => CardIntentTestCardCatalog.CreateCard(id)))));
+        }
+
+        return EnemyCardDeckRegistry.CreateCombatState(DeckId).DrawPile;
+    }
+
+    private static BaseEnemyCard Find(IReadOnlyList<BaseEnemyCard> cards, string suffix, int copy) => cards
+        .Where(card => card.CardId.Value.EndsWith($"_{suffix}", StringComparison.Ordinal))
+        .ElementAt(copy);
+
+    private static PreparedEnemyCardSource Success(BaseEnemyCard card) =>
+        new(card, 1, [Unit(card.InstanceKey, card.InstanceKey, card.CardId, [])]);
+
+    private static PreparedEnemyCardUnitPlan Unit(
+        EnemyCardInstanceKey root,
+        EnemyCardInstanceKey executing,
+        EnemyCardId id,
+        IEnumerable<PreparedEnemyResolutionStep> steps) =>
+        new(root, executing, id, 0, EnemyPreparedExecutionMode.Normal, [], steps);
+
+    private static PreparedEnemyCardAction Action(
+        IReadOnlyList<BaseEnemyCard> cards,
+        IReadOnlyList<PreparedEnemyCardSource> sources) =>
+        new(
+            EnemyActionMetric.Attack,
+            [],
+            cards,
+            sources,
+            new EnemySoftLockDiagnostic(new EnemyCardScore(0m, 0m), 0m, 0m, 1, 0, false));
+
+    private static EnemyIntentEffectProjection Effect(
+        EnemyCardInstanceKey root,
+        EnemyCardInstanceKey executing,
+        EnemyCardId id,
+        decimal firstDamage = 0m,
+        decimal secondDamage = 0m,
+        bool targetPower = false)
+    {
+        decimal[] damage = secondDamage > 0m ? [firstDamage, secondDamage] : firstDamage > 0m ? [firstDamage] : [];
+        return new EnemyIntentEffectProjection(
+            EnemyIntentDisplayKey.ForCard(executing),
+            root,
+            executing,
+            id,
+            0,
+            [new EnemyTargetProjection(
+                "TARGET",
+                damage.Select(value => new EnemyDamageHitProjection(value, value)).ToArray(),
+                targetPower ? new Dictionary<string, decimal> { ["DEBUFF"] = 1m } : new Dictionary<string, decimal>())],
+            0m,
+            new Dictionary<string, decimal>());
+    }
+}

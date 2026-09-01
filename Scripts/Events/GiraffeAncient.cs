@@ -23,13 +23,13 @@ public sealed class GiraffeAncient : CustomAncientModel
     /// <summary>
     /// 获取复用的地图节点图标路径。
     /// </summary>
-    public override string? CustomMapIconPath => "res://STS2_Tomorin_Mod/images/ancient_headIcon/Giraffe_Icon.png";
+    public override string? CustomMapIconPath => "res://STS2_Tomorin_Mod/images/boss_icon/Giraffe_Icon.png";
 
     /// <summary>
     /// 获取复用的地图节点描边图标路径。
     /// </summary>
     public override string? CustomMapIconOutlinePath =>
-        "res://STS2_Tomorin_Mod/images/ancient_headIcon/Giraffe_Icon.png";
+        "res://STS2_Tomorin_Mod/images/boss_icon/Giraffe_Icon.png";
 
     /// <summary>
     /// 获取复用的运行历史图标路径。

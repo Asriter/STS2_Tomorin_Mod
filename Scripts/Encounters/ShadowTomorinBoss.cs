@@ -13,12 +13,14 @@ public sealed class ShadowTomorinBoss : CustomEncounterModel
     {
     }
 
+    public override string CustomBgm => "ShadowTomorinBgm";
+    
     protected override bool HasCustomBackground => true;
 
     public override float GetCameraScaling() => 0.9f;
 
     public override string BossNodePath =>
-        "res://STS2_Tomorin_Mod/images/enemy_headIcon/tomorin_boss_headIcon";
+        "res://STS2_Tomorin_Mod/images/boss_icon/Shadow_Tomori_Boss_Icon";
 
     public override string? CustomRunHistoryIconPath =>
         "res://STS2_Tomorin_Mod/images/enemy_headIcon/tomorin_boss_headIcon.png";

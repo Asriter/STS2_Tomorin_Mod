@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using STS2_Tomorin_Mod.Commands;
+using STS2_Tomorin_Mod.Encounters;
 using STS2_Tomorin_Mod.Localization.CustomEnums;
 
 namespace STS2_Tomorin_Mod.Patch;
@@ -74,8 +75,20 @@ internal class HookAfterCombatEndPatch
         await originalLogicTask;
 
         // ------------------------------------------
-        // 【C】后置逻辑 (可选)
+        // 【C】后置逻辑
         // ------------------------------------------
-        // 如果原方法执行完之后你还需要做点什么，可以写在这里
+        // Encounter 不在原生 IterateHookListeners 中，需要显式派发目标 Encounter 的结算钩子。
+        await DispatchBandMemberEncounterAfterCombatEnd(combatState, room);
+    }
+
+    /// <summary>
+    /// 在原生战斗结束 Hook 完成后，仅为当前乐队精英 Encounter 派发专属奖励结算。
+    /// </summary>
+    internal static Task DispatchBandMemberEncounterAfterCombatEnd(CombatState? combatState, CombatRoom room)
+    {
+        ArgumentNullException.ThrowIfNull(room);
+        return combatState?.Encounter is BandMemberEncounter encounter
+            ? encounter.AfterCombatEnd(room)
+            : Task.CompletedTask;
     }
 }

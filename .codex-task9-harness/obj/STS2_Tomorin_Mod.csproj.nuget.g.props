@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <RestoreSuccess Condition=" '$(RestoreSuccess)' == '' ">True</RestoreSuccess>
+    <RestoreTool Condition=" '$(RestoreTool)' == '' ">NuGet</RestoreTool>
+    <ProjectAssetsFile Condition=" '$(ProjectAssetsFile)' == '' ">$(MSBuildThisFileDirectory)project.assets.json</ProjectAssetsFile>
+    <NuGetPackageRoot Condition=" '$(NuGetPackageRoot)' == '' ">G:\MyGame\STS2_Tomorin_Mod\packages</NuGetPackageRoot>
+    <NuGetPackageFolders Condition=" '$(NuGetPackageFolders)' == '' ">G:\MyGame\STS2_Tomorin_Mod\packages</NuGetPackageFolders>
+    <NuGetProjectStyle Condition=" '$(NuGetProjectStyle)' == '' ">PackageReference</NuGetProjectStyle>
+    <NuGetToolVersion Condition=" '$(NuGetToolVersion)' == '' ">6.14.0</NuGetToolVersion>
+  </PropertyGroup>
+  <ItemGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <SourceRoot Include="G:\MyGame\STS2_Tomorin_Mod\packages\" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(Language)' == 'C#' AND '$(ExcludeRestorePackageImports)' != 'true' ">
+    <Compile Include="$(NuGetPackageRoot)\bepinex.assemblypublicizer.msbuild\0.4.3\contentFiles\cs\any\IgnoresAccessChecksToAttribute.cs" Condition="Exists('$(NuGetPackageRoot)\bepinex.assemblypublicizer.msbuild\0.4.3\contentFiles\cs\any\IgnoresAccessChecksToAttribute.cs')">
+      <NuGetPackageId>BepInEx.AssemblyPublicizer.MSBuild</NuGetPackageId>
+      <NuGetPackageVersion>0.4.3</NuGetPackageVersion>
+      <NuGetItemType>Compile</NuGetItemType>
+      <Pack>false</Pack>
+      <Private>False</Private>
+      <Link>IgnoresAccessChecksToAttribute.cs</Link>
+    </Compile>
+  </ItemGroup>
+  <ImportGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <Import Project="$(NuGetPackageRoot)\godot.sourcegenerators\4.5.1\build\Godot.SourceGenerators.props" Condition="Exists('$(NuGetPackageRoot)\godot.sourcegenerators\4.5.1\build\Godot.SourceGenerators.props')" />
+    <Import Project="$(NuGetPackageRoot)\bepinex.assemblypublicizer.msbuild\0.4.3\build\BepInEx.AssemblyPublicizer.MSBuild.props" Condition="Exists('$(NuGetPackageRoot)\bepinex.assemblypublicizer.msbuild\0.4.3\build\BepInEx.AssemblyPublicizer.MSBuild.props')" />
+  </ImportGroup>
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <PkgAlchyr_Sts2_ModAnalyzers Condition=" '$(PkgAlchyr_Sts2_ModAnalyzers)' == '' ">G:\MyGame\STS2_Tomorin_Mod\packages\alchyr.sts2.modanalyzers\0.1.9</PkgAlchyr_Sts2_ModAnalyzers>
+  </PropertyGroup>
+</Project>

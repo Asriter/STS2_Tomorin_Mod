@@ -1,5 +1,6 @@
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
+using STS2_Tomorin_Mod.Encounters;
 
 namespace STS2_Tomorin_Mod.Enemy.Elite;
 
@@ -30,4 +31,13 @@ public sealed class RaanaElite : Raana
     protected override int S4Attack => EliteStatScaler.ScaleDown(base.S4Attack, StatMultiplier);
     protected override int S4HighAttack => EliteStatScaler.ScaleDown(base.S4HighAttack, StatMultiplier);
     protected override bool ShouldGrantBossReward => false;
+
+    /// <summary>
+    /// 保留原 Boss 入场逻辑后，按 Encounter 槽位初始化原生夹击 Power。
+    /// </summary>
+    public override async Task AfterAddedToRoom()
+    {
+        await base.AfterAddedToRoom();
+        await BandSurroundedCoordinator.InitializeFor(Creature);
+    }
 }

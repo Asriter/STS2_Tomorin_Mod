@@ -1,0 +1,100 @@
+using System.Reflection;
+using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.MonsterMoves.Intents;
+using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
+using MegaCrit.Sts2.Core.TestSupport;
+using STS2_Tomorin_Mod.Encounters;
+using STS2_Tomorin_Mod.Enemy.Elite;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.Encounters;
+
+public sealed class BandMemberEncounterLifecycleTests
+{
+    [Theory]
+    [InlineData(typeof(AnonElite))]
+    [InlineData(typeof(TakiElite))]
+    [InlineData(typeof(SoyoElite))]
+    [InlineData(typeof(RaanaElite))]
+    public void EveryBandEliteOwnsTheRoomEntryHookThatInitializesFlanking(Type eliteType)
+    {
+        MethodInfo? hook = eliteType.GetMethod(
+            nameof(MonsterModel.AfterAddedToRoom),
+            BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.NotNull(hook);
+        Assert.Equal(eliteType, hook.DeclaringType);
+    }
+
+    [Fact]
+    public async Task RoomEntryInitializationAppliesNativeFlankingPowersByEncounterSlot()
+    {
+        TestMode.IsOn = true;
+        ModelDb.ResetForTest();
+        ModelDb.Init(
+        [
+            typeof(FlankingProbeMonster),
+            typeof(SurroundedPower),
+            typeof(BackAttackLeftPower),
+            typeof(BackAttackRightPower)
+        ]);
+
+        try
+        {
+            var combatState = new CombatState();
+            Creature playerSideCreature = AddCreature(combatState, CombatSide.Player, null);
+            Creature leftEnemy = AddCreature(combatState, CombatSide.Enemy, BandMemberEncounter.LeftMember);
+            Creature rightEnemy = AddCreature(combatState, CombatSide.Enemy, BandMemberEncounter.RightMember);
+
+            Type coordinatorType = typeof(BandMemberEncounter).Assembly.GetType(
+                "STS2_Tomorin_Mod.Encounters.BandSurroundedCoordinator",
+                throwOnError: true)!;
+            MethodInfo initializeFor = coordinatorType.GetMethod(
+                "InitializeFor",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) ??
+                throw new InvalidOperationException(
+                    "BandSurroundedCoordinator is missing the room-entry InitializeFor method.");
+
+            await Assert.IsAssignableFrom<Task>(initializeFor.Invoke(null, [leftEnemy]));
+            await Assert.IsAssignableFrom<Task>(initializeFor.Invoke(null, [rightEnemy]));
+
+            Assert.True(playerSideCreature.HasPower<SurroundedPower>());
+            Assert.True(leftEnemy.HasPower<BackAttackLeftPower>());
+            Assert.True(rightEnemy.HasPower<BackAttackRightPower>());
+            Assert.False(leftEnemy.HasPower<BackAttackRightPower>());
+            Assert.False(rightEnemy.HasPower<BackAttackLeftPower>());
+        }
+        finally
+        {
+            ModelDb.ResetForTest();
+            TestMode.IsOn = false;
+        }
+    }
+
+    private static Creature AddCreature(CombatState combatState, CombatSide side, string? slot)
+    {
+        var monster = ModelDb.Monster<FlankingProbeMonster>().ToMutable();
+        Creature creature = combatState.CreateCreature(monster, side, slot);
+        combatState.AddCreature(creature);
+        return creature;
+    }
+
+    private sealed class FlankingProbeMonster : MonsterModel
+    {
+        public override int MinInitialHp => 10;
+        public override int MaxInitialHp => 10;
+
+        protected override MonsterMoveStateMachine GenerateMoveStateMachine()
+        {
+            var idle = new MoveState(
+                "FLANKING_PROBE_IDLE",
+                _ => Task.CompletedTask,
+                new UnknownIntent());
+            idle.FollowUpState = idle;
+            return new MonsterMoveStateMachine([idle], idle);
+        }
+    }
+}

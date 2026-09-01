@@ -1,0 +1,6 @@
+G:\MyGame\STS2_Tomorin_Mod\.codex-task9-harness\obj\Debug\net9.0\CardIntentHarness.csproj.AssemblyReference.cache
+G:\MyGame\STS2_Tomorin_Mod\.codex-task9-harness\obj\Debug\net9.0\CardIntentHarness.GeneratedMSBuildEditorConfig.editorconfig
+G:\MyGame\STS2_Tomorin_Mod\.codex-task9-harness\obj\Debug\net9.0\CardIntentHarness.AssemblyInfoInputs.cache
+G:\MyGame\STS2_Tomorin_Mod\.codex-task9-harness\obj\Debug\net9.0\CardIntentHarness.AssemblyInfo.cs
+G:\MyGame\STS2_Tomorin_Mod\.codex-task9-harness\obj\Debug\net9.0\CardIntentHarness.csproj.CoreCompileInputs.cache
+G:\MyGame\STS2_Tomorin_Mod\.codex-task9-harness\obj\Debug\net9.0\CardIntentHarness.sourcelink.json

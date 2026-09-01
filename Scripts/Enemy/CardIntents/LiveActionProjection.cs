@@ -65,6 +65,16 @@ public sealed record EnemyCardReplayProjection(
     IReadOnlyList<EnemyCollectionProjection> CollectionDeltas,
     IReadOnlyList<EnemyGeneratedCardProjection> GeneratedCards);
 
+public sealed record EnemyIntentEffectProjection(
+    Presentation.EnemyIntentDisplayKey DisplayKey,
+    EnemyCardInstanceKey RootSourceKey,
+    EnemyCardInstanceKey? ExecutingCardKey,
+    EnemyCardId? ExecutingCardId,
+    int ReplayIndex,
+    IReadOnlyList<EnemyTargetProjection> Targets,
+    decimal EnemyBlockDelta,
+    IReadOnlyDictionary<string, decimal> EnemyPowerDeltas);
+
 /// <summary>
 /// 表示当前冻结行动基于实时 Power 输入计算出的完整只读投影。
 /// </summary>
@@ -80,13 +90,32 @@ public sealed class LiveActionProjection
         IEnumerable<EnemyCardReplayProjection> units,
         bool isComplete,
         IEnumerable<string>? diagnostics = null,
+        IEnumerable<EnemyIntentEffectProjection>? timelineEffects = null,
         IEnumerable<EnemyFrozenEffectiveCardState>? effectiveCardStates = null,
         EnemyProjectionEndState? endState = null,
-        EnemyActionRiskScore? riskScore = null)
+        EnemyActionRiskScore? riskScore = null,
+        IEnumerable<EnemyCardInstanceKey>? unavailableCardKeys = null)
     {
         Units = Array.AsReadOnly((units ?? throw new ArgumentNullException(nameof(units))).ToArray());
         IsComplete = isComplete;
         Diagnostics = Array.AsReadOnly((diagnostics ?? []).ToArray());
+        TimelineEffects = Array.AsReadOnly((timelineEffects ?? Units.Select(unit =>
+            new EnemyIntentEffectProjection(
+                Presentation.EnemyIntentDisplayKey.ForCard(unit.ExecutingCardKey),
+                unit.RootSourceKey,
+                unit.ExecutingCardKey,
+                unit.ExecutingCardId,
+                unit.ReplayIndex,
+                unit.Targets,
+                unit.EnemyBlockDelta,
+                unit.EnemyPowerDeltas))).ToArray());
+        EnemyCardInstanceKey[] unavailable = (unavailableCardKeys ?? []).ToArray();
+        if (unavailable.Any(key => key is null) || unavailable.Distinct().Count() != unavailable.Length)
+        {
+            throw new ArgumentException("不可用卡牌集合不能包含空值或重复实例键。", nameof(unavailableCardKeys));
+        }
+
+        UnavailableCardKeys = new HashSet<EnemyCardInstanceKey>(unavailable);
         EnemyFrozenEffectiveCardState[] states = (effectiveCardStates ?? []).ToArray();
         if (states.Any(state => state is null) ||
             states.Select(state => state.ExecutingCardInstanceKey).Distinct().Count() != states.Length)
@@ -110,6 +139,11 @@ public sealed class LiveActionProjection
     /// <summary>获取投影不完整、未知修改器或有限步骤截断的诊断集合。</summary>
     public IReadOnlyList<string> Diagnostics { get; }
 
+    public IReadOnlyList<EnemyIntentEffectProjection> TimelineEffects { get; }
+
+    /// <summary>获取因正常出牌条件不满足而置灰、但不会使整项投影失败的卡牌实例。</summary>
+    public IReadOnlySet<EnemyCardInstanceKey> UnavailableCardKeys { get; }
+
     /// <summary>获取与冻结行动共享的逐实际实例 N/X 元数据。</summary>
     public IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> EffectiveCardStates { get; }
 
@@ -125,7 +159,9 @@ public sealed class LiveActionProjection
             Units,
             IsComplete,
             Diagnostics,
+            TimelineEffects,
             EffectiveCardStates.Values,
             EndState,
-            riskScore ?? throw new ArgumentNullException(nameof(riskScore)));
+            riskScore ?? throw new ArgumentNullException(nameof(riskScore)),
+            UnavailableCardKeys);
 }

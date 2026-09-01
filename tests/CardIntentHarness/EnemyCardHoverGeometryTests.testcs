@@ -1,0 +1,39 @@
+using System.Reflection;
+using Godot;
+using STS2_Tomorin_Mod.Enemy.CardIntents.View;
+using Xunit;
+
+namespace CardIntentHarness;
+
+/// <summary>
+/// 验证敌人卡牌 Hover 使用原版卡面的固有边界，而不是零尺寸的 NCard 根 Control。
+/// </summary>
+public sealed class EnemyCardHoverGeometryTests
+{
+    /// <summary>
+    /// 原版 card.tscn 的 NCard 根尺寸为零，卡面以根原点为中心绘制；命中矩形仍须覆盖缩放后的完整卡面。
+    /// </summary>
+    [Fact]
+    public void CenteredCardBoundsRemainHittableWhenNCardRootHasNoSize()
+    {
+        MethodInfo? method = typeof(NEnemyIntentCardSlot).GetMethod(
+            "CalculateCardGlobalRect",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        Vector2 intrinsicCardSize = new(300f, 422f);
+        Transform2D globalTransform = new(
+            rotation: 0f,
+            scale: new Vector2(0.24f, 0.24f),
+            skew: 0f,
+            origin: new Vector2(500f, 300f));
+
+        Rect2 rect = Assert.IsType<Rect2>(method.Invoke(null, [intrinsicCardSize, globalTransform]));
+
+        Assert.InRange(rect.Position.X, 463.999f, 464.001f);
+        Assert.InRange(rect.Position.Y, 249.359f, 249.361f);
+        Assert.InRange(rect.Size.X, 71.999f, 72.001f);
+        Assert.InRange(rect.Size.Y, 101.279f, 101.281f);
+        Assert.True(rect.HasPoint(new Vector2(500f, 300f)));
+    }
+}

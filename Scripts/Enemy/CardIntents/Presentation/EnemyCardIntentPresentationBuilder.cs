@@ -1,74 +1,85 @@
 namespace STS2_Tomorin_Mod.Enemy.CardIntents.Presentation;
 
-/// <summary>
-/// 把完整结构投影纯映射为按公开实例键归属、可由 Godot 视图消费的逐牌 Intent 展示模型。
-/// </summary>
 public static class EnemyCardIntentPresentationBuilder
 {
-    /// <summary>
-    /// 按公开卡列顺序构建不可变展示，并将局部非法结构限制在对应卡牌的 Unknown 中。
-    /// </summary>
-    /// <param name="cardList">当前公开且顺序权威的敌人卡列。</param>
-    /// <param name="projection">从冻结 DFS 计划派生的实时结构投影。</param>
-    /// <returns>不引用 Godot、战斗命令或本地玩家上下文的纯展示模型。</returns>
-    public static EnemyCardListPresentation Build(
-        IReadOnlyList<BaseEnemyCard> cardList,
-        LiveActionProjection projection)
+    public static EnemyCardListPresentation Build(IReadOnlyList<BaseEnemyCard> cardList, LiveActionProjection projection)
     {
         ArgumentNullException.ThrowIfNull(cardList);
+        EnemyIntentTimeline timeline = new(cardList.Select(card => new EnemyIntentTimelineEntry(
+            EnemyIntentDisplayKey.ForCard(card.InstanceKey), card.CardModel, card.DescriptionOverride,
+            EnemyIntentTimelineRole.Source, false, card.InstanceKey, card.CardId)));
+        EnemyIntentEffectProjection[] rootEffects = projection.Units.Select(unit => new EnemyIntentEffectProjection(
+            EnemyIntentDisplayKey.ForCard(unit.RootSourceKey), unit.RootSourceKey, unit.ExecutingCardKey,
+            unit.ExecutingCardId, unit.ReplayIndex, unit.Targets, unit.EnemyBlockDelta, unit.EnemyPowerDeltas)).ToArray();
+        EnemyCardListPresentation built = Build(timeline, new LiveActionProjection(
+            projection.Units,
+            projection.IsComplete,
+            projection.Diagnostics,
+            rootEffects,
+            unavailableCardKeys: projection.UnavailableCardKeys));
+        return new EnemyCardListPresentation(
+            cardList.Select((card, index) => new EnemyCardIntentPresentation(
+                card.InstanceKey,
+                card,
+                built.Cards[index].Effects,
+                built.Cards[index].IsDimmed)),
+            built.RequiresGlobalUnknown,
+            built.Diagnostics);
+    }
+
+    public static EnemyCardListPresentation Build(EnemyIntentTimeline timeline, LiveActionProjection projection)
+    {
+        ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(projection);
-
-        BaseEnemyCard[] cards = cardList
-            .Select(card => card ?? throw new ArgumentException("公开敌人卡列不能包含空卡牌。", nameof(cardList)))
-            .ToArray();
-        List<string> diagnostics = projection.Diagnostics.ToList();
-        Dictionary<EnemyCardInstanceKey, int> publicKeyCounts = cards
-            .GroupBy(card => card.InstanceKey)
+        List<string> diagnostics = timeline.Diagnostics.Concat(projection.Diagnostics).ToList();
+        Dictionary<EnemyIntentDisplayKey, int> keyCounts = timeline.Entries.GroupBy(entry => entry.DisplayKey)
             .ToDictionary(group => group.Key, group => group.Count());
-        Dictionary<EnemyCardInstanceKey, List<EnemyCardReplayProjection>> unitsByRoot = [];
-        bool hasOrphanUnit = false;
-
-        foreach (EnemyCardReplayProjection unit in projection.Units)
+        Dictionary<EnemyIntentDisplayKey, List<EnemyIntentEffectProjection>> effectsByKey = [];
+        bool hasOrphan = false;
+        foreach (EnemyIntentEffectProjection effect in projection.TimelineEffects)
         {
-            if (unit is null || unit.RootSourceKey is null)
+            if (effect is null || effect.DisplayKey is null)
             {
-                diagnostics.Add("实时投影包含空单元或空根来源键，无法归属到公开卡牌。");
-                hasOrphanUnit = true;
+                diagnostics.Add("实时投影包含空效果切片或空展示键。");
+                hasOrphan = true;
                 continue;
             }
 
-            if (!unitsByRoot.TryGetValue(unit.RootSourceKey, out List<EnemyCardReplayProjection>? rootUnits))
+            if (!effectsByKey.TryGetValue(effect.DisplayKey, out List<EnemyIntentEffectProjection>? list))
             {
-                rootUnits = [];
-                unitsByRoot.Add(unit.RootSourceKey, rootUnits);
+                list = [];
+                effectsByKey.Add(effect.DisplayKey, list);
             }
 
-            rootUnits.Add(unit);
-            if (!publicKeyCounts.ContainsKey(unit.RootSourceKey))
+            list.Add(effect);
+            if (!keyCounts.ContainsKey(effect.DisplayKey))
             {
-                diagnostics.Add($"实时投影根来源 {unit.RootSourceKey} 不存在于公开卡列。");
-                hasOrphanUnit = true;
+                diagnostics.Add($"效果切片 {effect.DisplayKey} 不存在于结构时间线。");
+                hasOrphan = true;
             }
         }
 
-        List<EnemyCardIntentPresentation> presentations = new(cards.Length);
-        foreach (BaseEnemyCard card in cards)
+        List<EnemyCardIntentPresentation> cards = [];
+        foreach (EnemyIntentTimelineEntry entry in timeline.Entries)
         {
-            EnemyCardInstanceKey key = card.InstanceKey;
+            bool isUnavailable = entry.CardInstanceKey is EnemyCardInstanceKey cardKey &&
+                                 projection.UnavailableCardKeys.Contains(cardKey);
+            EnemyIntentTimelineEntry displayedEntry = isUnavailable && !entry.IsDimmed
+                ? entry with { IsDimmed = true }
+                : entry;
             List<string> localDiagnostics = [];
             List<EnemyCardEffectIntentPresentation> effects = [];
-
-            if (publicKeyCounts[key] > 1)
+            if (keyCounts[entry.DisplayKey] > 1)
             {
-                localDiagnostics.Add($"公开卡列包含重复实例键 {key}，无法唯一关联逐牌投影。");
+                localDiagnostics.Add($"结构时间线包含重复展示键 {entry.DisplayKey}。");
             }
-            else if (!unitsByRoot.TryGetValue(key, out List<EnemyCardReplayProjection>? units) || units.Count == 0)
+            else if (effectsByKey.TryGetValue(entry.DisplayKey, out List<EnemyIntentEffectProjection>? slices))
             {
-                localDiagnostics.Add($"公开卡牌 {key} 缺少对应的实时投影单元。");
+                BuildEffects(entry.DisplayKey, slices, effects, localDiagnostics);
             }
-            else
+            else if (RequiresProjection(entry.Role) && !isUnavailable)
             {
-                BuildCardEffects(key, units, effects, localDiagnostics);
+                localDiagnostics.Add($"展示槽 {entry.DisplayKey} 缺少实时效果投影。");
             }
 
             if (localDiagnostics.Count > 0)
@@ -77,28 +88,23 @@ public static class EnemyCardIntentPresentationBuilder
                 effects.Add(new EnemyUnknownPresentation(string.Join(" | ", localDiagnostics)));
             }
 
-            presentations.Add(new EnemyCardIntentPresentation(key, card, effects));
+            cards.Add(new EnemyCardIntentPresentation(displayedEntry, effects));
         }
 
-        bool requiresGlobalUnknown = !projection.IsComplete || hasOrphanUnit;
         if (!projection.IsComplete && projection.Diagnostics.Count == 0)
         {
             diagnostics.Add("实时投影被标记为不完整，但没有提供具体诊断。");
         }
 
-        return new EnemyCardListPresentation(presentations, requiresGlobalUnknown, diagnostics);
+        return new EnemyCardListPresentation(cards, !projection.IsComplete || hasOrphan, diagnostics);
     }
 
-    /// <summary>
-    /// 按首次攻击基础值顺序归并一个根来源的全部 DFS 单元，并追加固定类别顺序的展示项。
-    /// </summary>
-    /// <param name="rootKey">当前公开根来源实例键。</param>
-    /// <param name="units">严格保持投影 DFS 顺序的关联单元。</param>
-    /// <param name="effects">接收固定类别顺序结果的集合。</param>
-    /// <param name="diagnostics">接收只污染当前卡牌的诊断集合。</param>
-    private static void BuildCardEffects(
-        EnemyCardInstanceKey rootKey,
-        IReadOnlyList<EnemyCardReplayProjection> units,
+    private static bool RequiresProjection(EnemyIntentTimelineRole role) => role is
+        EnemyIntentTimelineRole.Source or EnemyIntentTimelineRole.ImmediateCard or EnemyIntentTimelineRole.ComposeToken;
+
+    private static void BuildEffects(
+        EnemyIntentDisplayKey displayKey,
+        IReadOnlyList<EnemyIntentEffectProjection> slices,
         ICollection<EnemyCardEffectIntentPresentation> effects,
         ICollection<string> diagnostics)
     {
@@ -107,159 +113,76 @@ public static class EnemyCardIntentPresentationBuilder
         bool hasDefense = false;
         bool hasBuff = false;
         bool hasDebuff = false;
-
-        foreach (EnemyCardReplayProjection unit in units)
+        foreach (EnemyIntentEffectProjection slice in slices)
         {
-            if (!ValidateUnitIdentity(rootKey, unit, diagnostics))
+            if (slice.ReplayIndex < 0 || slice.RootSourceKey is null)
             {
+                diagnostics.Add($"展示槽 {displayKey} 包含非法效果身份。");
                 continue;
             }
 
-            if (unit.EnemyBlockDelta > decimal.Zero)
-            {
-                hasDefense = true;
-            }
-            else if (unit.EnemyBlockDelta < decimal.Zero)
-            {
-                diagnostics.Add($"根来源 {rootKey} 的单元包含无法映射的负敌人格挡变化。");
-            }
+            if (slice.EnemyBlockDelta > decimal.Zero) hasDefense = true;
+            else if (slice.EnemyBlockDelta < decimal.Zero) diagnostics.Add($"展示槽 {displayKey} 包含负敌人格挡变化。");
+            if (slice.EnemyPowerDeltas is null) diagnostics.Add($"展示槽 {displayKey} 缺少敌人 Power 投影。");
+            else if (slice.EnemyPowerDeltas.Values.Any(delta => delta != decimal.Zero)) hasBuff = true;
 
-            if (unit.EnemyPowerDeltas is null)
+            IReadOnlyList<decimal>? hits = ReadCanonicalDamageHits(displayKey, slice, diagnostics, ref hasDebuff);
+            if (hits is null) continue;
+            foreach (decimal damage in hits)
             {
-                diagnostics.Add($"根来源 {rootKey} 的单元缺少敌人 Power 投影字典。");
-            }
-            else if (unit.EnemyPowerDeltas.Values.Any(delta => delta != decimal.Zero))
-            {
-                hasBuff = true;
-            }
-
-            IReadOnlyList<decimal>? canonicalHits = ReadCanonicalDamageHits(rootKey, unit, diagnostics, ref hasDebuff);
-            if (canonicalHits is null)
-            {
-                continue;
-            }
-
-            foreach (decimal baseDamage in canonicalHits)
-            {
-                if (!hitCounts.TryAdd(baseDamage, 1))
-                {
-                    hitCounts[baseDamage]++;
-                    continue;
-                }
-
-                attackOrder.Add(baseDamage);
+                if (!hitCounts.TryAdd(damage, 1)) hitCounts[damage]++;
+                else attackOrder.Add(damage);
             }
         }
 
-        foreach (decimal baseDamage in attackOrder)
-        {
-            effects.Add(new EnemyAttackPresentation(baseDamage, hitCounts[baseDamage]));
-        }
-
-        if (hasDefense)
-        {
-            effects.Add(new EnemyDefendPresentation());
-        }
-
-        if (hasBuff)
-        {
-            effects.Add(new EnemyBuffPresentation());
-        }
-
-        if (hasDebuff)
-        {
-            effects.Add(new EnemyDebuffPresentation());
-        }
+        foreach (decimal damage in attackOrder) effects.Add(new EnemyAttackPresentation(damage, hitCounts[damage]));
+        if (hasDefense) effects.Add(new EnemyDefendPresentation());
+        if (hasBuff) effects.Add(new EnemyBuffPresentation());
+        if (hasDebuff) effects.Add(new EnemyDebuffPresentation());
     }
 
-    /// <summary>
-    /// 验证投影单元仍保留合法根来源、实际执行身份和非负重放索引。
-    /// </summary>
-    /// <param name="rootKey">当前分组的公开根来源键。</param>
-    /// <param name="unit">待验证的 DFS 投影单元。</param>
-    /// <param name="diagnostics">接收局部结构诊断的集合。</param>
-    /// <returns>身份字段可安全继续读取时为 <see langword="true"/>。</returns>
-    private static bool ValidateUnitIdentity(
-        EnemyCardInstanceKey rootKey,
-        EnemyCardReplayProjection unit,
-        ICollection<string> diagnostics)
-    {
-        if (unit.RootSourceKey != rootKey)
-        {
-            diagnostics.Add($"投影单元根来源 {unit.RootSourceKey} 与分组来源 {rootKey} 不一致。");
-            return false;
-        }
-
-        if (unit.ExecutingCardKey is null || !unit.ExecutingCardId.IsValid || unit.ReplayIndex < 0)
-        {
-            diagnostics.Add($"根来源 {rootKey} 的投影单元包含非法执行身份或重放索引。");
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// 验证所有目标具有相同的标准攻击基础命中结构，并返回不会按玩家数重复计数的首目标序列。
-    /// </summary>
-    /// <param name="rootKey">用于错误定位的公开根来源键。</param>
-    /// <param name="unit">待读取的单次执行投影。</param>
-    /// <param name="diagnostics">接收局部伤害或目标结构诊断的集合。</param>
-    /// <param name="hasDebuff">接收玩家目标是否包含 Power 变化。</param>
-    /// <returns>合法时返回首目标的基础命中序列；非法时返回空引用。</returns>
     private static IReadOnlyList<decimal>? ReadCanonicalDamageHits(
-        EnemyCardInstanceKey rootKey,
-        EnemyCardReplayProjection unit,
+        EnemyIntentDisplayKey displayKey,
+        EnemyIntentEffectProjection slice,
         ICollection<string> diagnostics,
         ref bool hasDebuff)
     {
-        if (unit.Targets is null)
+        if (slice.Targets is null)
         {
-            diagnostics.Add($"根来源 {rootKey} 的投影单元缺少玩家目标集合。");
+            diagnostics.Add($"展示槽 {displayKey} 缺少玩家目标集合。");
             return null;
         }
 
-        if (unit.Targets.Count == 0)
-        {
-            return [];
-        }
-
+        if (slice.Targets.Count == 0) return [];
         HashSet<string> targetIds = new(StringComparer.Ordinal);
         decimal[]? canonical = null;
-        foreach (EnemyTargetProjection target in unit.Targets)
+        foreach (EnemyTargetProjection target in slice.Targets)
         {
             if (target is null || string.IsNullOrWhiteSpace(target.TargetId) || !targetIds.Add(target.TargetId))
             {
-                diagnostics.Add($"根来源 {rootKey} 的投影单元包含空目标或重复目标标识。");
+                diagnostics.Add($"展示槽 {displayKey} 包含空目标或重复目标。");
                 return null;
             }
 
             if (target.PowerDeltas is null || target.DamageHits is null)
             {
-                diagnostics.Add($"根来源 {rootKey} 的目标 {target.TargetId} 缺少 Power 或伤害投影。");
+                diagnostics.Add($"展示槽 {displayKey} 的目标 {target.TargetId} 缺少投影。");
                 return null;
             }
 
-            if (target.PowerDeltas.Values.Any(delta => delta != decimal.Zero))
-            {
-                hasDebuff = true;
-            }
-
+            if (target.PowerDeltas.Values.Any(delta => delta != decimal.Zero)) hasDebuff = true;
             EnemyDamageHitProjection[] hits = target.DamageHits.ToArray();
             if (hits.Any(hit => hit is null || hit.BaseDamage <= decimal.Zero || hit.ProjectedDamage < decimal.Zero))
             {
-                diagnostics.Add($"根来源 {rootKey} 的目标 {target.TargetId} 包含非法标准攻击命中。");
+                diagnostics.Add($"展示槽 {displayKey} 包含非法标准攻击命中。");
                 return null;
             }
 
             decimal[] current = hits.Select(hit => hit.BaseDamage).ToArray();
-            if (canonical is null)
-            {
-                canonical = current;
-            }
+            if (canonical is null) canonical = current;
             else if (!canonical.SequenceEqual(current))
             {
-                diagnostics.Add($"根来源 {rootKey} 的各玩家目标具有不一致的基础攻击命中结构。");
+                diagnostics.Add($"展示槽 {displayKey} 的各目标命中结构不一致。");
                 return null;
             }
         }

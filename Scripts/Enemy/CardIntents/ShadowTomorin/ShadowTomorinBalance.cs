@@ -3,9 +3,9 @@ namespace STS2_Tomorin_Mod.Enemy.CardIntents;
 /// <summary>影灯首领的生命、阶段、规划锁与权重唯一配置源。</summary>
 public static class ShadowTomorinBalance
 {
-    public const int MaxHp = 1200;
-    public const decimal Phase1DamageAllowance = 216m;
-    public const decimal Phase2DamageAllowance = 432m;
+    public const int MaxHp = 2000;
+    public const decimal Phase1DamageAllowance = 360m;
+    public const decimal Phase2DamageAllowance = 721m;
     public const int MaxCandidateAttempts = 3;
     public const int MaxEffectiveCards = 6;
     public const int XMultiplierDefinitionThreshold = 5;

@@ -19,6 +19,7 @@ using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2_Tomorin_Mod.Cards;
 using STS2_Tomorin_Mod.Cards.EnemyCards;
+using STS2_Tomorin_Mod.Encounters;
 using STS2_Tomorin_Mod.Powers;
 using STS2_Tomorin_Mod.Relics;
 
@@ -360,12 +361,10 @@ public class Taki : CustomMonsterModel
     private void PhaseThreeClearCallBack(Creature creature)
     {
         TalkCmd.Play(_die, base.Creature, _takiColor);
-
-        if (ShouldGrantBossReward)
-        {
-            var room = (CombatRoom)creature.CombatState.RunState.CurrentRoom;
-            BandBossRelicReward.Add<TakiDrum>(room);
-        }
+        BandMemberRelicRewardLifecycle.RecordEarnedAndGrantBossReward<TakiDrum>(
+            creature,
+            BandMemberKind.Taki,
+            ShouldGrantBossReward);
 
         Creature.Died -= PhaseThreeClearCallBack;
     }

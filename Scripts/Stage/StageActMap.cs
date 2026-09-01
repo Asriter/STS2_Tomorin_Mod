@@ -10,41 +10,64 @@ public sealed class StageActMap : ActMap
     private const int MapWidth = 7;
     private const int CenterColumn = MapWidth / 2;
 
-    private readonly MapPoint[,] _grid = new MapPoint[MapWidth, StageRouteDefinition.Nodes.Count];
+    private readonly MapPoint[,] _grid = new MapPoint[MapWidth, StageRouteDefinition.Nodes.Count - 1];
     private readonly Dictionary<MapPoint, StageRouteNode> _nodesByPoint = [];
+    private readonly MapPoint _startingMapPoint;
+    private readonly MapPoint _bossMapPoint;
 
     /// <summary>
     /// 创建位于地图中线、只包含确定性单路线的舞台地图。
     /// </summary>
     public StageActMap()
     {
-        MapPoint? previous = null;
-
-        for (var row = 0; row < StageRouteDefinition.Nodes.Count; row++)
+        var startingNode = StageRouteDefinition.Nodes[0];
+        _startingMapPoint = new MapPoint(CenterColumn, 0)
         {
-            var node = StageRouteDefinition.Nodes[row];
-            var mapPoint = new MapPoint(CenterColumn, row)
+            PointType = startingNode.MapPointType,
+            CanBeModified = false,
+        };
+        _nodesByPoint.Add(_startingMapPoint, startingNode);
+
+        MapPoint previous = _startingMapPoint;
+
+        for (var routeIndex = 1; routeIndex < StageRouteDefinition.Nodes.Count - 1; routeIndex++)
+        {
+            var node = StageRouteDefinition.Nodes[routeIndex];
+            var mapPoint = new MapPoint(CenterColumn, routeIndex)
             {
                 PointType = node.MapPointType,
                 CanBeModified = false,
             };
 
-            previous?.AddChildPoint(mapPoint);
-            _grid[CenterColumn, row] = mapPoint;
+            previous.AddChildPoint(mapPoint);
+            _grid[CenterColumn, routeIndex] = mapPoint;
             _nodesByPoint.Add(mapPoint, node);
+
+            if (routeIndex == 1)
+            {
+                startMapPoints.Add(mapPoint);
+            }
+
             previous = mapPoint;
         }
 
-        startMapPoints.Add(StartingMapPoint);
+        var bossNode = StageRouteDefinition.Nodes[^1];
+        _bossMapPoint = new MapPoint(CenterColumn, _grid.GetLength(1))
+        {
+            PointType = bossNode.MapPointType,
+            CanBeModified = false,
+        };
+        previous.AddChildPoint(_bossMapPoint);
+        _nodesByPoint.Add(_bossMapPoint, bossNode);
     }
 
     /// <summary>获取可见路线起点，即长颈鹿先古之民节点。</summary>
-    public override MapPoint StartingMapPoint => _grid[CenterColumn, 0];
+    public override MapPoint StartingMapPoint => _startingMapPoint;
 
-    /// <summary>获取可见路线终点，即 Crychic 亡灵首领节点。</summary>
-    public override MapPoint BossMapPoint => _grid[CenterColumn, StageRouteDefinition.Nodes.Count - 1];
+    /// <summary>获取可见路线终点，即当前章节权威第一 Boss 节点。</summary>
+    public override MapPoint BossMapPoint => _bossMapPoint;
 
-    /// <summary>暴露引擎要求的地图网格；网格外没有可见或可进入节点。</summary>
+    /// <summary>暴露引擎要求的普通节点网格；特殊起点与首领点由引擎单独处理。</summary>
     protected override MapPoint[,] Grid => _grid;
 
     /// <summary>

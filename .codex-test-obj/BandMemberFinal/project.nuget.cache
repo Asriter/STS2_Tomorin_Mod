@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "dgSpecHash": "LeZjmM/Wzh8=",
+  "success": false,
+  "projectFilePath": "G:\\MyGame\\STS2_Tomorin_Mod\\tests\\BandMemberEncounterHarness\\BandMemberEncounterHarness.csproj",
+  "expectedPackageFiles": [],
+  "logs": [
+    {
+      "code": "NU1301",
+      "level": "Error",
+      "message": "无法加载源 https://api.nuget.org/v3/index.json 的服务索引。\r\n  以一种访问权限不允许的方式做了一个访问套接字的尝试。 (api.nuget.org:443)\r\n  以一种访问权限不允许的方式做了一个访问套接字的尝试。",
+      "projectPath": "G:\\MyGame\\STS2_Tomorin_Mod\\tests\\BandMemberEncounterHarness\\BandMemberEncounterHarness.csproj",
+      "filePath": "G:\\MyGame\\STS2_Tomorin_Mod\\tests\\BandMemberEncounterHarness\\BandMemberEncounterHarness.csproj",
+      "libraryId": "Alchyr.Sts2.BaseLib",
+      "targetGraphs": []
+    }
+  ]
+}

@@ -19,7 +19,11 @@ public sealed class EnemyCardSimulationContext
     private readonly IReadOnlyDictionary<EnemyCardInstanceKey, EnemyFrozenEffectiveCardState> _effectiveCardStates;
     private readonly List<UnitAccumulator> _units = [];
     private readonly Stack<UnitAccumulator> _parentUnits = new();
+    private readonly List<EffectAccumulator> _effects = [];
+    private readonly Stack<EffectAccumulator> _parentEffects = new();
     private readonly List<string> _diagnostics = [];
+    private readonly HashSet<EnemyCardInstanceKey> _unavailableCardKeys = [];
+    private readonly HashSet<EnemyCardInstanceKey> _successfulCardKeys = [];
     private readonly EnemyCardContentDirectory? _contentDirectory;
     private readonly EnemyCardPhase _activePhase;
     private readonly Dictionary<string, decimal> _endEnemyPowers;
@@ -32,6 +36,7 @@ public sealed class EnemyCardSimulationContext
     private readonly IEnemyAbilityHookDispatcher _abilityHooks;
     private decimal _endEnemyBlock;
     private UnitAccumulator? _current;
+    private EffectAccumulator? _currentEffect;
     private bool _stepLimitReached;
     private bool _dispatchingBlockGain;
 
@@ -173,6 +178,48 @@ public sealed class EnemyCardSimulationContext
             replayIndex,
             _targets);
         _units.Add(_current);
+
+        if (_currentEffect is not null)
+        {
+            _parentEffects.Push(_currentEffect);
+        }
+
+        _currentEffect = new EffectAccumulator(
+            Presentation.EnemyIntentDisplayKey.ForCard(executingCardKey),
+            rootSourceKey,
+            executingCardKey,
+            executingCardId,
+            replayIndex,
+            _targets);
+        _effects.Add(_currentEffect);
+    }
+
+    public void BeginCollectionEffectScope(string collectionInstanceId)
+    {
+        UnitAccumulator unit = RequireCurrentUnit();
+        if (_currentEffect is not null)
+        {
+            _parentEffects.Push(_currentEffect);
+        }
+
+        _currentEffect = new EffectAccumulator(
+            Presentation.EnemyIntentDisplayKey.ForCollection(collectionInstanceId),
+            unit.RootSourceKey,
+            null,
+            null,
+            unit.ReplayIndex,
+            _targets);
+        _effects.Add(_currentEffect);
+    }
+
+    public void EndCollectionEffectScope()
+    {
+        if (_currentEffect is null || _parentEffects.Count == 0)
+        {
+            throw new InvalidOperationException("没有可结束的收藏品效果作用域。 ");
+        }
+
+        _currentEffect = _parentEffects.Pop();
     }
 
     /// <summary>
@@ -203,6 +250,16 @@ public sealed class EnemyCardSimulationContext
             }
         }
 
+        foreach (TargetAccumulator target in RequireCurrentEffect().Targets.Values)
+        {
+            for (int index = 0; index < hitCount; index++)
+            {
+                target.DamageHits.Add(new EnemyDamageHitProjection(
+                    baseDamage,
+                    baseDamage * target.Input.DamageMultiplier));
+            }
+        }
+
     }
 
     /// <summary>
@@ -220,6 +277,12 @@ public sealed class EnemyCardSimulationContext
         {
             _current.EnemyBlock += amount;
         }
+
+        if (_currentEffect is not null)
+        {
+            _currentEffect.EnemyBlock += amount;
+        }
+
         _endEnemyBlock = Math.Max(decimal.Zero, _endEnemyBlock + amount);
         if (amount > decimal.Zero && !_dispatchingBlockGain)
         {
@@ -251,6 +314,12 @@ public sealed class EnemyCardSimulationContext
         {
             AddDelta(_current.EnemyPowers, powerId, amount);
         }
+
+        if (_currentEffect is not null)
+        {
+            AddDelta(_currentEffect.EnemyPowers, powerId, amount);
+        }
+
         AddDelta(_endEnemyPowers, powerId, amount);
     }
 
@@ -273,6 +342,10 @@ public sealed class EnemyCardSimulationContext
         }
 
         foreach (TargetAccumulator target in RequireCurrentUnit().Targets.Values)
+        {
+            AddDelta(target.PowerDeltas, powerId, amount * target.Input.DebuffMultiplier);
+        }
+        foreach (TargetAccumulator target in RequireCurrentEffect().Targets.Values)
         {
             AddDelta(target.PowerDeltas, powerId, amount * target.Input.DebuffMultiplier);
         }
@@ -461,6 +534,28 @@ public sealed class EnemyCardSimulationContext
         }
     }
 
+    /// <summary>把正常条件不满足记录为单牌不可用；这不是结构故障，不降低投影完整性。</summary>
+    public void MarkCardUnavailable(EnemyCardInstanceKey instanceKey)
+    {
+        ArgumentNullException.ThrowIfNull(instanceKey);
+        if (!_successfulCardKeys.Contains(instanceKey))
+        {
+            _unavailableCardKeys.Add(instanceKey);
+        }
+    }
+
+    /// <summary>记录同一实例至少有一次重放满足条件；此时整张牌不应置灰。</summary>
+    public void MarkCardAvailable(EnemyCardInstanceKey instanceKey)
+    {
+        ArgumentNullException.ThrowIfNull(instanceKey);
+        _successfulCardKeys.Add(instanceKey);
+        _unavailableCardKeys.Remove(instanceKey);
+    }
+
+    /// <summary>判断当前投影是否已把指定实例标记为不可用。</summary>
+    public bool IsCardUnavailable(EnemyCardInstanceKey instanceKey) =>
+        _unavailableCardKeys.Contains(instanceKey ?? throw new ArgumentNullException(nameof(instanceKey)));
+
     /// <summary>
     /// 提交当前重放单元，并保留其逐目标命中结构。
     /// </summary>
@@ -468,6 +563,7 @@ public sealed class EnemyCardSimulationContext
     {
         RequireCurrentUnit();
         _current = _parentUnits.Count > 0 ? _parentUnits.Pop() : null;
+        _currentEffect = _parentEffects.Count > 0 ? _parentEffects.Pop() : null;
     }
 
     /// <summary>
@@ -476,7 +572,8 @@ public sealed class EnemyCardSimulationContext
     /// <returns>本次顺序模拟结果。</returns>
     public LiveActionProjection BuildProjection()
     {
-        if (_current is not null || _parentUnits.Count != 0)
+        if (_current is not null || _parentUnits.Count != 0 ||
+            _currentEffect is not null || _parentEffects.Count != 0)
         {
             throw new InvalidOperationException("存在未提交模拟单元，不能生成投影。 ");
         }
@@ -485,6 +582,7 @@ public sealed class EnemyCardSimulationContext
             _units.Select(unit => unit.ToProjection()),
             IsComplete,
             _diagnostics,
+            _effects.Select(effect => effect.ToProjection()),
             _effectiveCardStates.Values,
             new EnemyProjectionEndState(
                 _endEnemyBlock,
@@ -495,7 +593,8 @@ public sealed class EnemyCardSimulationContext
                     StringComparer.Ordinal),
                 _endCards.Values,
                 _endAvailableCollections,
-                _endConsumedCollections));
+                _endConsumedCollections),
+            unavailableCardKeys: _unavailableCardKeys);
     }
 
     private void ApplyGeneratedCard(EnemyGeneratedCardProjection projection)
@@ -618,6 +717,9 @@ public sealed class EnemyCardSimulationContext
     private UnitAccumulator RequireCurrentUnit() =>
         _current ?? throw new InvalidOperationException("必须先开始模拟单元。 ");
 
+    private EffectAccumulator RequireCurrentEffect() =>
+        _currentEffect ?? throw new InvalidOperationException("必须先开始模拟效果作用域。 ");
+
     /// <summary>
     /// 提交一个有限原子步骤，超过规则上限时终止模拟。
     /// </summary>
@@ -654,6 +756,48 @@ public sealed class EnemyCardSimulationContext
 
         deltas.TryGetValue(key, out decimal previous);
         deltas[key] = previous + amount;
+    }
+
+    private sealed class EffectAccumulator
+    {
+        public EffectAccumulator(
+            Presentation.EnemyIntentDisplayKey displayKey,
+            EnemyCardInstanceKey rootSourceKey,
+            EnemyCardInstanceKey? executingCardKey,
+            EnemyCardId? executingCardId,
+            int replayIndex,
+            IReadOnlyList<EnemySimulationTarget> targets)
+        {
+            DisplayKey = displayKey;
+            RootSourceKey = rootSourceKey;
+            ExecutingCardKey = executingCardKey;
+            ExecutingCardId = executingCardId;
+            ReplayIndex = replayIndex;
+            Targets = targets.ToDictionary(
+                target => target.TargetId,
+                target => new TargetAccumulator(target),
+                StringComparer.Ordinal);
+        }
+
+        public Presentation.EnemyIntentDisplayKey DisplayKey { get; }
+        public EnemyCardInstanceKey RootSourceKey { get; }
+        public EnemyCardInstanceKey? ExecutingCardKey { get; }
+        public EnemyCardId? ExecutingCardId { get; }
+        public int ReplayIndex { get; }
+        public Dictionary<string, TargetAccumulator> Targets { get; }
+        public decimal EnemyBlock { get; set; }
+        public Dictionary<string, decimal> EnemyPowers { get; } = new(StringComparer.Ordinal);
+
+        public EnemyIntentEffectProjection ToProjection() =>
+            new(
+                DisplayKey,
+                RootSourceKey,
+                ExecutingCardKey,
+                ExecutingCardId,
+                ReplayIndex,
+                Targets.Values.Select(target => target.ToProjection()).ToArray(),
+                EnemyBlock,
+                new Dictionary<string, decimal>(EnemyPowers, StringComparer.Ordinal));
     }
 
     /// <summary>保存一个尚未提交的来源牌重放投影。</summary>

@@ -330,12 +330,16 @@ The `.csproj` auto-detects platform and sets `SteamLibraryPath`, `Sts2Path`, and
 
 `Stage` 是注册在 Glory 后方的隐藏候选最终层。新 Run 仅在非 Daily 且玩家列表至少包含一名 Tomorin 时注册候选；旧存档不会补注册或重排章节。Glory 奖励完成后的最终资格还要求：候选 Stage 唯一且紧邻 Glory、本 Run 已真实击败 FPO，并由同一名玩家完整持有 `AnonGuitar`、`RaanaGuitar`、`SoyoBase` 与 `TakiDrum`。
 
-固定路线由 `StageRouteDefinition` 作为唯一语义来源：`GiraffeAncient → FeedTheCat → MechaKnightElite → Shop → FeedTheCat → RestSite → CrychicPhatomBoss`。`StageActMap` 只创建这条可见单路线，`StageRoomResolver` 绕过随机事件池并将内容模型转为 mutable 实例；Shop 与 RestSite 保持原版房间行为。
+固定路线由 `StageRouteDefinition` 作为唯一语义来源：`GiraffeAncient → StageSupplyEvent → BandMemberEncounter → Shop → FateGuidance → RestSite → 当前 Act.BossEncounter`。`StageActMap` 只创建这条可见单路线；`StageRoomResolver` 绕过随机内容池，向 `EventRoom` 提供 canonical 事件模型、向 `CombatRoom` 提供 mutable 遭遇模型，Shop 与 RestSite 保持原版房间行为。
+
+`FateGuidance` 是 Stage 第二事件位置的原生共享事件。当前版本只开放 `ChooseCrychic`；`ChooseOblivionis` 与 `ChooseTaki` 使用 BaseLib `LockedOption` 创建游戏原生锁定选项，同时保留未来解锁所需的处理器和独立结果页。`BossMapRouteService` 使用 `ModelId` 对第一、第二 Boss 去重，只允许写第一 Boss；`BossMapVisualSynchronizer` 将 Act 权威状态投影到已创建的第一、第二 Boss 地图节点，并支持 PNG/Spine 双向切换。UI 刷新失败只记录错误，不回滚 Boss 状态或中断共享事件。
 
 核心文件：
 
 - `Scripts/Acts/Stage.cs`：章节模型与集中式 Glory 临时资源代理；每项复用均保留可搜索的 Stage 资源 TODO。
-- `Scripts/Stage/StageRouteDefinition.cs`、`StageActMap.cs`、`StageRoomResolver.cs`：确定性地图与固定房间解析。
+- `Scripts/Stage/StageRouteDefinition.cs`、`StageActMap.cs`、`StageRoomResolver.cs`：确定性地图、FateGuidance 固定房间和权威 Boss 房间解析。
+- `Scripts/Events/FateGuidance.cs`：原生共享事件、当前选项锁定策略和三个 Boss 结果页。
+- `Scripts/Services/BossMapRouteService.cs`、`BossMapVisualSynchronizer.cs`：第一 Boss 状态修改与地图 Boss 视觉投影。
 - `Scripts/Stage/StageRegistrationPolicy.cs`、`StageEligibility.cs`：新 Run 注册和 Glory 后最终资格。
 - `Scripts/Stage/StageRunProgressModifier.cs`：通过 `[SavedProperty]` 保存 FPO 历史进度及当前 Boss 奖励状态；战斗身份由 Encounter ID、章节索引和地图坐标组成。
 - `Scripts/Patch/StageRunRegistrationPatch.cs`、`StageFpoProgressPatch.cs`、`StageBossRewardLifecyclePatch.cs`、`StageActTransitionPatch.cs`：注册、真实死亡、原版奖励资格、防重与 Architect 终局接入。

@@ -15,7 +15,7 @@ public static class StageRouteDefinition
         new(StageRouteNodeKind.FirstEvent, MapPointType.Unknown, RoomType.Event),
         new(StageRouteNodeKind.Elite, MapPointType.Elite, RoomType.Elite),
         new(StageRouteNodeKind.Shop, MapPointType.Shop, RoomType.Shop),
-        new(StageRouteNodeKind.SecondEvent, MapPointType.Unknown, RoomType.Event),
+        new(StageRouteNodeKind.FateGuidance, MapPointType.Unknown, RoomType.Event),
         new(StageRouteNodeKind.RestSite, MapPointType.RestSite, RoomType.RestSite),
         new(StageRouteNodeKind.Boss, MapPointType.Boss, RoomType.Boss),
     ];
@@ -28,17 +28,17 @@ public enum StageRouteNodeKind
 {
     /// <summary>长颈鹿先古之民节点。</summary>
     Ancient,
-    /// <summary>第一次固定喂猫事件。</summary>
+    /// <summary>固定舞台补给事件。</summary>
     FirstEvent,
     /// <summary>固定机甲骑士精英节点。</summary>
     Elite,
     /// <summary>原版商店节点。</summary>
     Shop,
-    /// <summary>第二次固定喂猫事件。</summary>
-    SecondEvent,
+    /// <summary>固定命运所指共享事件。</summary>
+    FateGuidance,
     /// <summary>原版篝火节点。</summary>
     RestSite,
-    /// <summary>固定 Crychic 亡灵首领节点。</summary>
+    /// <summary>读取当前章节权威第一 Boss 的首领节点。</summary>
     Boss,
 }
 

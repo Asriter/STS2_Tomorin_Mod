@@ -110,6 +110,28 @@ public sealed class IntentPresentationTests
         Assert.Empty(result.Cards.Single().Effects.OfType<EnemyUnknownPresentation>());
     }
 
+    /// <summary>验证正常条件不满足只让对应牌置灰，不产生局部或全局问号。</summary>
+    [Fact]
+    public void UnavailableCardIsDimmedWithoutUnknownPresentation()
+    {
+        BaseEnemyCard unavailable = CreateBoundCard("UNAVAILABLE", 0);
+        BaseEnemyCard available = CreateBoundCard("AVAILABLE_AFTER_UNAVAILABLE", 1);
+        decimal baseDamage = new StrikeTomorin().DynamicVars.Damage.BaseValue;
+        LiveActionProjection projection = new(
+            [CreateUnit(available, available, [baseDamage])],
+            isComplete: true,
+            unavailableCardKeys: [unavailable.InstanceKey]);
+
+        EnemyCardListPresentation result =
+            EnemyCardIntentPresentationBuilder.Build([unavailable, available], projection);
+
+        Assert.True(result.Cards[0].IsDimmed);
+        Assert.Empty(result.Cards[0].Effects.OfType<EnemyUnknownPresentation>());
+        Assert.False(result.Cards[1].IsDimmed);
+        Assert.Single(result.Cards[1].Effects.OfType<EnemyAttackPresentation>());
+        Assert.False(result.RequiresGlobalUnknown);
+    }
+
     /// <summary>
     /// 验证缺少投影、重复公开实例键和非法伤害只污染相关卡牌，并产生可定位诊断。
     /// </summary>

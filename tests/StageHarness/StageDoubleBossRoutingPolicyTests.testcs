@@ -1,0 +1,137 @@
+using STS2_Tomorin_Mod.Stage;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.Stage;
+
+public sealed class StageDoubleBossRoutingPolicyTests
+{
+    [Theory]
+    [InlineData("000", 2)]
+    [InlineData("0001", 2)]
+    [InlineData("00010", 2)]
+    public void DoubleBossTargetsTheLastPlayableActBeforeTheHiddenStage(
+        string stageMembership,
+        int expectedActIndex)
+    {
+        bool[] isStageByActIndex = stageMembership.Select(value => value == '1').ToArray();
+
+        int actualActIndex = StageDoubleBossRoutingPolicy.FindDoubleBossTargetIndex(isStageByActIndex);
+
+        Assert.Equal(expectedActIndex, actualActIndex);
+    }
+
+    [Theory]
+    [InlineData("0001", 3)]
+    [InlineData("00010", 4)]
+    public void A10MovesTheDistinctBossFromTheVanillaLastAct(
+        string stageMembership,
+        int expectedOriginalActIndex)
+    {
+        bool[] isStageByActIndex = stageMembership.Select(value => value == '1').ToArray();
+
+        StageDoubleBossRoutingPolicy.RelocationPlan<string>? plan =
+            StageDoubleBossRoutingPolicy.CreateRelocationPlan(
+                hasDoubleBoss: true,
+                isStageByActIndex,
+                primaryBossId: "CrychicPhatomBoss",
+                allBossIds: ["CrychicPhatomBoss", "OblivionisBoss"],
+                hasMisplacedBoss: true,
+                misplacedBossId: "OblivionisBoss");
+
+        Assert.NotNull(plan);
+        Assert.Equal(2, plan.TargetActIndex);
+        Assert.Equal(expectedOriginalActIndex, plan.OriginalTargetActIndex);
+        Assert.Equal(["OblivionisBoss"], plan.EligibleBossIds);
+        Assert.Equal(0, plan.PreferredBossIndex);
+
+        string?[] secondBossByActIndex = new string?[stageMembership.Length];
+        secondBossByActIndex[expectedOriginalActIndex] = "OblivionisBoss";
+        List<string> operations = [];
+
+        StageDoubleBossRoutingPolicy.ApplyRelocation(
+            plan,
+            "OblivionisBoss",
+            (index, boss) =>
+            {
+                operations.Add($"set:{index}:{boss}");
+                secondBossByActIndex[index] = boss;
+            },
+            index =>
+            {
+                operations.Add($"clear:{index}");
+                secondBossByActIndex[index] = null;
+            });
+
+        Assert.Equal("OblivionisBoss", secondBossByActIndex[2]);
+        Assert.Null(secondBossByActIndex[expectedOriginalActIndex]);
+        Assert.Equal(
+            [$"set:2:OblivionisBoss", $"clear:{expectedOriginalActIndex}"],
+            operations);
+    }
+
+    [Theory]
+    [InlineData(false, "0001")]
+    [InlineData(true, "0000")]
+    public void IneligibleLayoutsPreserveTheVanillaBossSlots(
+        bool hasDoubleBoss,
+        string stageMembership)
+    {
+        bool[] isStageByActIndex = stageMembership.Select(value => value == '1').ToArray();
+
+        StageDoubleBossRoutingPolicy.RelocationPlan<string>? plan =
+            StageDoubleBossRoutingPolicy.CreateRelocationPlan(
+                hasDoubleBoss,
+                isStageByActIndex,
+                primaryBossId: "CrychicPhatomBoss",
+                allBossIds: ["CrychicPhatomBoss", "OblivionisBoss"],
+                hasMisplacedBoss: true,
+                misplacedBossId: "OblivionisBoss");
+
+        Assert.Null(plan);
+    }
+
+    [Fact]
+    public void InvalidStageLayoutsFallBackSafely()
+    {
+        Assert.Equal(2, StageDoubleBossRoutingPolicy.FindDoubleBossTargetIndex([true, false, false]));
+        Assert.Equal(3, StageDoubleBossRoutingPolicy.FindDoubleBossTargetIndex([false, true, false, true]));
+        Assert.Throws<ArgumentNullException>(() =>
+            StageDoubleBossRoutingPolicy.FindDoubleBossTargetIndex(null!));
+        Assert.Throws<ArgumentException>(() =>
+            StageDoubleBossRoutingPolicy.FindDoubleBossTargetIndex([]));
+    }
+
+    [Fact]
+    public void InvalidMisplacedBossFallsBackToEligiblePool()
+    {
+        StageDoubleBossRoutingPolicy.RelocationPlan<string>? plan =
+            StageDoubleBossRoutingPolicy.CreateRelocationPlan(
+                hasDoubleBoss: true,
+                isStageByActIndex: [false, false, false, true],
+                primaryBossId: "CrychicPhatomBoss",
+                allBossIds: ["CrychicPhatomBoss", "OblivionisBoss"],
+                hasMisplacedBoss: true,
+                misplacedBossId: "TakiBoss");
+
+        Assert.NotNull(plan);
+        Assert.Equal(["OblivionisBoss"], plan.EligibleBossIds);
+        Assert.Equal(-1, plan.PreferredBossIndex);
+    }
+
+    [Fact]
+    public void MissingDistinctBossProducesAnEmptyEligiblePool()
+    {
+        StageDoubleBossRoutingPolicy.RelocationPlan<string>? plan =
+            StageDoubleBossRoutingPolicy.CreateRelocationPlan(
+                hasDoubleBoss: true,
+                isStageByActIndex: [false, false, false, true],
+                primaryBossId: "CrychicPhatomBoss",
+                allBossIds: ["CrychicPhatomBoss"],
+                hasMisplacedBoss: false,
+                misplacedBossId: string.Empty);
+
+        Assert.NotNull(plan);
+        Assert.Empty(plan.EligibleBossIds);
+        Assert.Equal(-1, plan.PreferredBossIndex);
+    }
+}

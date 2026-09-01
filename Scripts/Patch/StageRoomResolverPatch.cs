@@ -23,7 +23,12 @@ internal static class StageRoomResolverPatch
     private static void Prefix(ref RoomType roomType, MapPointType mapPointType, ref AbstractModel model)
     {
         var runState = RunManager.Instance?.DebugOnlyGetState();
-        if (runState == null || !StageRoomResolver.TryResolveCurrentRoom(runState, out var resolvedRoomType, out var resolvedModel))
+        if (runState == null ||
+            !StageRoomResolver.TryResolveCurrentRoom(
+                runState,
+                mapPointType,
+                out var resolvedRoomType,
+                out var resolvedModel))
         {
             return;
         }

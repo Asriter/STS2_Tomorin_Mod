@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Models;
 using STS2_Tomorin_Mod.Enemy.CardIntents;
 using Xunit;
 
@@ -172,5 +173,11 @@ public sealed class CollectionInventoryTests
     /// <param name="id">定义标识。</param>
     /// <returns>不可变收藏品定义。</returns>
     private static EnemyCollectionDefinition Definition(string id) =>
-        new(id, typeof(CollectionInventoryTests), CardType.Status, false, $"effect:{id}");
+        new(
+            id,
+            typeof(CardModel),
+            CardType.Status,
+            false,
+            $"effect:{id}",
+            static () => throw new InvalidOperationException("收藏品队列测试不使用卡面模型。"));
 }

@@ -1,0 +1,134 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Runs.History;
+using STS2_Tomorin_Mod.Events;
+using STS2_Tomorin_Mod.Stage;
+using Xunit;
+
+namespace STS2_Tomorin_Mod.Tests.Stage;
+
+public sealed class StageRoomResolverLifecycleTests
+{
+    [Fact]
+    public void StageEventNodesResolveCanonicalModelsAcceptedByEventRoom()
+    {
+        ModelDb.ResetForTest();
+        ModelDb.Init(
+        [
+            typeof(Acts.Stage),
+            typeof(GiraffeAncient),
+            typeof(StageSupplyEvent),
+            typeof(FateGuidance),
+        ]);
+
+        var map = new StageActMap();
+        var visitedMapCoords = new List<MapCoord>();
+        RunState runState = CreateRunState(map, visitedMapCoords);
+        (MapCoord Coord, Type ExpectedType)[] eventNodes =
+        [
+            (new MapCoord(3, 0), typeof(GiraffeAncient)),
+            (new MapCoord(3, 1), typeof(StageSupplyEvent)),
+            (new MapCoord(3, 4), typeof(FateGuidance)),
+        ];
+
+        foreach (var (coord, expectedType) in eventNodes)
+        {
+            visitedMapCoords.Add(coord);
+
+            Assert.True(StageRoomResolver.TryResolveCurrentRoom(
+                runState,
+                runState.CurrentMapPoint.PointType,
+                out var roomType,
+                out var model));
+            Assert.Equal(RoomType.Event, roomType);
+            Assert.Equal(expectedType, model?.GetType());
+
+            var eventModel = Assert.IsAssignableFrom<EventModel>(model);
+            Assert.True(eventModel.IsCanonical);
+
+            var room = new EventRoom(eventModel);
+            Assert.Same(eventModel, room.CanonicalEvent);
+        }
+    }
+
+    [Fact]
+    public void RoomCreationRejectsAStaleMapPointWhoseTypeDoesNotMatchTheRequestedRoom()
+    {
+        InitializeStageEventModels();
+
+        var map = new StageActMap();
+        var visitedMapCoords = new List<MapCoord> { new(3, 0) };
+        RunState runState = CreateRunState(map, visitedMapCoords, completedRoomCount: 1);
+
+        Assert.False(StageRoomResolver.TryResolveCurrentRoom(
+            runState,
+            MapPointType.Unknown,
+            out _,
+            out _));
+    }
+
+    [Theory]
+    [InlineData(1, typeof(StageSupplyEvent))]
+    [InlineData(4, typeof(FateGuidance))]
+    public void ReloadedQuestionRoomsResolveFromCompletedStageProgress(
+        int completedRoomCount,
+        Type expectedEventType)
+    {
+        InitializeStageEventModels();
+
+        var map = new StageActMap();
+        RunState runState = CreateRunState(map, [], completedRoomCount);
+
+        EventModel result = StageRoomResolver.ResolveEventForCurrentProgress(runState);
+
+        Assert.Equal(expectedEventType, result.GetType());
+        Assert.True(result.IsCanonical);
+    }
+
+    private static void InitializeStageEventModels()
+    {
+        ModelDb.ResetForTest();
+        ModelDb.Init(
+        [
+            typeof(Acts.Stage),
+            typeof(GiraffeAncient),
+            typeof(StageSupplyEvent),
+            typeof(FateGuidance),
+        ]);
+    }
+
+    private static RunState CreateRunState(
+        StageActMap map,
+        List<MapCoord> visitedMapCoords,
+        int completedRoomCount = 0)
+    {
+        var runState = (RunState)RuntimeHelpers.GetUninitializedObject(typeof(RunState));
+        SetField(runState, "<Acts>k__BackingField", new ActModel[] { ModelDb.Act<Acts.Stage>() });
+        SetField(runState, "_currentActIndex", 0);
+        SetField(runState, "<Map>k__BackingField", map);
+        SetField(runState, "_visitedMapCoords", visitedMapCoords);
+        SetField(
+            runState,
+            "_mapPointHistory",
+            new List<List<MapPointHistoryEntry>>
+            {
+                Enumerable.Range(0, completedRoomCount)
+                    .Select(_ => (MapPointHistoryEntry)RuntimeHelpers.GetUninitializedObject(typeof(MapPointHistoryEntry)))
+                    .ToList(),
+            });
+        return runState;
+    }
+
+    private static void SetField<T>(RunState runState, string fieldName, T value)
+    {
+        FieldInfo field = typeof(RunState).GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException($"RunState 缺少测试所需字段 {fieldName}。");
+        field.SetValue(runState, value);
+    }
+}
